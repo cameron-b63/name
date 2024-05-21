@@ -13,3 +13,6 @@ NAME accomplishes a modular approach to assembly code emulation by dividing and 
 3. **Development** - accomplished by 
   - [name-ext](name-ext), a VSCode integration for assembly development complete with a [DAP](https://microsoft.github.io/debug-adapter-protocol//) and [IntelliSense](https://learn.microsoft.com/en-us/visualstudio/ide/using-intellisense) for insight into emulated CPU cores
   - [name-fmt](name-fmt) a VSCode extension for canonical assembly formatting
+
+---
+This branch contains the original state of the main branch of the project, as I received it. I will not be removing it for some time.
