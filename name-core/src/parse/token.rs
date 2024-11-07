@@ -8,6 +8,7 @@ pub enum TokenKind {
     BinaryNumber,
     OctalNumber,
     DecimalNumber,
+    Float,
 
     String,
     Char,
