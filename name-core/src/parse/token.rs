@@ -1,6 +1,15 @@
+#[derive(Debug, PartialEq)]
+pub struct SrcSpan<'a> {
+    pub start: usize,
+    pub end: usize,
+    pub src: &'a str,
+    pub line: usize,
+    pub line_pos: usize,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenKind {
-    Name,
+    Symbol,
     Register,
     Directive,
 
@@ -8,7 +17,7 @@ pub enum TokenKind {
     BinaryNumber,
     OctalNumber,
     DecimalNumber,
-    Float,
+    Fractional,
 
     String,
     Char,
@@ -27,17 +36,21 @@ pub enum TokenKind {
     Minus,
     Plus,
 
+    Newline,
     EndOfFile,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Token<'a> {
     pub kind: TokenKind,
-    pub src: &'a str,
+    pub src_span: SrcSpan<'a>,
 }
 
 impl<'a> Token<'a> {
-    pub fn new(kind: TokenKind, src: &'a str) -> Self {
-        Token { kind, src }
+    pub fn is_eof(&self) -> bool {
+        match self.kind {
+            TokenKind::EndOfFile => true,
+            _ => false,
+        }
     }
 }
