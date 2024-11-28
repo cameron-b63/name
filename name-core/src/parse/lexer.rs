@@ -74,13 +74,6 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn single_token(&self, kind: TokenKind) -> Token<'a> {
-        Token {
-            kind,
-            src_span: self.src_span(self.get_pos()),
-        }
-    }
-
     fn error(&self, start: usize, kind: ErrorKind) -> LexerError<'a> {
         LexerError {
             kind,
@@ -97,10 +90,10 @@ impl<'a> Lexer<'a> {
 
     /// get next char for lexer and advance the position
     fn next_char(&mut self) -> Option<char> {
-        self.chars.next().map(|c| {
-            self.inc_pos();
-            self.inc_line_pos();
+        self.inc_pos();
+        self.inc_line_pos();
 
+        self.chars.next().map(|c| {
             if c == '\n' {
                 self.line_pos = None;
                 self.line += 1;
@@ -164,7 +157,7 @@ impl<'a> Lexer<'a> {
     fn consume_string(&mut self) -> LexerResult<'a, ()> {
         let pos = self.get_pos();
         self.consume_until('"')
-            .map_err(|e| self.error(pos, ErrorKind::ExpectedChar('"')))?;
+            .map_err(|_e| self.error(pos, ErrorKind::ExpectedChar('"')))?;
         Ok(())
     }
 
@@ -179,8 +172,6 @@ impl<'a> Lexer<'a> {
     }
 
     fn consume_char_lit(&mut self) -> LexerResult<'a, ()> {
-        let pos = self.pos;
-
         if '\\' == self.try_next_char()? {
             let c = self.try_next_char()?;
             if !matches!(c, 'n' | 't' | '\\' | 'r') {
@@ -196,13 +187,24 @@ impl<'a> Lexer<'a> {
         self.consume_while(|c| matches!(c, 'a'..='z' | '0'..='9'))
     }
 
-    fn lex(&mut self) -> LexerResult<'a, TokenKind> {
-        self.next_char()
+    fn tokenize(&mut self) -> Vec<LexerResult<'a, Token<'a>>> {
+        let mut results = Vec::new();
+        while let Some(res) = self.next_tok() {
+            results.push(res);
+        }
+        results
+    }
+
+    fn lex(&mut self) -> LexerResult<'a, Token<'a>> {
+        let c = self.next_char();
+        let pos = self.get_pos();
+
+        let tok_kind = c
             .map(|c| {
                 let tok_kind = match c {
                     'a'..='z' | 'A'..='Z' => {
                         self.consume_name();
-                        TokenKind::Name
+                        TokenKind::Symbol
                     }
                     '0'..='9' => match self.next_char_if(|r| matches!(r, 'x' | 'o' | 'b')) {
                         Some(r) if c == '0' => match r {
@@ -240,7 +242,7 @@ impl<'a> Lexer<'a> {
                         TokenKind::Directive
                     }
                     '\'' => {
-                        self.consume_char_lit();
+                        self.consume_char_lit()?;
                         TokenKind::Char
                     }
                     '$' => {
@@ -258,93 +260,129 @@ impl<'a> Lexer<'a> {
                 };
                 Ok(tok_kind)
             })
-            .unwrap_or(Ok(TokenKind::EndOfFile))
+            .unwrap_or(Ok(TokenKind::EndOfFile))?;
+
+        Ok(self.token(pos, tok_kind))
     }
 
-    pub fn next_tok(&mut self) -> LexerResult<Token<'a>> {
-        // eat any whitce space that may prepend next token
-        self.consume_while(char::is_whitespace);
+    pub fn done_lexing(&self) -> bool {
+        self.pos == Some(self.src.len())
+    }
 
-        // check for comments and eat the rest of them it
-        while self.next_char_if(|c| c == '#').is_some() {
-            self.consume_until('\n')?;
+    pub fn next_tok(&mut self) -> Option<LexerResult<'a, Token<'a>>> {
+        if self.done_lexing() {
+            None
+        } else {
+            // eat any whitce space that may prepend next token
+            self.consume_while(char::is_whitespace);
 
-            // consume any whitespace that may occur before next token
-            self.consume_while(char::is_whitespace)
+            // check for comments and eat the rest of them it
+            while self.next_char_if(|c| c == '#').is_some() {
+                self.consume_while(|c| c != '\n');
+
+                // consume any whitespace that may occur before next token
+                self.consume_while(char::is_whitespace)
+            }
+
+            Some(self.lex())
         }
-
-        // pos of next_tok or eof
-        let pos = self.get_pos() + 1;
-
-        // get the tokenkind
-        let tok = self.lex()?;
-
-        // make a token
-        Ok(self.token(pos, tok))
     }
-}
-
-macro_rules! test {
-    ($mod:ident, $tokens:expr) => {};
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn test_token_sequence(s: &str, v: &[TokenKind]) {
-        let mut lex = Lexer::new(s);
+    macro_rules! test_group {
+        { $test:ident: $str:literal = $tok:expr } => {
 
-        for tk in v {
-            assert_eq!(lex.next_tok().map(|t| t.kind), Ok(tk))
-        }
+            #[test]
+            fn $test(){
+                let mut lex = Lexer::new($str);
+
+                for tk in $tok {
+                    assert_eq!(lex.next_tok().unwrap().map(|t| t.kind), Ok(tk).cloned());
+                }
+            }
+
+        };
+
+
+        { $test:ident: $str:literal = $tok:expr, $($tests:ident : $strs:literal = $toks:expr),+ } => {
+            test_group! { $test: $str = $tok }  // Expand the first test
+            test_group! { $($tests : $strs = $toks),+ }  // Recursively expand the rest
+        };
+
+        { $name:ident, $($tests:ident : $strs:literal = $toks:expr),+ } => {
+
+            mod $name {
+                use super::*;
+                test_group! { $($tests: $strs = $toks),+ }
+            }
+
+        };
     }
 
-    token_group! {
-        string,
-        string: "\"hello world\""=&[TokenKind::String],
-        empty_string: "\"\""=&[TokenKind::String],
+    test_group! {
+        singles,
+        parens: "()" = &[TokenKind::LParen, TokenKind::RParen],
+        binops: "+-" = &[TokenKind::Plus, TokenKind::Minus],
+        punctuation: ":," = &[TokenKind::Colon, TokenKind::Comma]
     }
 
-    token_group! {
-        comments,
-        end_comment: "\n#"=&[TokenKind::Newline],
-        begin_comment: "#\n"=&[TokenKind::Newline],
-        double_comment: "# # # #\n"=&[TokenKind::Newline],
-        after_comment: "label: # hello\n"=&[TokenKind::Name, TokenKind::Colon, TokenKind::Newline],
+    test_group! {
+        numbers,
+        decimal: " 42 034" = &[
+            TokenKind::DecimalNumber,
+            TokenKind::DecimalNumber,
+        ],
+        hexidecimal: " 0xDEADBEEEF" = &[TokenKind::HexNumber],
+        octal: "0o42 " = &[TokenKind::OctalNumber],
+        float: "1234.00001 " = &[TokenKind::Fractional]
     }
 
-    #[test]
-    fn whitespace_sep_next_tok() {
-        let cases = vec![
-            ("my-func_tion12", TokenKind::Name),
-            ("\"hello\"", TokenKind::String),
-            ("'c'", TokenKind::Char),
-            (".macro", TokenKind::Directive),
-            ("1234", TokenKind::DecimalNumber),
-            ("1234.12345", TokenKind::Fractional),
-            ("0xFFFFFFFA", TokenKind::HexNumber),
-            ("0b1111111", TokenKind::BinaryNumber),
-            ("0o12345", TokenKind::OctalNumber),
-            ("", TokenKind::EndOfFile),
-        ];
+    test_group! {
+        data,
+        string: "hello_world: .asciiz \"hello word\"" = &[
+            TokenKind::Symbol,
+            TokenKind::Colon,
+            TokenKind::Directive,
+            TokenKind::String,
+            TokenKind::EndOfFile,
+        ],
+        array: "my_array: .word 0 : 0xAA" = &[
+            TokenKind::Symbol,
+            TokenKind::Colon,
+            TokenKind::Directive,
+            TokenKind::DecimalNumber,
+            TokenKind::Colon,
+            TokenKind::HexNumber
+        ]
+    }
 
-        let lex_str = cases.iter().fold(String::new(), |mut acc: String, (s, _)| {
-            acc.push(' ');
-            acc.push_str(s);
-            acc
-        });
-
-        // dbg!(lex_str.chars().enumerate().collect::<Vec<(usize, char)>>());
-
-        let mut lex = Lexer::new(&lex_str);
-
-        let _ = cases.into_iter().fold(1, |pos, (s, tk)| {
-            let end = pos + s.len() - 1;
-            assert_eq!(Ok(tk), lex.next_tok().map(|t| t.kind));
-
-            // increment passed the one inserted space and to the next char
-            end + 2
-        });
+    test_group! {
+        instruction,
+        rtype: "add $a1, $a2, $a3 # this is a comment" = &[
+            TokenKind::Symbol,
+            TokenKind::Register,
+            TokenKind::Comma,
+            TokenKind::Register,
+            TokenKind::Comma,
+            TokenKind::Register,
+            TokenKind::EndOfFile
+        ],
+        itype: "addi $a1, $a2, 0xDEADBEEF" = &[
+            TokenKind::Symbol,
+            TokenKind::Register,
+            TokenKind::Comma,
+            TokenKind::Register,
+            TokenKind::Comma,
+            TokenKind::HexNumber,
+            TokenKind::EndOfFile
+        ],
+        jtype: "j my_label" = &[
+            TokenKind::Symbol,
+            TokenKind::Symbol,
+        ]
     }
 }

@@ -30,6 +30,7 @@ fn lexer_no_fail_test() {
         loop {
             let tok = lexer
                 .next_tok()
+                .unwrap()
                 .unwrap_or_else(|e| panic!("{:?} {:?}", &file_path, e));
             if tok.is_eof() {
                 break;

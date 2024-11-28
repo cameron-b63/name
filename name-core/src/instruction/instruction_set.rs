@@ -3,7 +3,7 @@ use crate::instruction::{
     information::{wrap_imp, ArgumentType, InstructionInformation, InstructionType},
 };
 
-use std::sync::LazyLock;
+use std::{collections::HashMap, sync::LazyLock};
 
 /// This is the entire implemented instruction set for NAME.
 /// The assembler searches through this table using the mnemonic field.
@@ -363,3 +363,11 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
         },
     ]
 });
+
+pub static INSTRUCTION_TABLE: LazyLock<HashMap<&'static str, &'static InstructionInformation>> =
+    LazyLock::new(|| {
+        INSTRUCTION_SET
+            .iter()
+            .map(|info| (info.mnemonic, info))
+            .collect()
+    });

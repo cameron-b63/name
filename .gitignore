@@ -31,3 +31,5 @@ personal_to_do_list.txt
 test_files/bubblesort/*
 tests/samples/*
 !test/samples/*.asm
+
+*/rusty-tags.vi
