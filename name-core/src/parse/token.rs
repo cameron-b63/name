@@ -7,18 +7,20 @@ pub struct SrcSpan<'a> {
     pub line_pos: usize,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenKind {
     Symbol,
     Register,
     Directive,
 
+    // whole numbers
     HexNumber,
     BinaryNumber,
     OctalNumber,
     DecimalNumber,
+
+    // need to figure these out
     Fractional,
-    Words,
 
     String,
     Char,
@@ -36,6 +38,15 @@ pub enum TokenKind {
 
     Newline,
     EndOfFile,
+}
+
+impl TokenKind {
+    pub fn is_number(&self) -> bool {
+        matches!(
+            self,
+            TokenKind::BinaryNumber | TokenKind::OctalNumber | TokenKind::DecimalNumber
+        )
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -58,5 +69,13 @@ impl<'a> Token<'a> {
             TokenKind::EndOfFile => true,
             _ => false,
         }
+    }
+
+    pub fn is_section_directive(&self) -> bool {
+        matches!(self.src_span.src, ".data" | ".text" | ".ktext")
+    }
+
+    pub fn is_data_directive(&self) -> bool {
+        matches!(self.src_span.src, ".asciiz" | ".word" | ".byte")
     }
 }

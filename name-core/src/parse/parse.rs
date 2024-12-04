@@ -1,26 +1,34 @@
 use crate::{
-    instruction::{information::InstructionInformation, instruction_set::INSTRUCTION_TABLE},
+    instruction::{
+        information::{ArgumentType, InstructionInformation},
+        instruction_set::INSTRUCTION_TABLE,
+    },
     parse::token::{Token, TokenKind},
     structs::{ParseRegisterError, Register},
 };
 
-//pub enum Ast {
-//    Symbol(String),
-//    Label(String),
-//
-//    // literals
-//    String(String),
-//    Number(u32),
-//    Char(char),
-//
-//    // constructs
-//    Instruction(String, Vec<Ast>),
-//    Register(Register),
-//    Directive(String, Vec<Ast>),
-//    BaseAddress(u32, Box<Ast>),
-//
-//    Root(Vec<Ast>),
-//}
+pub enum Ast {
+    // a branch label
+    Label(String),
+    // refrence to a branch label
+    LabelRef(String),
+
+    // Immediates
+    Symbol(String),
+    Immediate(u32),
+
+    // Directives
+    Include(String),
+    Asciiz(String),
+    Section(&'static str, Vec<Ast>),
+    Eqv(String, Box<Ast>),
+
+    // constructs
+    Instruction(String, Vec<Ast>),
+    Register(Register),
+    BaseAddress(u32, Box<Ast>),
+    Root(Vec<Ast>),
+}
 
 pub enum ParseError {
     UnexpectedToken,
@@ -28,6 +36,13 @@ pub enum ParseError {
     InvalidInstruction(String),
     UnexpectedEof,
     InvalidNumber,
+    InvalidChar,
+    InvalidEscape,
+    InvalidImmediate,
+    InvalidDirective,
+    WrongSection,
+    InvalidData,
+    InvalidText,
 }
 
 type ParseResult<T> = Result<T, ParseError>;
@@ -42,6 +57,14 @@ impl<'a> Parser<'a> {
         Parser { tokens, pos: 0 }
     }
 
+    pub fn advance(&mut self) {
+        self.pos += 1;
+    }
+
+    pub fn is_eof(&self) -> bool {
+        self.pos == self.tokens.len()
+    }
+
     pub fn next(&mut self) -> Option<&Token> {
         let tok = self.tokens.get(self.pos);
         self.pos += 1;
@@ -50,6 +73,14 @@ impl<'a> Parser<'a> {
 
     pub fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.pos)
+    }
+
+    pub fn peek2(&self) -> Option<&Token> {
+        self.tokens.get(self.pos + 1)
+    }
+
+    pub fn try_peek(&self) -> ParseResult<&Token> {
+        self.peek().ok_or(ParseError::UnexpectedEof)
     }
 
     pub fn try_next(&mut self) -> ParseResult<&Token> {
@@ -87,17 +118,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_char(&mut self) -> ParseResult<char> {
-        self.try_next_if(TokenKind::Char).and_then(|tok| {
-            let src = tok.src_span.src;
-
-            let char = &src[1..(src.len() - 2)];
-
-            char.parse::<char>()
-                .map_err(|_| ParseError::UnexpectedToken)
-        })
-    }
-
     pub fn parse_register(&mut self) -> ParseResult<Register> {
         self.try_next_if(TokenKind::Register).and_then(|tok| {
             tok.src_span
@@ -122,51 +142,159 @@ impl<'a> Parser<'a> {
             .copied()
     }
 
+    pub fn parse_char(&mut self) -> ParseResult<u32> {
+        let src = self.try_next_if(TokenKind::Char)?.src_span.src;
+        let mut chars = src[1..(src.len() - 1)].chars();
+        let char = match (chars.next(), chars.next()) {
+            (Some(c), None) => c,
+            (Some('\\'), Some(c)) => match c {
+                't' => '\t',
+                'r' => '\r',
+                'n' => '\n',
+                _ => return Err(ParseError::InvalidEscape),
+            },
+            _ => return Err(ParseError::InvalidChar),
+        };
+        Ok(char as u32)
+    }
+
     pub fn parse_number(&mut self) -> ParseResult<u32> {
         let is_minus = self.next_if(TokenKind::Minus).is_some();
-        self.try_next().and_then(|tok| {
+        let tok = self.try_next()?;
+        let num =
             match tok.kind {
-                TokenKind::HexNumber => {
-                    u32::from_str_radix(tok.src_span.src, 16).map_err(|_| ParseError::InvalidNumber)
-                }
-                TokenKind::DecimalNumber => {
-                    u32::from_str_radix(tok.src_span.src, 10).map_err(|_| ParseError::InvalidNumber)
-                }
-                TokenKind::OctalNumber => {
-                    u32::from_str_radix(tok.src_span.src, 8).map_err(|_| ParseError::InvalidNumber)
-                }
+                TokenKind::HexNumber => u32::from_str_radix(tok.src_span.src, 16)
+                    .map_err(|_| ParseError::InvalidNumber)?,
+                TokenKind::DecimalNumber => u32::from_str_radix(tok.src_span.src, 10)
+                    .map_err(|_| ParseError::InvalidNumber)?,
+                TokenKind::OctalNumber => u32::from_str_radix(tok.src_span.src, 8)
+                    .map_err(|_| ParseError::InvalidNumber)?,
                 TokenKind::Fractional => tok
                     .src_span
                     .src
                     .parse::<f32>()
                     .map(|num| num as u32)
-                    .map_err(|_| ParseError::InvalidNumber),
-                _ => Err(ParseError::UnexpectedToken),
+                    .map_err(|_| ParseError::InvalidNumber)?,
+                _ => return Err(ParseError::UnexpectedToken),
+            };
+        let signed_num = if is_minus {
+            if tok.is_kind(TokenKind::Fractional) {
+                // set the first bit to a one
+                num | 0x8000
+            } else {
+                // will always twos complement
+                (num as i32 * -1i32) as u32
             }
-            .map(|num| {
-                if is_minus {
-                    if tok.is_kind(TokenKind::Fractional) {
-                        // set the first bit to a one
-                        num | 0x8000
+        } else {
+            num
+        };
+        Ok(signed_num)
+    }
+
+    pub fn parse_base_address(&mut self) -> ParseResult<()> {
+        self.try_advance_if(TokenKind::LParen)?;
+        let reg = self.parse_register()?;
+        self.try_advance_if(TokenKind::RParen)?;
+        Ok(())
+    }
+
+    pub fn parse_immediate(&mut self) -> ParseResult<Ast> {
+        let ast = match self.try_peek()?.kind {
+            tok if tok.is_number() => Ast::Immediate(self.parse_number()?),
+            TokenKind::Char => Ast::Immediate(self.parse_char()?),
+            // these will be resolved on ast passover
+            TokenKind::Symbol => Ast::Symbol(self.parse_symbol()?),
+            _ => return Err(ParseError::InvalidImmediate),
+        };
+        Ok(ast)
+    }
+
+    pub fn parse_argument_type(&mut self, t: ArgumentType) -> ParseResult<Ast> {
+        use ArgumentType::*;
+
+        let ast = match t {
+            Rd | Rs | Rt => Ast::Register(self.parse_register()?),
+            Immediate | Identifier => self.parse_immediate()?,
+            BranchLabel => Ast::LabelRef(self.parse_symbol()?),
+        };
+
+        Ok(ast)
+    }
+
+    pub fn parse_data_section(&mut self) -> ParseResult<Vec<Ast>> {
+        let mut entries = Vec::new();
+
+        while let Some(tok) = self.peek() {
+            let ast = match tok.kind {
+                TokenKind::Symbol => Ast::Label(self.parse_label()?),
+                TokenKind::Directive => {
+                    if tok.is_section_directive() {
+                        break;
                     } else {
-                        // will always twos complement
-                        (num as i32 * -1i32) as u32
+                        self.parse_directive()?
                     }
-                } else {
-                    num
                 }
-            })
-        })
+                _ => return Err(ParseError::InvalidData),
+            };
+            entries.push(ast);
+        }
+        Ok(entries)
     }
 
-    pub fn parse_directive(&mut self) -> ParseResult<String> {
-        self.try_next_if(TokenKind::Directive)
-            .map(|tok| tok.src_string())
-    }
-
-    pub fn parse_base_address() {
+    pub fn parse_instruction(&mut self) -> ParseResult<Ast> {
         todo!()
     }
 
-    // pub fn parse_instruction() {}
+    pub fn parse_text_section(&mut self) -> ParseResult<Vec<Ast>> {
+        let mut entries = Vec::new();
+        while let Some(tok) = self.peek() {
+            let ast = match tok.kind {
+                TokenKind::Symbol => {
+                    if let Some(TokenKind::Colon) = self.peek2().map(|t| t.kind) {
+                        Ast::Label(self.parse_label()?)
+                    } else {
+                        self.parse_instruction()?
+                    }
+                }
+                TokenKind::Directive => {
+                    if tok.is_section_directive() {
+                        break;
+                    } else if tok.is_data_directive() {
+                        return Err(ParseError::WrongSection);
+                    } else {
+                        self.parse_directive()?
+                    }
+                }
+                _ => return Err(ParseError::InvalidText),
+            };
+            entries.push(ast);
+        }
+        Ok(entries)
+    }
+
+    pub fn parse_directive(&mut self) -> ParseResult<Ast> {
+        let directive = self.try_next_if(TokenKind::Directive)?.src_span.src;
+
+        let ast = match directive {
+            ".eqv" => Ast::Eqv(self.parse_symbol()?, Box::new(self.parse_immediate()?)),
+            ".include" => Ast::Include(self.parse_string()?),
+            ".text" => Ast::Section("text", self.parse_text_section()?),
+            ".data" => Ast::Section("data", self.parse_data_section()?),
+            ".asciiz" => Ast::Asciiz(self.parse_string()?),
+            ".align" => todo!(),
+            ".macro" => todo!(),
+            _ => return Err(ParseError::InvalidDirective),
+        };
+
+        Ok(ast)
+    }
+
+    pub fn parse(&mut self) -> ParseResult<Ast> {
+        let mut directives = Vec::new();
+        while !self.is_eof() {
+            let dir = self.parse_directive()?;
+            directives.push(dir);
+        }
+        Ok(Ast::Root(directives))
+    }
 }
