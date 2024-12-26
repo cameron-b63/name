@@ -4,7 +4,7 @@
     .data
 
 OurBelovedString:
-    .asciiz     "Hello, World!"
+    .asciiz     "Hello, World!\n"
 
     .text
     la  $a0, OurBelovedString

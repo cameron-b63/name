@@ -1,6 +1,7 @@
 use crate::conformity::relocatable_conformity_check;
 
-use name_core::elf_def::{Elf, ET_EXEC, MIPS_TEXT_START_ADDR};
+use name_core::constants::MIPS_TEXT_START_ADDR;
+use name_core::elf_def::{Elf, ET_EXEC};
 use name_core::elf_utils::{find_global_symbol_address, parse_elf_symbols};
 
 pub fn one_module_linker(et_rel: Elf) -> Result<Elf, String> {

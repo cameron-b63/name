@@ -32,10 +32,9 @@ pub fn srl(program_state: &mut ProgramState, args: RArgs) -> () {
 
 // 0x08 - jr
 pub fn jr(program_state: &mut ProgramState, args: RArgs) -> () {
-    if program_state.cpu.general_purpose_registers[args.rs as usize]
-        >= program_state.memory.text_end
-        || program_state.cpu.general_purpose_registers[args.rs as usize]
-            < program_state.memory.text_start
+    if !program_state
+        .memory
+        .allows_execution_of(program_state.cpu.general_purpose_registers[args.rs as usize])
     {
         // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
@@ -51,12 +50,10 @@ pub fn jalr(program_state: &mut ProgramState, args: RArgs) -> () {
         x => x,
     };
 
-    if program_state.cpu.general_purpose_registers[args.rs as usize]
-        >= program_state.memory.text_end
-        || program_state.cpu.general_purpose_registers[args.rs as usize]
-            < program_state.memory.text_start
+    if !program_state
+        .memory
+        .allows_execution_of(program_state.cpu.general_purpose_registers[args.rs as usize])
     {
-        // TODO: Take care of this lingering Err
         // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
     }
@@ -196,9 +193,10 @@ pub fn sltu(program_state: &mut ProgramState, args: RArgs) -> () {
 pub fn j(program_state: &mut ProgramState, args: JArgs) -> () {
     let address: u32 = (args.address << 2) | (program_state.cpu.pc & 0xF0000000);
 
-    if address >= program_state.memory.text_end || address < program_state.memory.text_start {
+    if !program_state.memory.allows_execution_of(address) {
         // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
     }
 
     program_state.cpu.pc = address;
@@ -208,9 +206,10 @@ pub fn j(program_state: &mut ProgramState, args: JArgs) -> () {
 pub fn jal(program_state: &mut ProgramState, args: JArgs) -> () {
     let address: u32 = (args.address << 2) | (program_state.cpu.pc & 0xF0000000);
 
-    if address >= program_state.memory.text_end || address < program_state.memory.text_start {
+    if !program_state.memory.allows_execution_of(address) {
         // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
     }
 
     program_state.cpu.general_purpose_registers[Ra as usize] = program_state.cpu.pc;
@@ -230,9 +229,10 @@ pub fn beq(program_state: &mut ProgramState, args: IArgs) -> () {
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
-    if temp >= program_state.memory.text_end || temp < program_state.memory.text_start {
+    if !program_state.memory.allows_execution_of(temp) {
         // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
     }
 
     // Bro forgot the actual jump logic
@@ -252,9 +252,10 @@ pub fn bne(program_state: &mut ProgramState, args: IArgs) -> () {
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
-    if temp >= program_state.memory.text_end || temp < program_state.memory.text_start {
+    if !program_state.memory.allows_execution_of(temp) {
         // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
     }
 
     // Bro once again forgot the actual jump logic
@@ -271,9 +272,10 @@ pub fn blez(program_state: &mut ProgramState, args: IArgs) -> () {
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
-    if temp >= program_state.memory.text_end || temp < program_state.memory.text_start {
+    if !program_state.memory.allows_execution_of(temp) {
         // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
     }
 
     // BRO HAS ONCE AGAIN FORGOTTEN THE ACTUAL JUMP
@@ -291,9 +293,10 @@ pub fn bgtz(program_state: &mut ProgramState, args: IArgs) -> () {
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
-    if temp >= program_state.memory.text_end || temp < program_state.memory.text_start {
+    if !program_state.memory.allows_execution_of(temp) {
         // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
     }
 
     program_state.cpu.pc = temp;
@@ -340,21 +343,22 @@ pub fn lui(program_state: &mut ProgramState, args: IArgs) -> () {
 
 // 0x20 - lb
 pub fn lb(program_state: &mut ProgramState, args: IArgs) -> () {
-    program_state.cpu.general_purpose_registers[At as usize] =
-        (program_state.cpu.general_purpose_registers[args.rs as usize] as i32 + args.imm as i32)
-            as u32;
+    let temp: u32 = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+        + args.imm as i32) as u32;
 
-    if program_state.cpu.general_purpose_registers[At as usize] >= program_state.memory.data_end
-        || program_state.cpu.general_purpose_registers[At as usize]
-            < program_state.memory.data_start
-    {
+    if !program_state.memory.allows_read_from(temp) {
         // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
-    } else {
-        program_state.cpu.general_purpose_registers[args.rt as usize] =
-            program_state.memory.data[(program_state.cpu.general_purpose_registers[At as usize]
-                - program_state.memory.data_start) as usize] as u32;
+        return;
     }
+    let return_byte: u8 = match program_state.memory.read_byte(temp) {
+        Ok(b) => b,
+        Err(_) => {
+            program_state.set_exception(ExceptionType::AddressExceptionLoad);
+            return;
+        }
+    };
+    program_state.cpu.general_purpose_registers[args.rt as usize] = return_byte as u32;
 }
 
 // 0x23 - lw
@@ -367,20 +371,25 @@ pub fn lw(program_state: &mut ProgramState, args: IArgs) -> () {
         return;
     }
 
-    if temp + 4 >= program_state.memory.data_end || temp < program_state.memory.data_start {
+    if !program_state.memory.allows_read_from(temp)
+        || !program_state.memory.allows_read_from(temp + 3)
+    {
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
         return;
     }
 
     // Checks passed. Load word.
-    let start_idx: usize = (temp - program_state.memory.data_start) as usize;
-    let end_idx: usize = (start_idx + 4) as usize;
+    let mut i = 0;
+    let mut result_word: u32 = 0;
+    while i < 4 {
+        match program_state.memory.read_byte(temp + i) {
+            Ok(b) => result_word |= (b as u32) << (24 - (i * 8)),
+            Err(_) => program_state.set_exception(ExceptionType::AddressExceptionLoad),
+        }
+        i += 1;
+    }
 
-    program_state.cpu.general_purpose_registers[args.rt as usize] = u32::from_be_bytes(
-        program_state.memory.data[start_idx..end_idx]
-            .try_into()
-            .unwrap(),
-    );
+    program_state.cpu.general_purpose_registers[args.rt as usize] = result_word;
 }
 
 // 0x28 - sb
@@ -388,13 +397,18 @@ pub fn sb(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    if temp >= program_state.memory.data_end || temp < program_state.memory.data_start {
-        // TODO: Use a function which sets the proper values in cp0 for us
+    if !program_state.memory.allows_write_to(temp) {
         program_state.set_exception(ExceptionType::AddressExceptionStore);
+        return;
     }
 
-    program_state.memory.data[(temp - program_state.memory.data_start) as usize] =
-        program_state.cpu.general_purpose_registers[args.rt as usize] as u8;
+    match program_state.memory.set_byte(
+        temp,
+        program_state.cpu.general_purpose_registers[args.rt as usize] as u8,
+    ) {
+        Ok(_) => (),
+        Err(_) => program_state.set_exception(ExceptionType::AddressExceptionStore),
+    };
 }
 
 // 0x2b - sw
@@ -403,22 +417,34 @@ pub fn sw(program_state: &mut ProgramState, args: IArgs) -> () {
         + args.imm as i32) as u32;
 
     if temp % 4 != 0 {
-        // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionStore);
+        return;
     }
 
-    if temp + 4 >= program_state.memory.data_end || temp < program_state.memory.data_start {
-        // TODO: Use a function which sets the proper values in cp0 for us
+    if !program_state.memory.allows_write_to(temp)
+        || !program_state.memory.allows_write_to(temp + 3)
+    {
         program_state.set_exception(ExceptionType::AddressExceptionStore);
+        return;
     }
 
-    let start_idx: usize = (temp - program_state.memory.data_start) as usize;
-    let end_idx: usize = (start_idx + 4) as usize;
+    // Retrieve value of rt from cpu
+    let value: u32 = program_state.cpu.general_purpose_registers[args.rt as usize];
 
-    program_state.memory.data.splice(
-        start_idx..end_idx,
-        program_state.cpu.general_purpose_registers[args.rt as usize].to_be_bytes(),
-    );
-
-    // println!("Storing {} at 0x{:x} from ${}", program_state.cpu.general_purpose_registers[args.rt as usize], temp, rt);
+    // Checks passed. Store word.
+    let mut i = 0;
+    while i < 4 {
+        // Shift/mask value to get correct byte
+        let new_byte: u8 = ((value >> (i * 8)) & 0xFF) as u8;
+        // Write it to correct location
+        match program_state.memory.set_byte(temp + (3 - i), new_byte) {
+            Ok(_) => (),
+            Err(_) => {
+                // If write failed, trigger an exception
+                program_state.set_exception(ExceptionType::AddressExceptionStore);
+                return;
+            }
+        }
+        i += 1;
+    }
 }

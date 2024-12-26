@@ -3,6 +3,7 @@
 // Imports
 use std::{fs, io::Write, path::PathBuf, vec::Vec};
 
+use crate::constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR};
 use crate::elf_def::*;
 use crate::structs::{LineInfo, Section, Symbol, Visibility}; // Used for ELF sections
 

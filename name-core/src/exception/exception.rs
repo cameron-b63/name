@@ -15,7 +15,7 @@ impl ProgramState {
         // The EPC register contains the PC of where the exception occurred.
         // If it already contains some other value important to our flow, we do not want to overwrite the address.
         if !self.is_exception() {
-            self.cp0.set_epc(self.cpu.pc);
+            self.cp0.set_epc(self.cpu.pc - 4);
         }
         // Set the EXL bit.
         self.cp0.set_exception_level(EXCEPTION_BEING_HANDLED);
@@ -29,7 +29,7 @@ impl ProgramState {
         self.cp0.set_exception_level(NO_EXCEPTION);
         // TODO: LEAVE KERNEL MODE
         // Go back to where we were headed before the exception was handled
-        self.cpu.pc = self.cp0.get_epc();
+        self.cpu.pc = self.cp0.get_epc() + 4;
         // Clear EPC
         self.cp0.set_epc(0u32);
     }

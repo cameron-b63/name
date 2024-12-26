@@ -35,7 +35,10 @@ pub fn sys_print_string<W: Write>(
     let mut to_print: Vec<u8> = Vec::new();
 
     loop {
-        let byte = program_state.memory.read_byte(address)?;
+        let byte = program_state
+            .memory
+            .read_byte(address)
+            .map_err(|e| format!("{e}"))?;
 
         if byte == 0 {
             break;
@@ -84,8 +87,16 @@ pub fn sys_read_string<R: Read>(
     let mut address = program_state.cpu.general_purpose_registers[A0 as usize];
     let maxlength = program_state.cpu.general_purpose_registers[A1 as usize];
     while count < maxlength - 1 {
-        sys.read_exact(&mut buf).expect("Failed to read from stdin");
-        program_state.memory.data[(address - program_state.memory.data_start) as usize] = buf[0];
+        match sys.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(_) => return Err(format!("Failed to access stdin.")),
+        };
+
+        match program_state.memory.set_byte(address, buf[0]) {
+            Ok(_) => (),
+            Err(e) => return Err(format!("Error occurred in read string syscall:\n - {e}")),
+        };
+
         count += 1;
         address += 1;
         if buf[0] == b'\n' as u8 {
@@ -93,7 +104,10 @@ pub fn sys_read_string<R: Read>(
         }
     }
     buf[0] = 0;
-    program_state.memory.data[(address - program_state.memory.data_start) as usize] = buf[0];
+    match program_state.memory.set_byte(address, buf[0]) {
+        Ok(_) => (),
+        Err(e) => return Err(format!("Error occurred in read string syscall:\n - {e}")),
+    };
 
     Ok(())
 }
@@ -171,7 +185,8 @@ mod tests {
             Memory::new("hello world\0".as_bytes().to_vec(), vec![]),
         );
 
-        program_state.cpu.general_purpose_registers[A0 as usize] = program_state.memory.data_start;
+        program_state.cpu.general_purpose_registers[A0 as usize] =
+            crate::constants::MIPS_DATA_START_ADDR;
         test_print(sys_print_string, &mut program_state, "hello world");
     }
 
@@ -210,7 +225,8 @@ mod tests {
         let mut program_state =
             ProgramState::new(Processor::default(), Memory::new([0; 16].to_vec(), vec![]));
 
-        program_state.cpu.general_purpose_registers[A0 as usize] = program_state.memory.data_start;
+        program_state.cpu.general_purpose_registers[A0 as usize] =
+            crate::constants::MIPS_DATA_START_ADDR;
         program_state.cpu.general_purpose_registers[A1 as usize] = 16;
 
         assert_eq!(Ok(()), sys_read_string(&mut program_state, &mut cursor));

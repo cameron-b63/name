@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::LazyLock};
 
 use name_core::{
-    elf_def::MIPS_ADDRESS_ALIGNMENT,
+    constants::MIPS_ADDRESS_ALIGNMENT,
     exception::definitions::ExceptionType,
     instruction::{information::InstructionInformation, instruction_set::INSTRUCTION_SET},
     structs::{LineInfo, ProgramState},
@@ -33,10 +33,12 @@ pub fn single_step(
     // passing a breakpoints vector into this function is a very messy way of doing this, i'm aware,,,
     // ideally, a break instruction is physically injected into the code and everything works politely from there without extra shenaniganery.
     // however, for now, this will have to do
-    if program_state.cpu.pc > program_state.memory.text_end
-        || program_state.cpu.pc < program_state.memory.text_start
+    if !program_state
+        .memory
+        .allows_execution_of(program_state.cpu.pc)
     {
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
     }
 
     // println!("{}", program_state.cpu.pc);
@@ -48,7 +50,7 @@ pub fn single_step(
             program_state.set_exception(ExceptionType::Breakpoint);
         }
     }
-  
+
     // Fetch
     let raw_instruction = fetch(program_state);
     let instr_info = match INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {

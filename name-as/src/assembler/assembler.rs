@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use name_core::elf_def::{
-    MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR, STT_FUNC, STT_OBJECT,
-};
+use name_core::constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR};
+use name_core::elf_def::{STT_FUNC, STT_OBJECT};
 use name_core::instruction::information::InstructionInformation;
 use name_core::structs::{Section, Symbol, Visibility};
 

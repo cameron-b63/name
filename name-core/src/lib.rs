@@ -2,7 +2,6 @@ pub mod constants;
 pub mod elf_def;
 pub mod elf_utils;
 pub mod exception;
-pub mod implementations;
 pub mod instruction;
 pub mod parse;
 pub mod structs;

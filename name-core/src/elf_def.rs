@@ -31,10 +31,7 @@ pub const SECTIONS: [&'static str; NUM_OF_SECTIONS] = [
 ];
 
 // Constants pertaining to MIPS conventions
-pub const MIPS_TEXT_START_ADDR: u32 = 0x00400000; // The address at which, by convention, MIPS begins the .text section
-pub const MIPS_DATA_START_ADDR: u32 = 0x10010000; // The address at which, by convention, MIPS begins the .data section (I really typed this out again!)
 pub const MIPS_ALIGNMENT: u32 = 0x1000; // The appropriate alignment for MIPS executables (from all my research)
-pub const MIPS_ADDRESS_ALIGNMENT: u32 = 4; // MIPS is aligned by 4-byte word
 
 // ELF File Header fields
 
