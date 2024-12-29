@@ -31,9 +31,6 @@ impl Assembler {
 
         to_push.push(b'\0');
 
-        self.current_address += to_push.len() as u32;
-        self.section_dot_data.extend(&to_push);
-
         // TODO: This should really be refactored to implement.
         match self
             .symbol_table

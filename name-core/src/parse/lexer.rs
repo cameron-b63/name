@@ -195,7 +195,7 @@ impl<'a> Lexer<'a> {
         results
     }
 
-    fn lex(&mut self) -> LexerResult<'a, Token<'a>> {
+    fn lex_token(&mut self) -> LexerResult<'a, Token<'a>> {
         let c = self.next_char();
         let pos = self.get_pos();
 
@@ -284,8 +284,21 @@ impl<'a> Lexer<'a> {
                 self.consume_while(char::is_whitespace)
             }
 
-            Some(self.lex())
+            Some(self.lex_token())
         }
+    }
+
+    pub fn lex(&mut self) -> (Vec<LexerError<'a>>, Vec<Token<'a>>) {
+        let mut toks = Vec::new();
+        let mut errs = Vec::new();
+        while let Some(res) = self.next_tok() {
+            match res {
+                Ok(tok) => toks.push(tok),
+                Err(err) => errs.push(err),
+            }
+        }
+
+        (errs, toks)
     }
 }
 

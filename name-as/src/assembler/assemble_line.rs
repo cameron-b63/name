@@ -44,7 +44,7 @@ pub fn assemble_line(environment: &mut Assembler, line: &str, expanded_line: Str
         }
     }
 
-    if Option::is_none(&line_components) {
+    if line_components.is_none() {
         return;
     }
 

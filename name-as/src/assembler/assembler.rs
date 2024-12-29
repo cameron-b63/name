@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use name_core::constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR};
-use name_core::elf_def::{STT_FUNC, STT_OBJECT};
-use name_core::instruction::information::InstructionInformation;
-use name_core::structs::{Section, Symbol, Visibility};
+use name_core::{
+    constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
+    elf_def::{STT_FUNC, STT_OBJECT},
+    instruction::information::InstructionInformation,
+    parse::parse::Ast,
+    structs::{Section, Symbol, Visibility},
+};
 
 use crate::assembler::assemble_instruction::assemble_instruction;
 use crate::assembler::assembly_helpers::{
@@ -13,6 +16,9 @@ use crate::assembler::assembly_helpers::{
 
 use crate::definitions::constants::BACKPATCH_PLACEHOLDER;
 use crate::definitions::structs::{Backpatch, BackpatchType, LineComponent, PseudoInstruction};
+
+/// Possible assemble error codes
+pub enum AssembleError {}
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
 
@@ -276,5 +282,74 @@ impl Assembler {
         }
 
         self.current_address += MIPS_ADDRESS_ALIGNMENT;
+    }
+
+    pub fn assemble_instruction(
+        &mut self,
+        info: &InstructionInformation,
+        args: Vec<Ast>,
+    ) -> Result<AssembleError, ()> {
+        todo!()
+    }
+
+    pub fn assemble_asciiz(&mut self, s: String) {
+        // turn string to asciiz
+        let mut to_push: Vec<u8> = s
+            // Escape sequences
+            .replace(r"\n", "\n")
+            .replace(r"\t", "\t")
+            .replace(r"\\", "\\")
+            .into_bytes();
+
+        // add a null terminator
+        to_push.push(b'\0');
+
+        //  increment current address
+        self.current_address += to_push.len() as u32;
+
+        // add string to data section
+        self.section_dot_data.extend(&to_push);
+
+        // use the string to set the size of the most recent symbol in table
+        // TODO: refactor
+        match self
+            .symbol_table
+            .iter_mut()
+            .find(|s| s.identifier == self.most_recent_label)
+        {
+            Some(res) => res.size = to_push.len() as u32,
+            None => {}
+        }
+    }
+
+    /// entry point for folding ast into the environment
+    pub fn assemble(&mut self, ast: Ast) -> Result<(), AssembleError> {
+        match ast {
+            // individual ast nodes that can be folded into environment
+            Ast::Label(s) => Ok(self.add_label(&s)),
+            Ast::Include(s) => todo!(),
+            Ast::Asciiz(s) => Ok(self.assemble_asciiz(s)),
+            Ast::Section(section) => {
+                self.current_section = section;
+                Ok(())
+            }
+            Ast::Instruction(info, args) => todo!(),
+            Ast::Root(nodes) => {
+                // TODO! nodes??
+                for node in nodes {
+                    self.assemble(node)?;
+                }
+
+                Ok(())
+            }
+
+            // ast nodes that should be ohterwise consumed
+            Ast::Immediate(s) => todo!(),
+            Ast::Eqv(_, _) => panic!(),
+            Ast::Symbol(s) => panic!(),
+            Ast::BaseAddress(_, _) => panic!(),
+            Ast::Register(s) => panic!(),
+            Ast::LabelRef(s) => panic!(),
+        }
     }
 }

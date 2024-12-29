@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
-use name_core::structs::{LineInfo, Section};
+use name_core::{
+    parse::{lexer::Lexer, parse::Parser},
+    structs::{LineInfo, Section},
+};
 
 use crate::assembler::assemble_line::assemble_line;
 use crate::assembler::assembler::Assembler;
@@ -16,6 +19,44 @@ The Ok variant contains the Assembler environment, which contains the needed inf
 */
 
 pub fn assemble(
+    file_contents: String,
+    current_dir: PathBuf,
+    line_prefix: Option<String>,
+) -> Result<Assembler, Vec<String>> {
+    let mut environment: Assembler = Assembler::new();
+
+    environment.current_dir = current_dir;
+
+    match line_prefix {
+        Some(s) => environment.line_prefix = s,
+        None => {}
+    }
+
+    let mut lexer = Lexer::new(&file_contents);
+    let (errs, toks) = lexer.lex();
+
+    if !errs.is_empty() {
+        todo!("add lexer error handling");
+    }
+
+    let mut parser = Parser::new(toks);
+
+    let (perrs, ast) = parser.parse();
+
+    if !perrs.is_empty() {
+        todo!("add parser error handling");
+    }
+
+    environment.assemble(ast);
+
+    if environment.errors.is_empty() {
+        return Ok(environment);
+    } else {
+        return Err(environment.errors);
+    }
+}
+
+pub fn assemble_old(
     file_contents: String,
     current_dir: PathBuf,
     line_prefix: Option<String>,

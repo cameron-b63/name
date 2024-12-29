@@ -1,12 +1,16 @@
-use name_core::constants::REGISTERS;
-use name_core::structs::Symbol;
+use name_core::{
+    constants::REGISTERS,
+    instruction::{
+        information::{ArgumentType, InstructionInformation},
+        instruction_set::INSTRUCTION_TABLE,
+    },
+    structs::Symbol,
+};
 
 use crate::definitions::{
-    constants::INSTRUCTION_TABLE,
     pseudo_instructions::PSEUDO_INSTRUCTION_SET,
     structs::{LineComponent, PseudoInstruction},
 };
-use name_core::instruction::information::{ArgumentType, InstructionInformation};
 
 use std::collections::HashMap;
 

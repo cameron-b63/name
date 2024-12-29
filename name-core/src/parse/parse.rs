@@ -4,7 +4,7 @@ use crate::{
         instruction_set::INSTRUCTION_TABLE,
     },
     parse::token::{Token, TokenKind},
-    structs::{ParseRegisterError, Register},
+    structs::{ParseRegisterError, Register, Section},
 };
 
 pub enum Ast {
@@ -20,11 +20,11 @@ pub enum Ast {
     // Directives
     Include(String),
     Asciiz(String),
-    Section(&'static str, Vec<Ast>),
+    Section(Section),
     Eqv(String, Box<Ast>),
 
     // constructs
-    Instruction(String, Vec<Ast>),
+    Instruction(&'static InstructionInformation, Vec<Ast>),
     Register(Register),
     BaseAddress(u32, Box<Ast>),
     Root(Vec<Ast>),
@@ -127,10 +127,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_label(&mut self) -> ParseResult<String> {
+    pub fn parse_label(&mut self) -> ParseResult<Ast> {
         let label = self.try_next_if(TokenKind::Symbol)?.src_string();
         self.try_advance_if(TokenKind::Colon)?;
-        Ok(label)
+        Ok(Ast::Label(label))
     }
 
     pub fn parse_op(&mut self) -> ParseResult<&'static InstructionInformation> {
@@ -221,56 +221,58 @@ impl<'a> Parser<'a> {
         Ok(ast)
     }
 
-    pub fn parse_data_section(&mut self) -> ParseResult<Vec<Ast>> {
-        let mut entries = Vec::new();
-
-        while let Some(tok) = self.peek() {
-            let ast = match tok.kind {
-                TokenKind::Symbol => Ast::Label(self.parse_label()?),
-                TokenKind::Directive => {
-                    if tok.is_section_directive() {
-                        break;
-                    } else {
-                        self.parse_directive()?
-                    }
-                }
-                _ => return Err(ParseError::InvalidData),
-            };
-            entries.push(ast);
-        }
-        Ok(entries)
-    }
+    // pub fn parse_data_section(&mut self) -> ParseResult<Vec<Ast>> {
+    //     let mut entries = Vec::new();
+    //
+    //     while let Some(tok) = self.peek() {
+    //         let ast = match tok.kind {
+    //             TokenKind::Symbol => self.parse_label(),
+    //             TokenKind::Directive => {
+    //                 if tok.is_section_directive() {
+    //                     break;
+    //                 } else {
+    //                     self.parse_directive()?
+    //                 }
+    //             }
+    //             _ => return Err(ParseError::InvalidData),
+    //         };
+    //         entries.push(ast);
+    //     }
+    //     Ok(entries)
+    // }
 
     pub fn parse_instruction(&mut self) -> ParseResult<Ast> {
-        todo!()
+        let info = self.parse_op()?;
+
+        todo!("parse an instruction")
     }
 
-    pub fn parse_text_section(&mut self) -> ParseResult<Vec<Ast>> {
-        let mut entries = Vec::new();
-        while let Some(tok) = self.peek() {
-            let ast = match tok.kind {
-                TokenKind::Symbol => {
-                    if let Some(TokenKind::Colon) = self.peek2().map(|t| t.kind) {
-                        Ast::Label(self.parse_label()?)
-                    } else {
-                        self.parse_instruction()?
-                    }
-                }
-                TokenKind::Directive => {
-                    if tok.is_section_directive() {
-                        break;
-                    } else if tok.is_data_directive() {
-                        return Err(ParseError::WrongSection);
-                    } else {
-                        self.parse_directive()?
-                    }
-                }
-                _ => return Err(ParseError::InvalidText),
-            };
-            entries.push(ast);
-        }
-        Ok(entries)
-    }
+    // pub fn parse_text_section(&mut self) -> ParseResult<Vec<Ast>> {
+    //     let mut entries = Vec::new();
+    //     while let Some(tok) = self.peek() {
+    //         let ast = match tok.kind {
+    //             TokenKind::Symbol => {
+    //                 if let Some(TokenKind::Colon) = self.peek2().map(|t| t.kind) {
+    //                     Ast::Label(self.parse_label()?)
+    //                 } else {
+    //                     self.parse_instruction()?
+    //                 }
+    //             }
+    //             TokenKind::Directive => {
+    //                 if tok.is_section_directive() {
+    //                     break;
+    //                 } else if tok.is_data_directive() {
+    //                     return Err(ParseError::WrongSection);
+    //                 } else {
+    //                     self.parse_directive()?
+    //                 }
+    //             }
+    //             _ => return Err(ParseError::InvalidText),
+    //         };
+    //         entries.push(ast);
+    //     }
+    //     Ok(entries)
+    // }
 
     pub fn parse_directive(&mut self) -> ParseResult<Ast> {
         let directive = self.try_next_if(TokenKind::Directive)?.src_span.src;
@@ -278,8 +280,8 @@ impl<'a> Parser<'a> {
         let ast = match directive {
             ".eqv" => Ast::Eqv(self.parse_symbol()?, Box::new(self.parse_immediate()?)),
             ".include" => Ast::Include(self.parse_string()?),
-            ".text" => Ast::Section("text", self.parse_text_section()?),
-            ".data" => Ast::Section("data", self.parse_data_section()?),
+            ".text" => Ast::Section(Section::Text),
+            ".data" => Ast::Section(Section::Data),
             ".asciiz" => Ast::Asciiz(self.parse_string()?),
             ".align" => todo!(),
             ".macro" => todo!(),
@@ -289,12 +291,31 @@ impl<'a> Parser<'a> {
         Ok(ast)
     }
 
-    pub fn parse(&mut self) -> ParseResult<Ast> {
-        let mut directives = Vec::new();
-        while !self.is_eof() {
-            let dir = self.parse_directive()?;
-            directives.push(dir);
+    pub fn parse(&mut self) -> (Vec<ParseError>, Ast) {
+        // root units of our ast, directives, instructions and labels
+        let mut entries = Vec::new();
+        let mut errs = Vec::new();
+
+        while let Some(tok) = self.peek() {
+            let res = match tok.kind {
+                TokenKind::Directive => self.parse_directive(),
+                TokenKind::Symbol => {
+                    if let Some(tok) = self.peek2().filter(|tok| tok.is_kind(TokenKind::Colon)) {
+                        self.parse_label()
+                    } else {
+                        self.parse_instruction()
+                    }
+                }
+                _ => Err(ParseError::UnexpectedToken),
+            };
+
+            // add the result to our vectors
+            match res {
+                Ok(ast) => entries.push(ast),
+                Err(err) => errs.push(err),
+            }
         }
-        Ok(Ast::Root(directives))
+
+        (errs, Ast::Root(entries))
     }
 }
