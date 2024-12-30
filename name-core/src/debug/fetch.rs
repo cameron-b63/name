@@ -1,4 +1,4 @@
-use name_core::{
+use crate::{
     exception::definitions::ExceptionType, instruction::RawInstruction, structs::ProgramState,
 };
 

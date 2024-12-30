@@ -1,18 +1,13 @@
-use crate::assembler::assembly_helpers::{
-    arg_configuration_is_ok, translate_identifier_to_address,
-};
+use crate::assembler::assembly_helpers::arg_configuration_is_ok;
 use crate::assembler::assembly_utils::*;
 use crate::definitions::structs::LineComponent;
 use name_core::instruction::information::{ArgumentType, InstructionInformation, InstructionType};
-use name_core::structs::Symbol;
 
 // Big logic for instruction assembly - this is the main driver code for actual packing of instructions once parsed.
 pub fn assemble_instruction(
     info: &InstructionInformation,
     arguments: &Vec<LineComponent>,
-    symbol_table: &Vec<Symbol>,
-    current_address: &u32,
-) -> Result<Option<u32>, String> {
+) -> Result<u32, String> {
     let has_alternate_configurations: bool = info.alt_args.is_some();
 
     // Find proper argument configuration early
@@ -49,64 +44,22 @@ pub fn assemble_instruction(
                 Err(e) => return Err(e),
             };
 
-            match assemble_r_type(rd, rs, rt, shamt, funct) {
-                Ok(packed_instr) => {
-                    return Ok(Some(packed_instr));
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
+            return assemble_r_type(rd, rs, rt, shamt, funct);
         }
         InstructionType::IType => {
             let opcode: u32 = info.op_code as u32;
 
-            let (rs, rt, imm) = match assign_i_type_arguments(
-                arguments,
-                configuration_to_use,
-                symbol_table,
-                current_address,
-            ) {
+            let (rs, rt, imm) = match assign_i_type_arguments(arguments, configuration_to_use) {
                 Ok((rs, rt, imm)) => (rs, rt, imm),
                 Err(e) => return Err(e),
             };
 
-            if imm.is_none() && configuration_to_use.contains(&ArgumentType::BranchLabel) {
-                return Ok(None);
-            }
-
-            match assemble_i_type(opcode, rs, rt, imm) {
-                Ok(packed_instr) => {
-                    return Ok(Some(packed_instr));
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
+            return assemble_i_type(opcode, rs, rt, imm);
         }
         InstructionType::JType => {
             let opcode: u32 = info.op_code as u32;
 
-            let identifier = match assign_j_type_arguments(arguments, configuration_to_use) {
-                Ok(identifier) => identifier,
-                Err(e) => return Err(e),
-            };
-
-            let address = match translate_identifier_to_address(&identifier, symbol_table) {
-                Some(addr) => addr >> 2,
-                None => return Ok(None), // Unresolved symbol (forward reference)
-            };
-
-            let assembled_output = assemble_j_type(opcode, Some(address));
-
-            match assembled_output {
-                Ok(_) => {
-                    return assembled_output;
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
+            return Ok(assemble_j_type(opcode));
         }
     }
 }

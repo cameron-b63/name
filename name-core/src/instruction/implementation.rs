@@ -84,6 +84,11 @@ pub fn syscall(program_state: &mut ProgramState, _args: RArgs) -> () {
     program_state.set_exception(ExceptionType::Syscall);
 }
 
+// 0x0D - break
+pub fn break_instr(program_state: &mut ProgramState, _args: RArgs) -> () {
+    program_state.set_exception(ExceptionType::Breakpoint);
+}
+
 // 0x20 - add
 pub fn add(program_state: &mut ProgramState, args: RArgs) -> () {
     program_state.cpu.general_purpose_registers[args.rd as usize] =

@@ -1,9 +1,12 @@
-use name_core::{
+use crate::{
     exception::definitions::ExceptionType,
     structs::{LineInfo, OperatingSystem, ProgramState},
 };
 
-use crate::{debug::debug_utils::handle_breakpoint, simulator_helpers::generate_err};
+use crate::debug::simulator_helpers::generate_err;
+
+use super::debug_utils::DebuggerState;
+//use name_core::debug::
 
 /// The exception handler is invoked whenever an exception has occurred.
 /// Some common exceptions include breakpoints, syscalls, and arithmetic overflow.
@@ -12,15 +15,15 @@ pub fn handle_exception(
     program_state: &mut ProgramState,
     os: &mut OperatingSystem,
     lineinfo: &Vec<LineInfo>,
+    debugger_state: &mut DebuggerState,
 ) {
     // In order to invoke this function, certain values (like exception_level == 1) are already assumed.
 
     // Attempt to recognize the exception that occurred
-    let exception_type: ExceptionType;
-    match ExceptionType::try_from(program_state.cp0.get_exc_code()) {
-        Ok(exc_type) => exception_type = exc_type,
+    let exception_type = match ExceptionType::try_from(program_state.cp0.get_exc_code()) {
+        Ok(exc_type) => exc_type,
         Err(e) => panic!("{e}"),
-    }
+    };
 
     // Retrieve necessary values
     let epc: u32 = program_state.cp0.get_epc();
@@ -60,7 +63,12 @@ pub fn handle_exception(
         }
         ExceptionType::Breakpoint => {
             // Invoke the breakpoint handler on program state and lineinfo
-            handle_breakpoint(program_state, lineinfo);
+            if program_state.cp0.is_debug_mode() {
+                // debugger is running.
+                os.handle_breakpoint(program_state, lineinfo, debugger_state);
+            } else {
+                panic!("Break not recognized outside of debug mode. To run in debug mode, pass -d as a command line argument.");
+            }
         }
         ExceptionType::ReservedInstruction => {
             panic!(

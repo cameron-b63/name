@@ -57,7 +57,7 @@ impl From<ExceptionType> for u32 {
     }
 }
 
-/// This impl block allows for converting the other way around:
+/// This impl block allows for converting the other way around (ExcCode to ExceptionType):
 impl TryFrom<u32> for ExceptionType {
     type Error = String;
 

@@ -43,6 +43,15 @@ macro_rules! getset {
 /// For instance, bit 1 of register 12, select 0 (Status) represents the Exception Level.
 /// The implementations below are used to perform bit-level accesses.
 impl Coprocessor0 {
+    // TODO: Implement EJTAG
+    pub fn set_debug_mode(&mut self, thing: bool) {
+        self.debug_mode = thing;
+    }
+
+    pub fn is_debug_mode(&self) -> bool {
+        return self.debug_mode;
+    }
+
     fn get_bit_field(&self, register: Register, range: Range<usize>) -> u32 {
         let reg = to_register(register);
 

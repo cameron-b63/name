@@ -1,4 +1,6 @@
-use crate::{instruction::instruction::RawInstruction, structs::ProgramState};
+use crate::{
+    elf_def::RelocationEntryType, instruction::instruction::RawInstruction, structs::ProgramState,
+};
 use std::fmt::Debug;
 
 pub struct InstructionInformation {
@@ -9,6 +11,7 @@ pub struct InstructionInformation {
     pub implementation: Box<dyn Fn(&mut ProgramState, RawInstruction) -> () + Sync + Send>,
     pub args: &'static [ArgumentType],
     pub alt_args: Option<&'static [&'static [ArgumentType]]>,
+    pub relocation_type: Option<RelocationEntryType>,
 }
 
 impl PartialEq for InstructionInformation {

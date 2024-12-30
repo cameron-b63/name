@@ -1,5 +1,5 @@
 use name_emu::args::Cli;
-use name_emu::simulator;
+use name_emu::simulator::simulate;
 
 use name_core::elf_def::Elf;
 use name_core::elf_utils::read_bytes_to_elf;
@@ -18,7 +18,5 @@ pub fn main() {
         Err(e) => panic!("{}", e),
     };
 
-    let _ = simulator::simulate(executable, args.debug);
-
-    // println!("ploink");
+    let _ = simulate(executable, args.debug);
 }

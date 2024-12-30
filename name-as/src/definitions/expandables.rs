@@ -1,12 +1,13 @@
 use crate::assembler::assembler::Assembler;
 use crate::assembler::assembly_helpers::translate_identifier_to_address;
 use crate::definitions::structs::LineComponent;
+use crate::definitions::{constants::INSTRUCTION_TABLE, structs::LineComponent};
+use name_core::constants::MIPS_TEXT_START_ADDR;
+use name_core::elf_def::{RelocationEntry, RelocationEntryType};
+use name_core::instruction::information::InstructionInformation;
 use name_core::instruction::{
     information::InstructionInformation, instruction_set::INSTRUCTION_TABLE,
 };
-
-use super::constants::BACKPATCH_PLACEHOLDER;
-use super::structs::BackpatchType;
 
 /*
 Each pseudo instruction must implement its own `expand` fn. This function expands the pseudoinstruction's content into its respective instructions.
@@ -153,60 +154,46 @@ pub(crate) fn expand_la(
     let rd = args[0].clone();
     let label = args[1].clone();
 
-    // let zero = LineComponent::Register(String::from("$0"));
+    let symbol_ident: String = label.to_string();
+
+    let symbol_offset: u32 = environment.get_symbol_offset(symbol_ident);
 
     let lui_info =  match INSTRUCTION_TABLE.get("lui") {
             Some(info) => info,
             None => return Err(format!(" - Failed to expand `la` pseudoinstruction. Its expansion was likely defined incorrectly (go use git blame on https://github.com/cameron-b63/name to find out who's at fault).")),
-        };
+    };
     let ori_info = match INSTRUCTION_TABLE.get("ori") {
             Some(info) => info,
             None => return Err(format!(" - Failed to expand `la` pseudoinstruction. Its expansion was likely defined incorrectly (go use git blame on https://github.com/cameron-b63/name to find out who's at fault).")),
-        };
+    };
 
-    // This is where things get ludicrous. Backpatching needs to be accounted for here.
-    // A more sophisticated version of backpatching is necessary for this exact reason.
+    // Create appropriate relocation entries:
+    let entries: Vec<RelocationEntry> = vec![
+        RelocationEntry {
+            r_offset: environment.current_address - MIPS_TEXT_START_ADDR,
+            r_sym: symbol_offset as u32,
+            r_type: RelocationEntryType::Hi16,
+        },
+        RelocationEntry {
+            r_offset: environment.current_address + 4 - MIPS_TEXT_START_ADDR,
+            r_sym: symbol_offset as u32,
+            r_type: RelocationEntryType::Lo16,
+        },
+    ];
 
-    let mut resolved_symbol_value: u32 = BACKPATCH_PLACEHOLDER;
-    let mut must_backpatch: bool = false;
-    let identifier: String;
+    let new_bytes: Vec<u8> = entries.iter().flat_map(|entry| entry.to_bytes()).collect();
 
-    match label {
-        LineComponent::Identifier(ident) => {
-            identifier = ident;
-            match translate_identifier_to_address(&identifier, &environment.symbol_table) {
-                Some(addr) => resolved_symbol_value = addr,
-                None => {
-                    must_backpatch = true;
-                }
-            }
-        }
-        _ => return Err(format!("`la` expected a label, got {:?}", label)),
-    }
+    environment.section_dot_rel.extend(new_bytes);
 
-    let upper = LineComponent::Immediate((resolved_symbol_value >> 16) as i32);
-    let lower = LineComponent::Immediate((resolved_symbol_value & 0xFFFF) as i32);
+    // Placeholder zeros since this will be filled in during linking.
+    let null_component = LineComponent::Immediate(0i32);
 
-    if must_backpatch {
-        environment.add_backpatch(
-            lui_info,
-            &vec![rd.clone(), upper.clone()],
-            identifier.clone(),
-            BackpatchType::Upper,
-        );
-        environment.add_backpatch(
-            &lui_info,
-            &vec![rd.clone(), rd.clone(), lower.clone()],
-            identifier.clone(),
-            BackpatchType::Lower,
-        );
-    }
-
+    // Prepare for assembly.
     Ok(vec![
-        // lui  $rd, UPPER
-        (lui_info, vec![rd.clone(), upper]),
-        // ori  $rd, $rd, LOWER
-        (ori_info, vec![rd.clone(), rd.clone(), lower]),
+        // lui  $rd, 0
+        (lui_info, vec![rd.clone(), null_component.clone()]),
+        // ori  $rd, $rd, 0
+        (ori_info, vec![rd.clone(), rd.clone(), null_component]),
     ])
 }
 
@@ -223,11 +210,9 @@ pub(crate) fn expand_move(
 
     let zero: LineComponent = LineComponent::Register(String::from("$0"));
 
-    // let add_info: &'static InstructionInformation;
-
     let add_info = match INSTRUCTION_TABLE.get("add") {
         Some(info) => info,
-        None => return Err(format!(" - Failed to expand `la` pseudoinstruction. Its expansion was likely defined incorrectly (go use git blame on https://github.com/cameron-b63/name to find out who's at fault).")),
+        None => return Err(format!(" - Failed to expand `move` pseudoinstruction. Its expansion was likely defined incorrectly (go use git blame on https://github.com/cameron-b63/name to find out who's at fault).")),
     };
 
     Ok(vec![

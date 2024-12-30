@@ -1,5 +1,5 @@
 use name_ld::args::Cli;
-use name_ld::one_module_linker::one_module_linker;
+use name_ld::linker::linker;
 use std::path::PathBuf;
 
 use name_core::elf_def::Elf;
@@ -15,43 +15,49 @@ fn main() {
         .expect("[*] FATAL: No parent directory found (did you clone the entire repo?)")
         .to_path_buf();
 
-    // TODO: implement multiple input files (ehhhhh)
-    // uncomment this block when can add multiple input files
-    /* let module_input_fns: Vec<PathBuf> = args.input_filenames
-    .iter()
-    .map(|filename| base_path.join(filename))
-    .collect(); */
-    let single_module_input_fn = base_path.join(args.input_filenames); // this is just one file right now. obviously it's supposed to not be that
-    let single_module_output_fn = base_path.join(args.output_filename);
-
-    // invoke correct version of linker based on number of arguments supplied
-    // uncomment this block when can add multiple input files
-    /* let single_file_contents: Vec<u8> = module_input_fns
-    .iter()
-    .map(|filename| std::fs::read(filename).expect("Unable to open object file"))
-    .collect(); */
-    let single_file_contents: Vec<u8> =
-        std::fs::read(single_module_input_fn).expect("Unable to open object file");
-
-    // let single_et_rel: Elf = read_bytes_to_elf(single_file_contents).expect("This shouldn't fail rn");
-    let constructed_elf: Elf = match read_bytes_to_elf(single_file_contents) {
-        Ok(relocatable) => relocatable,
-        Err(e) => panic!("{e}"),
-    };
-
-    // let linked_single_module = one_module_linker(single_et_rel);
-    let executable_contents: Elf = match one_module_linker(constructed_elf) {
-        Ok(result) => result,
-        Err(e) => {
-            panic!("{e}");
+    // match on arguments provided
+    match args.input_filenames.len() {
+        0 => {
+            // Err
+            panic!("[*] FATAL: No input files supplied.");
         }
-    };
+        _ => {
+            // Invoke main linker
 
-    // output final ET_EXEC ELF (this comment might not be correct anymore. idk)
-    // let _ = write_elf_to_file(&args.output_filename, &linked_single_module.unwrap());
-    match write_elf_to_file(&single_module_output_fn, &executable_contents) {
-        Ok(_) => println!("Single module linking performed successfully."),
-        Err(e) => panic!("{e}"),
+            // Collect input filenames
+            let multi_module_input_fns: Vec<PathBuf> = args
+                .input_filenames
+                .iter()
+                .map(|filename| base_path.join(filename))
+                .collect();
+
+            // Generate output filename
+            let multi_module_output_fn = base_path.join(args.output_filename);
+
+            // Deserialize each input file, put into vector for linking
+            let mut elf_vector: Vec<Elf> = vec![];
+            for filename in multi_module_input_fns {
+                // get file contents
+                let single_file_contents: Vec<u8> =
+                    std::fs::read(filename).expect("Unable to open object file.");
+
+                match read_bytes_to_elf(single_file_contents) {
+                    Ok(relocatable) => elf_vector.push(relocatable),
+                    Err(e) => panic!("{e}"),
+                };
+            }
+
+            // Invoke linker on collected Elfs
+            let executable_contents: Elf = match linker(elf_vector) {
+                Ok(elf) => elf,
+                Err(e) => panic!("{e}"),
+            };
+
+            // Write output to file
+            match write_elf_to_file(&multi_module_output_fn, &executable_contents) {
+                Ok(_) => println!("Linking performed successfully."),
+                Err(e) => panic!("{e}"),
+            }
+        }
     }
-    println!("Imagine, if you will, an ET_EXEC has been emitted.");
 }

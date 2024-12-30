@@ -1,6 +1,4 @@
-use name_core::structs::Symbol;
-
-use crate::assembler::assembly_helpers::{parse_register_to_u32, translate_identifier_to_address};
+use crate::assembler::assembly_helpers::parse_register_to_u32;
 use crate::definitions::constants::{MAX_U16, MIN_U16};
 use crate::definitions::structs::LineComponent;
 use name_core::instruction::information::ArgumentType;
@@ -117,8 +115,6 @@ pub fn assemble_i_type(
 pub fn assign_i_type_arguments(
     arguments: &Vec<LineComponent>,
     args_to_use: &[ArgumentType],
-    symbol_table: &Vec<Symbol>,
-    current_address: &u32,
 ) -> Result<(Option<String>, Option<String>, Option<i32>), String> {
     let mut rs: Option<String> = None;
     let mut rt: Option<String> = None;
@@ -138,30 +134,7 @@ pub fn assign_i_type_arguments(
             ArgumentType::Rs => rs = Some(content.clone()),
             ArgumentType::Rt => rt = Some(content.clone()),
             ArgumentType::Immediate => imm = Some(immediate.clone()),
-            ArgumentType::Identifier => {
-                if let Some(addr) = translate_identifier_to_address(&content, symbol_table) {
-                    if addr as i16 as u32 != addr {
-                        return Err(" - Supplied identifier out of storable range (Consider using an intermediate temp register).".to_string());
-                    } else {
-                        imm = Some(addr as i32);
-                    }
-                }
-            }
-            ArgumentType::BranchLabel => {
-                if let Some(target_addr) = translate_identifier_to_address(&content, symbol_table) {
-                    // Translate from address to offset from this instruction's address
-                    // Bit shifted twice right for extra range - instruction bytes are already aligned to 4 so bottom 2 bits are extra
-                    let offset_unchecked: i32 =
-                        (target_addr as i32 - current_address.clone() as i32) >> 2;
-                    imm = Some(offset_unchecked - 1);
-
-                    if offset_unchecked as i16 as i32 != offset_unchecked {
-                        return Err(" - Branch target misaligned or out of range.".to_string());
-                    }
-                } else {
-                    imm = None;
-                }
-            }
+            ArgumentType::Identifier | ArgumentType::BranchLabel => imm = None,
             _ => unreachable!(),
         }
     }
@@ -182,50 +155,9 @@ pub fn assign_i_type_arguments(
 
 */
 
-pub fn assemble_j_type(opcode: u32, target: Option<u32>) -> Result<Option<u32>, String> {
-    let address: u32;
-
-    match target {
-        Some(addr) => {
-            if addr & 0xFC000000 == 0 {
-                address = addr;
-            } else {
-                return Err("Target address out of range for J-Type instruction.".to_string());
-            }
-        }
-        None => {
-            return Ok(None);
-        }
-    }
-
-    Ok(Some((opcode << 26) | (address)))
-}
-
-pub fn assign_j_type_arguments(
-    arguments: &Vec<LineComponent>,
-    args_to_use: &[ArgumentType],
-) -> Result<String, String> {
-    let mut identifier: Option<String> = None;
-
-    for (i, passed) in arguments.iter().enumerate() {
-        if let LineComponent::Identifier(ident) = passed {
-            match args_to_use[i] {
-                ArgumentType::BranchLabel => identifier = Some(ident.clone()),
-                _ => {
-                    return Err(
-                        " - Improper type of arguments provided for instruction.".to_string()
-                    )
-                }
-            }
-        } else {
-            return Err(" - Malformed argument.".to_string());
-        }
-    }
-
-    match identifier {
-        Some(ident) => Ok(ident),
-        None => Err(" - No identifier provided for J-Type instruction.".to_string()),
-    }
+/// "Assemble" a j-type instruction. Since the immediate won't be known until relocation, only have to shift opcode.
+pub fn assemble_j_type(opcode: u32) -> u32 {
+    return opcode << 26;
 }
 
 #[cfg(test)]
@@ -245,11 +177,10 @@ mod tests {
 
     #[test]
     fn assemble_j_type_test() {
-        let opcode: u32 = 3;
-        let target: u32 = 0x40BEE0;
+        let opcode: u32 = 2;
 
-        let assembled_output = assemble_j_type(opcode, Some(target));
-        assert_eq!(assembled_output, Ok(Some(0x0c40BEE0)));
+        let assembled_output = assemble_j_type(opcode);
+        assert_eq!(assembled_output, 0x08000000);
     }
 
     #[test]

@@ -19,11 +19,24 @@
 
 // Section setup for ET_REL files
 // These are the sections which should be present in each ET_REL constructed by the functions in this file.
-pub const NUM_OF_SECTIONS: usize = 7; // This is e_shnum.
-pub const SECTIONS: [&'static str; NUM_OF_SECTIONS] = [
+pub const NUM_OF_SECTIONS_REL: usize = 8; // This is e_shnum.
+pub const SECTIONS_REL: [&'static str; NUM_OF_SECTIONS_REL] = [
     "", // Null (reserved) section
-    ".text",
     ".data",
+    ".text",
+    ".rel",
+    ".symtab",
+    ".strtab",
+    ".line",
+    ".shstrtab",
+];
+
+// ET_EXEC files (output from linker) should look a little different.
+pub const NUM_OF_SECTIONS_EXEC: usize = 7; // This is e_shnum for ET_EXECs.
+pub const SECTIONS_EXEC: [&'static str; NUM_OF_SECTIONS_EXEC] = [
+    "",
+    ".data",
+    ".text",
     ".symtab",
     ".strtab",
     ".line",
@@ -70,6 +83,15 @@ pub const E_IDENT_DEFAULT: [u8; EI_NIDENT] = [
 pub const ET_REL: u16 = 1;
 pub const ET_EXEC: u16 = 2;
 // const ET_DYN: u16 = 3;
+
+
+/// ElfType is used to determine A) which type of ELF is being handled, and B) the subfields contain information about them.
+/// The u32 attached to Executable represents e_entry.
+#[derive(Clone)]
+pub enum ElfType {
+    Relocatable,
+    Executable(u32),
+}
 
 // all ELFs will first be constructed with e_type set to ET_REL. The linker handles any changes.
 pub const E_TYPE_DEFAULT: u16 = ET_REL;
@@ -120,10 +142,12 @@ pub const E_SHENTSIZE_DEFAULT: u16 = 40;
 
 // For our use case, e_shnum is known.
 // Each object file we assemble needs all program header entries, along with 2 entries for .debug and .line (debug/lineinfo). (plus 1 for null)
-pub const E_SHNUM_DEFAULT: u16 = NUM_OF_SECTIONS as u16;
+pub const E_SHNUM_DEFAULT_REL: u16 = NUM_OF_SECTIONS_REL as u16; // Relocatables have a different number
+pub const E_SHNUM_DEFAULT_EXEC: u16 = NUM_OF_SECTIONS_EXEC as u16;
 
 // By convention, e_shstrndx is set to the last value in the section header. The first index is reserved
-pub const E_SHSTRNDX_DEFAULT: u16 = E_SHNUM_DEFAULT - 1;
+pub const E_SHSTRNDX_DEFAULT_REL: u16 = E_SHNUM_DEFAULT_REL - 1;
+pub const E_SHSTRNDX_DEFAULT_EXEC: u16 = E_SHNUM_DEFAULT_EXEC - 1;
 
 // Program header consts
 
@@ -148,6 +172,7 @@ pub const SHT_NULL: u32 = 0;
 pub const SHT_PROGBITS: u32 = 1;
 pub const SHT_SYMTAB: u32 = 2;
 pub const SHT_STRTAB: u32 = 3;
+pub const SHT_REL: u32 = 9;
 
 // sh_flags  (unused commented out):
 pub const SHF_WRITE: u32 = 0x1; // writable
@@ -160,6 +185,9 @@ pub const SHF_STRINGS: u32 = 0x20; // contains null-term strings
                                    // const SHF_OS_NONCONFORMING: u32 = 0x100; // non-standard OS handling required
                                    // const SHF_GROUP: u32 = 0x200;        // section is a member of a group
                                    // const SHF_TLS: u32 = 0x400;          // section holds thread-local data
+
+// Other constants
+pub const SYMBOL_TABLE_ENTRY_SIZE: u32 = 8;
 
 /*
 
@@ -263,7 +291,7 @@ pub struct Elf32SectionHeader {
     pub(crate) sh_flags: u32, // Identifies section attributes: see const definitions
     pub(crate) sh_addr: u32, // Vaddr of section in memory (for loaded sections)
     pub(crate) sh_offset: u32, // Offset of the section in file image
-    pub(crate) sh_size: u32, // Size in bytes of the section in the file image
+    pub sh_size: u32,        // Size in bytes of the section in the file image
     pub(crate) sh_link: u32, // Section index of section
     pub(crate) sh_info: u32, // Extra info on section
     pub(crate) sh_addralign: u32, // Required alignment of section. Must be a power of two
@@ -286,6 +314,80 @@ impl Elf32SectionHeader {
         bytes.extend_from_slice(&self.sh_entsize.to_be_bytes());
 
         bytes
+    }
+}
+
+/// Relocation entry: For assembly -> linking pipeline
+#[derive(Clone, Copy, Debug)]
+pub struct RelocationEntry {
+    pub r_offset: u32,               // Address of instruction to relocate
+    pub r_sym: u32,                  // Symbol table index
+    pub r_type: RelocationEntryType, // Type of relocation entry
+}
+
+/// Enumerate the types of relocation entry based on https://refspecs.linuxfoundation.org/elf/mipsabi.pdf
+// TODO: Fix relocation types! They are not correct (exactly)!
+#[repr(u32)]
+#[derive(Clone, Copy, Debug)]
+pub enum RelocationEntryType {
+    /// No relocation; often used as a placeholder or for unsupported relocations.
+    None = 0,
+    /// Direct 16-bit relocation; used for small values or short jumps.
+    R16 = 1,
+    /// Direct 32-bit relocation; used for absolute addresses.
+    R32 = 2,
+    /// PC-relative 32-bit relocation; used for position-independent code adjustments.
+    Rel32 = 3,
+    /// Direct 26-bit shifted relocation; used for jump instructions within a 26-bit range. This is used in J-Type instructions.
+    R26 = 4,
+    /// High 16 bits of a 32-bit symbol; paired with Lo16 to handle larger addresses. This is the replacement for BackpatchType::Upper.
+    Hi16 = 5,
+    /// Low 16 bits of a 32-bit symbol; typically follows Hi16 for full address construction. This is the replacement for BackpatchType::Lower.
+    Lo16 = 6,
+    /// 16-bit offset from the Global Pointer (GP); used for accessing data in the global area.
+    GpRel16 = 7,
+    /// 16-bit literal entry; often used with specific load instructions.
+    Literal = 8,
+    /// 16-bit Global Offset Table (GOT) entry; used for dynamic linking and symbol access.
+    Got16 = 9,
+    /// PC-relative 16-bit relocation; used for branch instructions. This is used in I-Type Branch instructions.
+    Pc16 = 10,
+    /// 16-bit GOT entry for function calls; used in dynamic linking to resolve function addresses.
+    Call16 = 11,
+    /// 32-bit offset from the Global Pointer (GP); used for larger data accesses in the global area.
+    GpRel32 = 12,
+}
+
+/// Allow for u32 to RelocationEntryType coercion
+impl TryFrom<u32> for RelocationEntryType {
+    type Error = String;
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(RelocationEntryType::None),
+            1 => Ok(RelocationEntryType::R16),
+            2 => Ok(RelocationEntryType::R32),
+            3 => Ok(RelocationEntryType::Rel32),
+            4 => Ok(RelocationEntryType::R26),
+            5 => Ok(RelocationEntryType::Hi16),
+            6 => Ok(RelocationEntryType::Lo16),
+            7 => Ok(RelocationEntryType::GpRel16),
+            8 => Ok(RelocationEntryType::Literal),
+            9 => Ok(RelocationEntryType::Got16),
+            10 => Ok(RelocationEntryType::Pc16),
+            11 => Ok(RelocationEntryType::Call16),
+            12 => Ok(RelocationEntryType::GpRel32),
+            _ => Err(format!("Failed to coerce {value} to RelocationEntryType")),
+        }
+    }
+}
+
+/// Allow for to/from ELF section
+impl RelocationEntry {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes: Vec<u8> = vec![];
+        bytes.extend_from_slice(&self.r_offset.to_be_bytes());
+        bytes.extend_from_slice(&((self.r_sym << 8) | (self.r_type as u32)).to_be_bytes());
+        return bytes;
     }
 }
 
@@ -312,6 +414,23 @@ impl Elf32Sym {
         bytes.extend_from_slice(&self.st_shndx.to_be_bytes());
 
         bytes
+    }
+
+    pub fn get_bind(&self) -> u8 {
+        self.st_info >> 4
+    }
+
+    pub fn get_type(&self) -> u8 {
+        self.st_info & 0xf
+    }
+
+    pub fn get_linked_name(&self, strtab: &Vec<u8>) -> String {
+        return strtab
+            .iter()
+            .skip(self.st_name as usize)
+            .take_while(|&&b| b != 0)
+            .map(|&b| b as char)
+            .collect::<String>();
     }
 }
 
