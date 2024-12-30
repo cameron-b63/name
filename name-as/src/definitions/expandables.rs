@@ -1,12 +1,9 @@
 use crate::assembler::assembler::Assembler;
-use crate::assembler::assembly_helpers::translate_identifier_to_address;
 use crate::definitions::structs::LineComponent;
-use crate::definitions::{constants::INSTRUCTION_TABLE, structs::LineComponent};
-use name_core::constants::MIPS_TEXT_START_ADDR;
-use name_core::elf_def::{RelocationEntry, RelocationEntryType};
-use name_core::instruction::information::InstructionInformation;
-use name_core::instruction::{
-    information::InstructionInformation, instruction_set::INSTRUCTION_TABLE,
+use name_core::{
+    constants::MIPS_TEXT_START_ADDR,
+    elf_def::{RelocationEntry, RelocationEntryType},
+    instruction::{information::InstructionInformation, instruction_set::INSTRUCTION_TABLE},
 };
 
 /*

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use name_core::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
-    elf_def::{STT_FUNC, STT_OBJECT},
+    elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
     instruction::information::InstructionInformation,
     parse::parse::Ast,
     structs::{Section, Symbol, Visibility},
@@ -225,7 +225,8 @@ impl Assembler {
     pub fn assemble(&mut self, ast: Ast) -> Result<(), AssembleError> {
         match ast {
             // individual ast nodes that can be folded into environment
-            Ast::Label(s) => Ok(self.add_label(&s)),
+            // TODO! 0 is placeholder value is it right?
+            Ast::Label(s) => Ok(self.add_label(&s, 0)),
             Ast::Include(s) => todo!(),
             Ast::Asciiz(s) => Ok(self.assemble_asciiz(s)),
             Ast::Section(section) => {
@@ -250,6 +251,7 @@ impl Assembler {
             Ast::Register(s) => panic!(),
             Ast::LabelRef(s) => panic!(),
         }
+    }
 
     pub fn get_symbol_offset(&mut self, ident: String) -> u32 {
         match self
