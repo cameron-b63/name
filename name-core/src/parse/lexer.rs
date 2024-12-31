@@ -24,9 +24,9 @@ type CharScanner<'a> = Peekable<Chars<'a>>;
 pub struct Lexer<'a> {
     chars: CharScanner<'a>,
     src: &'a str,
-    pos: Option<usize>,
+    pos: usize,
     line: usize,
-    line_pos: Option<usize>,
+    line_pos: usize,
 }
 
 impl<'a> Lexer<'a> {
@@ -34,36 +34,20 @@ impl<'a> Lexer<'a> {
         Lexer {
             chars: src.chars().peekable(),
             src,
-            pos: None,
+            pos: 0,
             line: 0,
-            line_pos: None,
+            line_pos: 0,
         }
     }
 
-    pub fn get_pos(&self) -> usize {
-        self.pos.unwrap_or(0)
-    }
-
-    pub fn inc_pos(&mut self) {
-        self.pos = Some(self.pos.map(|x| x + 1).unwrap_or(0));
-    }
-
-    pub fn get_line_pos(&self) -> usize {
-        self.line_pos.unwrap_or(0)
-    }
-
-    pub fn inc_line_pos(&mut self) {
-        self.line_pos = Some(self.line_pos.map(|x| x + 1).unwrap_or(0));
-    }
-
     fn src_span(&self, start: usize) -> SrcSpan<'a> {
-        let pos = self.get_pos();
+        let pos = self.pos;
         SrcSpan {
             start,
             end: pos,
             line: self.line,
-            line_pos: self.get_line_pos(),
-            src: self.src.get(start..=pos).unwrap_or(""),
+            line_pos: self.line_pos,
+            src: self.src.get(start..pos).unwrap_or(""),
         }
     }
 
@@ -84,18 +68,18 @@ impl<'a> Lexer<'a> {
     fn single_error(&self, kind: ErrorKind) -> LexerError<'a> {
         LexerError {
             kind,
-            src_span: self.src_span(self.get_pos()),
+            src_span: self.src_span(self.pos),
         }
     }
 
     /// get next char for lexer and advance the position
     fn next_char(&mut self) -> Option<char> {
-        self.inc_pos();
-        self.inc_line_pos();
+        self.pos += 1;
+        self.line_pos += 1;
 
         self.chars.next().map(|c| {
             if c == '\n' {
-                self.line_pos = None;
+                self.line_pos = 0;
                 self.line += 1;
             }
 
@@ -155,7 +139,7 @@ impl<'a> Lexer<'a> {
 
     // consumes a strings continuation fails if no terminating char
     fn consume_string(&mut self) -> LexerResult<'a, ()> {
-        let pos = self.get_pos();
+        let pos = self.pos;
         self.consume_until('"')
             .map_err(|_e| self.error(pos, ErrorKind::ExpectedChar('"')))?;
         Ok(())
@@ -187,116 +171,102 @@ impl<'a> Lexer<'a> {
         self.consume_while(|c| matches!(c, 'a'..='z' | '0'..='9'))
     }
 
-    fn tokenize(&mut self) -> Vec<LexerResult<'a, Token<'a>>> {
-        let mut results = Vec::new();
-        while let Some(res) = self.next_tok() {
-            results.push(res);
-        }
-        results
-    }
+    fn lex_token(&mut self) -> LexerResult<'a, Option<Token<'a>>> {
+        let pos = self.pos;
 
-    fn lex_token(&mut self) -> LexerResult<'a, Token<'a>> {
-        let c = self.next_char();
-        let pos = self.get_pos();
-
-        let tok_kind = c
-            .map(|c| {
-                let tok_kind = match c {
-                    'a'..='z' | 'A'..='Z' => {
-                        self.consume_name();
-                        TokenKind::Ident
-                    }
-                    '0'..='9' => match self.next_char_if(|r| matches!(r, 'x' | 'o' | 'b')) {
-                        Some(r) if c == '0' => match r {
-                            'x' => {
-                                self.consume_while_radix(16)?;
-                                TokenKind::HexNumber
-                            }
-                            'o' => {
-                                self.consume_while_radix(8)?;
-                                TokenKind::OctalNumber
-                            }
-                            'b' => {
-                                self.consume_while_radix(2)?;
-                                TokenKind::BinaryNumber
-                            }
-                            _ => unreachable!(),
-                        },
-                        _ => {
-                            self.consume_while_radix(10)?;
-
-                            if self.next_char_if(|c| c == '.').is_some() {
-                                self.consume_while_radix(10)?;
-                                TokenKind::Fractional
-                            } else {
-                                TokenKind::DecimalNumber
-                            }
+        if let Some(c) = self.next_char() {
+            let tok_kind = match c {
+                'a'..='z' | 'A'..='Z' => {
+                    self.consume_name();
+                    TokenKind::Ident
+                }
+                '0'..='9' => match self.next_char_if(|r| matches!(r, 'x' | 'o' | 'b')) {
+                    Some(r) if c == '0' => match r {
+                        'x' => {
+                            self.consume_while_radix(16)?;
+                            TokenKind::HexNumber
                         }
+                        'o' => {
+                            self.consume_while_radix(8)?;
+                            TokenKind::OctalNumber
+                        }
+                        'b' => {
+                            self.consume_while_radix(2)?;
+                            TokenKind::BinaryNumber
+                        }
+                        _ => unreachable!(),
                     },
-                    '"' => {
-                        self.consume_string()?;
-                        TokenKind::String
-                    }
-                    '.' => {
-                        self.consume_directive();
-                        TokenKind::Directive
-                    }
-                    '\'' => {
-                        self.consume_char_lit()?;
-                        TokenKind::Char
-                    }
-                    '$' => {
-                        self.consume_register();
-                        TokenKind::Register
-                    }
-                    '+' => TokenKind::Plus,
-                    '-' => TokenKind::Minus,
-                    '(' => TokenKind::LParen,
-                    ')' => TokenKind::RParen,
-                    ':' => TokenKind::Colon,
-                    ',' => TokenKind::Comma,
-                    '\n' => TokenKind::Newline,
-                    _ => return Err(self.single_error(ErrorKind::InvalidChar(c))),
-                };
-                Ok(tok_kind)
-            })
-            .unwrap_or(Ok(TokenKind::EndOfFile))?;
+                    _ => {
+                        self.consume_while_radix(10)?;
 
-        Ok(self.token(pos, tok_kind))
-    }
-
-    pub fn done_lexing(&self) -> bool {
-        self.pos == Some(self.src.len())
-    }
-
-    pub fn next_tok(&mut self) -> Option<LexerResult<'a, Token<'a>>> {
-        if self.done_lexing() {
-            None
+                        if self.next_char_if(|c| c == '.').is_some() {
+                            self.consume_while_radix(10)?;
+                            TokenKind::Fractional
+                        } else {
+                            TokenKind::DecimalNumber
+                        }
+                    }
+                },
+                '"' => {
+                    self.consume_string()?;
+                    TokenKind::String
+                }
+                '.' => {
+                    self.consume_directive();
+                    TokenKind::Directive
+                }
+                '\'' => {
+                    self.consume_char_lit()?;
+                    TokenKind::Char
+                }
+                '$' => {
+                    self.consume_register();
+                    TokenKind::Register
+                }
+                '+' => TokenKind::Plus,
+                '-' => TokenKind::Minus,
+                '(' => TokenKind::LParen,
+                ')' => TokenKind::RParen,
+                ':' => TokenKind::Colon,
+                ',' => TokenKind::Comma,
+                '\n' => TokenKind::Newline,
+                _ => return Err(self.single_error(ErrorKind::InvalidChar(c))),
+            };
+            Ok(Some(self.token(pos, tok_kind)))
         } else {
-            // eat any whitce space that may prepend next token
-            self.consume_while(char::is_whitespace);
-
-            // check for comments and eat the rest of them it
-            while self.next_char_if(|c| c == '#').is_some() {
-                self.consume_while(|c| c != '\n');
-
-                // consume any whitespace that may occur before next token
-                self.consume_while(char::is_whitespace)
-            }
-
-            Some(self.lex_token())
+            Ok(None)
         }
+    }
+
+    pub fn next_tok(&mut self) -> LexerResult<'a, Option<Token<'a>>> {
+        // eat any whitce space that may prepend next token
+        self.consume_while(|c| c.is_whitespace() && c != '\n');
+
+        // check for comments and eat the rest of them it
+        while self.next_char_if(|c| c == '#').is_some() {
+            self.consume_while(|c| c != '\n');
+
+            // consume any whitespace that may occur before next token
+            self.consume_while(|c| c.is_whitespace() && c != '\n')
+        }
+
+        self.lex_token()
     }
 
     pub fn lex(&mut self) -> (Vec<LexerError<'a>>, Vec<Token<'a>>) {
         let mut toks = Vec::new();
         let mut errs = Vec::new();
-        while let Some(res) = self.next_tok() {
-            match res {
-                Ok(tok) => toks.push(tok),
+
+        loop {
+            match self.next_tok() {
+                Ok(Some(tok)) => toks.push(tok),
+                Ok(None) => break,
                 Err(err) => errs.push(err),
             }
         }
+
+        dbg!(&toks);
+        dbg!(&errs);
 
         (errs, toks)
     }
@@ -361,7 +331,6 @@ mod tests {
             TokenKind::Colon,
             TokenKind::Directive,
             TokenKind::String,
-            TokenKind::EndOfFile,
         ],
         array: "my_array: .word 0 : 0xAA" = &[
             TokenKind::Ident,
@@ -382,7 +351,6 @@ mod tests {
             TokenKind::Register,
             TokenKind::Comma,
             TokenKind::Register,
-            TokenKind::EndOfFile
         ],
         itype: "addi $a1, $a2, 0xDEADBEEF" = &[
             TokenKind::Ident,
@@ -391,7 +359,6 @@ mod tests {
             TokenKind::Register,
             TokenKind::Comma,
             TokenKind::HexNumber,
-            TokenKind::EndOfFile
         ],
         jtype: "j my_label" = &[
             TokenKind::Ident,

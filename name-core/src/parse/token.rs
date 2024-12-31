@@ -37,7 +37,6 @@ pub enum TokenKind {
     Plus,
 
     Newline,
-    EndOfFile,
 }
 
 impl TokenKind {
@@ -71,20 +70,5 @@ impl<'a> Token<'a> {
 
     pub fn is_kind(&self, tk: TokenKind) -> bool {
         self.kind == tk
-    }
-
-    pub fn is_eof(&self) -> bool {
-        match self.kind {
-            TokenKind::EndOfFile => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_section_directive(&self) -> bool {
-        matches!(self.src_span.src, ".data" | ".text" | ".ktext")
-    }
-
-    pub fn is_data_directive(&self) -> bool {
-        matches!(self.src_span.src, ".asciiz" | ".word" | ".byte")
     }
 }

@@ -117,7 +117,7 @@ impl<'a> Parser<'a> {
     pub fn parse_string(&mut self) -> ParseResult<String> {
         self.try_next_if(TokenKind::String).map(|tok| {
             let src = tok.src_span.src;
-            src[1..src.len() - 2].to_string()
+            src[1..src.len() - 1].to_string()
         })
     }
 
@@ -286,7 +286,10 @@ impl<'a> Parser<'a> {
                         Ok(Ast::Instruction(sym, args))
                     }
                 }),
-                TokenKind::Newline => continue,
+                TokenKind::Newline => {
+                    self.advance();
+                    continue;
+                }
                 _ => {
                     // TODO add more info to error
                     self.advance();
