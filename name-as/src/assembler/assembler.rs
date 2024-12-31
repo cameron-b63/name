@@ -22,7 +22,7 @@ pub enum AssembleError {}
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Assembler {
     pub(crate) pseudo_instruction_table: HashMap<&'static str, &'static PseudoInstruction>,
     pub section_dot_text: Vec<u8>,

@@ -7,6 +7,7 @@ use crate::{
     structs::{ParseRegisterError, Register, Section},
 };
 
+#[derive(Debug, Clone)]
 pub enum Ast {
     // a branch label
     Label(String),
@@ -28,6 +29,7 @@ pub enum Ast {
     Root(Vec<Ast>),
 }
 
+#[derive(Debug, Clone)]
 pub enum ParseError {
     UnexpectedToken,
     InvalidRegister(ParseRegisterError),

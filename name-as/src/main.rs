@@ -39,6 +39,7 @@ fn main() {
                 ElfType::Relocatable,
                 true,
             );
+
             match write_elf_to_file(&args.output_filename, &et_rel) {
                 Ok(()) => println!(
                     "Object file successfuly written to {:?}",

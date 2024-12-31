@@ -18,7 +18,7 @@ use crate::{
 
 /// Symbol is used for assembly -> ELF, ET_REL -> ET_EXEC, and ELF -> ProgramState construction.
 /// Its definition is provided in the ELF TIS: https://refspecs.linuxfoundation.org/elf/elf.pdf
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Symbol {
     pub symbol_type: u8,
     pub identifier: String,
@@ -309,7 +309,7 @@ pub enum Register {
     Ra,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseRegisterError(pub String);
 
 impl FromStr for Register {
@@ -356,7 +356,7 @@ impl FromStr for Register {
 }
 
 /// Visibility - for use in Symbol. Enumerated version of needed variants.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub enum Visibility {
     #[default]
     Local,

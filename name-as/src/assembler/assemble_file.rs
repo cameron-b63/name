@@ -44,8 +44,10 @@ pub fn assemble(
     let (perrs, ast) = parser.parse();
 
     if !perrs.is_empty() {
-        todo!("add parser error handling");
+        dbg!(perrs);
     }
+
+    dbg!(&ast);
 
     environment.assemble(ast);
 
