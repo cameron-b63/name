@@ -227,11 +227,15 @@ impl Assembler {
         match ast {
             // individual ast nodes that can be folded into environment
             // TODO! 0 is placeholder value is it right?
-            Ast::Label(s) => Ok(self.add_label(&s, 0)),
+            Ast::Label(s) => Ok(self.add_label(&s, self.current_address)),
             Ast::Include(s) => todo!(),
             Ast::Asciiz(s) => Ok(self.assemble_asciiz(s)),
             Ast::Section(section) => {
-                self.current_section = section;
+                match section {
+                    Section::Text => self.switch_to_text_section(),
+                    Section::Data => self.switch_to_data_section(),
+                    _ => panic!("other sections not implemented"),
+                }
                 Ok(())
             }
             Ast::Instruction(instr, args) => self.assemble_instruction(&instr, args),

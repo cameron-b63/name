@@ -36,7 +36,7 @@ pub fn assemble(
     let (errs, toks) = lexer.lex();
 
     if !errs.is_empty() {
-        todo!("add lexer error handling");
+        dbg!(errs);
     }
 
     let mut parser = Parser::new(toks);
@@ -47,43 +47,15 @@ pub fn assemble(
         dbg!(perrs);
     }
 
-    dbg!(&ast);
-
     environment.assemble(ast);
 
-    if environment.errors.is_empty() {
-        return Ok(environment);
-    } else {
-        return Err(environment.errors);
-    }
-}
-
-pub fn assemble_old(
-    file_contents: String,
-    current_dir: PathBuf,
-    line_prefix: Option<String>,
-) -> Result<Assembler, Vec<String>> {
-    let mut environment: Assembler = Assembler::new();
-
-    environment.current_dir = current_dir;
-
-    match line_prefix {
-        Some(s) => environment.line_prefix = s,
-        None => {}
-    }
-
+    // process line info
     for line in file_contents.split('\n') {
         let start_address = match environment.current_section {
             Section::Text => environment.current_address,
             Section::Data => environment.text_address,
             Section::Null => 0,
         };
-
-        // Pre-process line (expand pseudoinstructions, macros, and .eqv values here)
-        let expanded_line = environment.expand_line(line);
-
-        // Assemble the line (changes environment)
-        assemble_line(&mut environment, line, expanded_line);
 
         // Extend section .line to include the new line
         environment.section_dot_line.extend(
@@ -106,7 +78,7 @@ pub fn assemble_old(
         environment.line_number += 1;
     }
 
-    if environment.errors.len() == 0 {
+    if environment.errors.is_empty() {
         return Ok(environment);
     } else {
         return Err(environment.errors);
