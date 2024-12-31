@@ -204,7 +204,7 @@ impl<'a> Lexer<'a> {
                 let tok_kind = match c {
                     'a'..='z' | 'A'..='Z' => {
                         self.consume_name();
-                        TokenKind::Symbol
+                        TokenKind::Ident
                     }
                     '0'..='9' => match self.next_char_if(|r| matches!(r, 'x' | 'o' | 'b')) {
                         Some(r) if c == '0' => match r {
@@ -357,14 +357,14 @@ mod tests {
     test_group! {
         data,
         string: "hello_world: .asciiz \"hello word\"" = &[
-            TokenKind::Symbol,
+            TokenKind::Ident,
             TokenKind::Colon,
             TokenKind::Directive,
             TokenKind::String,
             TokenKind::EndOfFile,
         ],
         array: "my_array: .word 0 : 0xAA" = &[
-            TokenKind::Symbol,
+            TokenKind::Ident,
             TokenKind::Colon,
             TokenKind::Directive,
             TokenKind::DecimalNumber,
@@ -376,7 +376,7 @@ mod tests {
     test_group! {
         instruction,
         rtype: "add $a1, $a2, $a3 # this is a comment" = &[
-            TokenKind::Symbol,
+            TokenKind::Ident,
             TokenKind::Register,
             TokenKind::Comma,
             TokenKind::Register,
@@ -385,7 +385,7 @@ mod tests {
             TokenKind::EndOfFile
         ],
         itype: "addi $a1, $a2, 0xDEADBEEF" = &[
-            TokenKind::Symbol,
+            TokenKind::Ident,
             TokenKind::Register,
             TokenKind::Comma,
             TokenKind::Register,
@@ -394,8 +394,8 @@ mod tests {
             TokenKind::EndOfFile
         ],
         jtype: "j my_label" = &[
-            TokenKind::Symbol,
-            TokenKind::Symbol,
+            TokenKind::Ident,
+            TokenKind::Ident,
         ]
     }
 }

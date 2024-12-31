@@ -9,7 +9,7 @@ pub struct SrcSpan<'a> {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenKind {
-    Symbol,
+    Ident,
     Register,
     Directive,
 
@@ -41,11 +41,20 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+    // Token is a whole number type or start of one
     pub fn is_number(&self) -> bool {
         matches!(
             self,
-            TokenKind::BinaryNumber | TokenKind::OctalNumber | TokenKind::DecimalNumber
+            TokenKind::BinaryNumber
+                | TokenKind::OctalNumber
+                | TokenKind::DecimalNumber
+                | TokenKind::Minus
         )
+    }
+
+    // Token can appear in an immediates position
+    pub fn is_immediate(&self) -> bool {
+        matches!(self, TokenKind::Ident | TokenKind::Char) || self.is_number()
     }
 }
 

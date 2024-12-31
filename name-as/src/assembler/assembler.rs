@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use name_core::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
-    instruction::information::InstructionInformation,
+    instruction::{information::InstructionInformation, instruction_set::INSTRUCTION_TABLE},
     parse::parse::Ast,
     structs::{Section, Symbol, Visibility},
 };
@@ -185,10 +185,11 @@ impl Assembler {
 
     pub fn assemble_instruction(
         &mut self,
-        info: &InstructionInformation,
+        instr: &str,
         args: Vec<Ast>,
-    ) -> Result<AssembleError, ()> {
-        todo!()
+    ) -> Result<(), AssembleError> {
+        let info = INSTRUCTION_TABLE.get(instr).ok_or(()).copied();
+        todo!("rest of this")
     }
 
     pub fn assemble_asciiz(&mut self, s: String) {
@@ -233,7 +234,7 @@ impl Assembler {
                 self.current_section = section;
                 Ok(())
             }
-            Ast::Instruction(info, args) => todo!(),
+            Ast::Instruction(instr, args) => self.assemble_instruction(&instr, args),
             Ast::Root(nodes) => {
                 // TODO! nodes??
                 for node in nodes {
@@ -244,12 +245,11 @@ impl Assembler {
             }
 
             // ast nodes that should be ohterwise consumed
-            Ast::Immediate(s) => todo!(),
+            Ast::Immediate(_) => panic!(),
             Ast::Eqv(_, _) => panic!(),
-            Ast::Symbol(s) => panic!(),
+            Ast::Symbol(_) => panic!(),
             Ast::BaseAddress(_, _) => panic!(),
-            Ast::Register(s) => panic!(),
-            Ast::LabelRef(s) => panic!(),
+            Ast::Register(_) => panic!(),
         }
     }
 

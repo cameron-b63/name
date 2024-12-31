@@ -10,8 +10,6 @@ use crate::{
 pub enum Ast {
     // a branch label
     Label(String),
-    // refrence to a branch label
-    LabelRef(String),
 
     // Immediates
     Symbol(String),
@@ -24,9 +22,9 @@ pub enum Ast {
     Eqv(String, Box<Ast>),
 
     // constructs
-    Instruction(&'static InstructionInformation, Vec<Ast>),
+    Instruction(String, Vec<Ast>),
     Register(Register),
-    BaseAddress(u32, Box<Ast>),
+    BaseAddress(Box<Ast>, Register),
     Root(Vec<Ast>),
 }
 
@@ -87,13 +85,16 @@ impl<'a> Parser<'a> {
         self.next().ok_or(ParseError::UnexpectedEof)
     }
 
+    pub fn peek_is_kind(&self, kind: TokenKind) -> bool {
+        self.peek().is_some_and(|tok| tok.is_kind(kind))
+    }
+
     pub fn next_if(&mut self, kind: TokenKind) -> Option<&Token> {
-        self.tokens
-            .get(self.pos)
-            .filter(|tok| tok.is_kind(kind))
-            .inspect(|_| {
-                self.pos += 1;
-            })
+        if self.peek_is_kind(kind) {
+            self.next()
+        } else {
+            None
+        }
     }
 
     pub fn try_next_if(&mut self, kind: TokenKind) -> ParseResult<&Token> {
@@ -106,8 +107,8 @@ impl<'a> Parser<'a> {
         self.try_next_if(kind).map(|_| ())
     }
 
-    pub fn parse_symbol(&mut self) -> ParseResult<String> {
-        self.try_next_if(TokenKind::Symbol)
+    pub fn parse_ident(&mut self) -> ParseResult<String> {
+        self.try_next_if(TokenKind::Ident)
             .map(|tok| tok.src_string())
     }
 
@@ -128,23 +129,15 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_label(&mut self) -> ParseResult<Ast> {
-        let label = self.try_next_if(TokenKind::Symbol)?.src_string();
+        let label = self.try_next_if(TokenKind::Ident)?.src_string();
         self.try_advance_if(TokenKind::Colon)?;
         Ok(Ast::Label(label))
     }
 
-    pub fn parse_op(&mut self) -> ParseResult<&'static InstructionInformation> {
-        let instr = self.try_next_if(TokenKind::Symbol)?.src_span.src;
-
-        INSTRUCTION_TABLE
-            .get(instr)
-            .ok_or(ParseError::InvalidInstruction(instr.to_string()))
-            .copied()
-    }
-
     pub fn parse_char(&mut self) -> ParseResult<u32> {
         let src = self.try_next_if(TokenKind::Char)?.src_span.src;
-        let mut chars = src[1..(src.len() - 1)].chars();
+        // skip the first quote
+        let mut chars = src.chars().skip(1);
         let char = match (chars.next(), chars.next()) {
             (Some(c), None) => c,
             (Some('\\'), Some(c)) => match c {
@@ -203,82 +196,17 @@ impl<'a> Parser<'a> {
             tok if tok.is_number() => Ast::Immediate(self.parse_number()?),
             TokenKind::Char => Ast::Immediate(self.parse_char()?),
             // these will be resolved on ast passover
-            TokenKind::Symbol => Ast::Symbol(self.parse_symbol()?),
+            TokenKind::Ident => Ast::Symbol(self.parse_ident()?),
             _ => return Err(ParseError::InvalidImmediate),
         };
         Ok(ast)
     }
 
-    pub fn parse_argument_type(&mut self, t: ArgumentType) -> ParseResult<Ast> {
-        use ArgumentType::*;
-
-        let ast = match t {
-            Rd | Rs | Rt => Ast::Register(self.parse_register()?),
-            Immediate | Identifier => self.parse_immediate()?,
-            BranchLabel => Ast::LabelRef(self.parse_symbol()?),
-        };
-
-        Ok(ast)
-    }
-
-    // pub fn parse_data_section(&mut self) -> ParseResult<Vec<Ast>> {
-    //     let mut entries = Vec::new();
-    //
-    //     while let Some(tok) = self.peek() {
-    //         let ast = match tok.kind {
-    //             TokenKind::Symbol => self.parse_label(),
-    //             TokenKind::Directive => {
-    //                 if tok.is_section_directive() {
-    //                     break;
-    //                 } else {
-    //                     self.parse_directive()?
-    //                 }
-    //             }
-    //             _ => return Err(ParseError::InvalidData),
-    //         };
-    //         entries.push(ast);
-    //     }
-    //     Ok(entries)
-    // }
-
-    pub fn parse_instruction(&mut self) -> ParseResult<Ast> {
-        let info = self.parse_op()?;
-
-        todo!("parse an instruction")
-    }
-
-    // pub fn parse_text_section(&mut self) -> ParseResult<Vec<Ast>> {
-    //     let mut entries = Vec::new();
-    //     while let Some(tok) = self.peek() {
-    //         let ast = match tok.kind {
-    //             TokenKind::Symbol => {
-    //                 if let Some(TokenKind::Colon) = self.peek2().map(|t| t.kind) {
-    //                     Ast::Label(self.parse_label()?)
-    //                 } else {
-    //                     self.parse_instruction()?
-    //                 }
-    //             }
-    //             TokenKind::Directive => {
-    //                 if tok.is_section_directive() {
-    //                     break;
-    //                 } else if tok.is_data_directive() {
-    //                     return Err(ParseError::WrongSection);
-    //                 } else {
-    //                     self.parse_directive()?
-    //                 }
-    //             }
-    //             _ => return Err(ParseError::InvalidText),
-    //         };
-    //         entries.push(ast);
-    //     }
-    //     Ok(entries)
-    // }
-
     pub fn parse_directive(&mut self) -> ParseResult<Ast> {
         let directive = self.try_next_if(TokenKind::Directive)?.src_span.src;
 
         let ast = match directive {
-            ".eqv" => Ast::Eqv(self.parse_symbol()?, Box::new(self.parse_immediate()?)),
+            ".eqv" => Ast::Eqv(self.parse_ident()?, Box::new(self.parse_immediate()?)),
             ".include" => Ast::Include(self.parse_string()?),
             ".text" => Ast::Section(Section::Text),
             ".data" => Ast::Section(Section::Data),
@@ -291,6 +219,52 @@ impl<'a> Parser<'a> {
         Ok(ast)
     }
 
+    pub fn parse_base(&mut self) -> ParseResult<Register> {
+        self.try_advance_if(TokenKind::LParen)?;
+        let reg = self.parse_register()?;
+        self.try_advance_if(TokenKind::RParen)?;
+        Ok(reg)
+    }
+
+    pub fn parse_arg(&mut self) -> ParseResult<Ast> {
+        let ast = match self.try_peek()?.kind {
+            TokenKind::Register => Ast::Register(self.parse_register()?),
+            tok if tok.is_immediate() => {
+                let immediate = self.parse_immediate()?;
+
+                if self.peek_is_kind(TokenKind::LParen) {
+                    let reg = self.parse_base()?;
+                    Ast::BaseAddress(Box::new(immediate), reg)
+                } else {
+                    immediate
+                }
+            }
+            TokenKind::LParen => Ast::BaseAddress(Box::new(Ast::Immediate(0)), self.parse_base()?),
+            _ => return Err(ParseError::UnexpectedToken),
+        };
+        Ok(ast)
+    }
+
+    pub fn parse_args(&mut self) -> ParseResult<Vec<Ast>> {
+        let mut args = Vec::new();
+
+        // check if there are no args
+        if self.peek_is_kind(TokenKind::Newline) {
+            return Ok(args);
+        }
+
+        // parse an arg, stop parsing when there is not comma after arg
+        loop {
+            args.push(self.parse_arg()?);
+
+            if self.next_if(TokenKind::Comma).is_none() {
+                break;
+            }
+        }
+
+        Ok(args)
+    }
+
     pub fn parse(&mut self) -> (Vec<ParseError>, Ast) {
         // root units of our ast, directives, instructions and labels
         let mut entries = Vec::new();
@@ -299,14 +273,23 @@ impl<'a> Parser<'a> {
         while let Some(tok) = self.peek() {
             let res = match tok.kind {
                 TokenKind::Directive => self.parse_directive(),
-                TokenKind::Symbol => {
-                    if let Some(tok) = self.peek2().filter(|tok| tok.is_kind(TokenKind::Colon)) {
-                        self.parse_label()
+                TokenKind::Ident => self.parse_ident().and_then(|sym| {
+                    // if it's a label declaration
+                    if self.next_if(TokenKind::Colon).is_some() {
+                        Ok(Ast::Label(sym))
+
+                    // if it's an instruction
                     } else {
-                        self.parse_instruction()
+                        let args = self.parse_args()?;
+                        Ok(Ast::Instruction(sym, args))
                     }
+                }),
+                TokenKind::Newline => continue,
+                _ => {
+                    // TODO add more info to error
+                    self.advance();
+                    Err(ParseError::UnexpectedToken)
                 }
-                _ => Err(ParseError::UnexpectedToken),
             };
 
             // add the result to our vectors
