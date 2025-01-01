@@ -183,11 +183,7 @@ impl Assembler {
         self.current_address += MIPS_ADDRESS_ALIGNMENT;
     }
 
-    pub fn assemble_instruction(
-        &mut self,
-        instr: &str,
-        args: Vec<Ast>,
-    ) -> Result<(), AssembleError> {
+    pub fn assemble_instruction(&mut self, instr: &str, args: Vec<Ast>) {
         let info = INSTRUCTION_TABLE.get(instr).ok_or(()).copied();
         todo!("rest of this")
     }
@@ -223,31 +219,23 @@ impl Assembler {
     }
 
     /// entry point for folding ast into the environment
-    pub fn assemble(&mut self, ast: Ast) -> Result<(), AssembleError> {
+    pub fn assemble(&mut self, ast: Ast) {
         match ast {
             // individual ast nodes that can be folded into environment
-            // TODO! 0 is placeholder value is it right?
-            Ast::Label(s) => Ok(self.add_label(&s, self.current_address)),
+            Ast::Label(s) => self.add_label(&s, self.current_address),
             Ast::Include(s) => todo!(),
-            Ast::Asciiz(s) => Ok(self.assemble_asciiz(s)),
-            Ast::Section(section) => {
-                match section {
-                    Section::Text => self.switch_to_text_section(),
-                    Section::Data => self.switch_to_data_section(),
-                    _ => panic!("other sections not implemented"),
-                }
-                Ok(())
-            }
+            Ast::Asciiz(s) => self.assemble_asciiz(s),
+            Ast::Section(section) => match section {
+                Section::Text => self.switch_to_text_section(),
+                Section::Data => self.switch_to_data_section(),
+                _ => panic!("other sections not implemented"),
+            },
             Ast::Instruction(instr, args) => self.assemble_instruction(&instr, args),
-            Ast::Root(nodes) => {
-                // TODO! nodes??
-                for node in nodes {
-                    self.assemble(node)?;
+            Ast::Root(entries) => {
+                for entry in entries {
+                    self.assemble(entry);
                 }
-
-                Ok(())
             }
-
             // ast nodes that should be ohterwise consumed
             Ast::Immediate(_) => panic!(),
             Ast::Eqv(_, _) => panic!(),

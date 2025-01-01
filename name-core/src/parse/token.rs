@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct SrcSpan<'a> {
     pub start: usize,
     pub end: usize,
