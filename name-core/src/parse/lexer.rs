@@ -1,5 +1,5 @@
 use crate::parse::token::{SrcSpan, Token, TokenKind};
-use std::{iter::Peekable, str::Chars};
+use std::{fmt, iter::Peekable, str::Chars};
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
@@ -11,10 +11,29 @@ pub enum ErrorKind {
     WrongRadix(char, u32),
 }
 
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ErrorKind::UnexpectedEof => write!(f, "unexpected eof"),
+            ErrorKind::UnexpectedChar(c) => write!(f, "{} was not an expected char", c),
+            ErrorKind::InvalidChar(c) => write!(f, "{} is not a valid char", c),
+            ErrorKind::ExpectedChar(c) => write!(f, "expected char {}", c),
+            ErrorKind::InvalidEscape(c) => write!(f, "{} is not a valid escape character", c),
+            ErrorKind::WrongRadix(c, r) => write!(f, "{} is not of radix {}", c, r),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct LexerError<'a> {
     src_span: SrcSpan<'a>,
     kind: ErrorKind,
+}
+
+impl fmt::Display for LexerError<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} at {}", self.kind, self.src_span)
+    }
 }
 
 type LexerResult<'a, T> = Result<T, LexerError<'a>>;
@@ -265,9 +284,6 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        dbg!(&toks);
-        dbg!(&errs);
-
         (errs, toks)
     }
 }
@@ -284,7 +300,7 @@ mod tests {
                 let mut lex = Lexer::new($str);
 
                 for tk in $tok {
-                    assert_eq!(lex.next_tok().unwrap().map(|t| t.kind), Ok(tk).cloned());
+                    assert_eq!(lex.next_tok().map(|t| t.unwrap().kind), Ok(tk).cloned());
                 }
             }
 

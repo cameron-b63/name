@@ -36,7 +36,9 @@ pub fn assemble(
     let (errs, toks) = lexer.lex();
 
     if !errs.is_empty() {
-        dbg!(errs);
+        for err in errs {
+            println!("{}", err);
+        }
     }
 
     let mut parser = Parser::new(toks);
@@ -44,7 +46,9 @@ pub fn assemble(
     let (perrs, ast) = parser.parse();
 
     if !perrs.is_empty() {
-        dbg!(perrs);
+        for perr in perrs {
+            println!("{}", perr);
+        }
     }
 
     environment.assemble(ast);

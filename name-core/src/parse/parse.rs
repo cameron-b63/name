@@ -72,6 +72,12 @@ pub struct ParseError<'a> {
     pub kind: ErrorKind,
 }
 
+impl fmt::Display for ParseError<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} at {}", self.kind, self.src_span)
+    }
+}
+
 impl<'a> ParseError<'a> {
     fn unexpected_token(src_span: SrcSpan<'a>) -> Self {
         ParseError {

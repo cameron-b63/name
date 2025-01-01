@@ -27,14 +27,10 @@ fn lexer_no_fail_test() {
             fs::read_to_string(&file_path).expect("couldn't read file path to string");
         let mut lexer = Lexer::new(&cont);
 
-        loop {
-            let tok = lexer
-                .next_tok()
-                .unwrap()
-                .unwrap_or_else(|e| panic!("{:?} {:?}", &file_path, e));
-            if tok.is_eof() {
-                break;
-            }
-        }
+        while lexer
+            .next_tok()
+            .unwrap_or_else(|e| panic!("{:?} {:?}", &file_path, e))
+            .is_some()
+        {}
     }
 }

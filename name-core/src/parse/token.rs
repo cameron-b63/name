@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct SrcSpan<'a> {
     pub start: usize,
@@ -5,6 +7,12 @@ pub struct SrcSpan<'a> {
     pub src: &'a str,
     pub line: usize,
     pub line_pos: usize,
+}
+
+impl fmt::Display for SrcSpan<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{} {}", self.line, self.line_pos, self.src)
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
