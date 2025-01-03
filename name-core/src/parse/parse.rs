@@ -22,7 +22,7 @@ pub enum Ast {
     Include(String),
     Asciiz(String),
     Section(Section),
-    Eqv(String, Box<Ast>),
+    Eqv(String, u32),
 
     // constructs
     Instruction(String, Vec<Ast>),
@@ -217,6 +217,9 @@ impl<'a> Parser<'a> {
                 't' => '\t',
                 'r' => '\r',
                 'n' => '\n',
+                '\'' => '\'',
+                '"' => '"',
+                '\\' => '\\',
                 _ => {
                     return Err(ParseError {
                         kind: ErrorKind::InvalidEscape,
@@ -235,39 +238,25 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_number(&mut self) -> ParseResult<'a, u32> {
-        //TODO refactor
         let is_minus = self.next_if(TokenKind::Minus).is_some();
         let tok = self.try_next()?;
-        let err = ParseError {
+
+        let mut num = match tok.kind {
+            TokenKind::HexNumber => u32::from_str_radix(tok.src_span.src, 16),
+            TokenKind::DecimalNumber => u32::from_str_radix(tok.src_span.src, 10),
+            TokenKind::OctalNumber => u32::from_str_radix(tok.src_span.src, 8),
+            _ => return Err(ParseError::unexpected_token(tok.src_span.clone())),
+        }
+        .map_err(|_| ParseError {
             kind: ErrorKind::InvalidNumber,
             src_span: tok.src_span.clone(),
-        };
-        let num = match tok.kind {
-            TokenKind::HexNumber => u32::from_str_radix(tok.src_span.src, 16).map_err(|_| err)?,
-            TokenKind::DecimalNumber => {
-                u32::from_str_radix(tok.src_span.src, 10).map_err(|_| err)?
-            }
-            TokenKind::OctalNumber => u32::from_str_radix(tok.src_span.src, 8).map_err(|_| err)?,
-            TokenKind::Fractional => tok
-                .src_span
-                .src
-                .parse::<f32>()
-                .map(|num| num as u32)
-                .map_err(|_| err)?,
-            _ => return Err(ParseError::unexpected_token(tok.src_span.clone())),
-        };
-        let signed_num = if is_minus {
-            if tok.is_kind(TokenKind::Fractional) {
-                // set the first bit to a one
-                num | 0x8000
-            } else {
-                // will always twos complement
-                (num as i32 * -1i32) as u32
-            }
-        } else {
-            num
-        };
-        Ok(signed_num)
+        })?;
+
+        if is_minus {
+            num = (num as i32 * -1i32) as u32;
+        }
+
+        Ok(num)
     }
 
     pub fn parse_base_address(&mut self) -> ParseResult<'a, ()> {
@@ -277,11 +266,20 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    pub fn parse_literal(&mut self) -> ParseResult<'a, u32> {
+        let literal = self.try_peek()?;
+
+        match literal.kind {
+            tok if tok.is_number() => self.parse_number(),
+            TokenKind::Char => self.parse_char(),
+            _ => return Err(ParseError::unexpected_token(literal.src_span.clone())),
+        }
+    }
+
     pub fn parse_immediate(&mut self) -> ParseResult<'a, Ast> {
         let immediate = self.try_peek()?;
         let ast = match immediate.kind {
-            tok if tok.is_number() => Ast::Immediate(self.parse_number()?),
-            TokenKind::Char => Ast::Immediate(self.parse_char()?),
+            tok if tok.is_literal() => Ast::Immediate(self.parse_literal()?),
             // these will be resolved on ast passover
             TokenKind::Ident => Ast::Symbol(self.parse_ident()?),
             _ => {
@@ -298,7 +296,7 @@ impl<'a> Parser<'a> {
         let directive = self.try_next_if(TokenKind::Directive)?;
 
         let ast = match directive.src_span.src {
-            ".eqv" => Ast::Eqv(self.parse_ident()?, Box::new(self.parse_immediate()?)),
+            ".eqv" => Ast::Eqv(self.parse_ident()?, self.parse_literal()?),
             ".include" => Ast::Include(self.parse_string()?),
             ".text" => Ast::Section(Section::Text),
             ".data" => Ast::Section(Section::Data),

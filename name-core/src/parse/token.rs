@@ -28,7 +28,7 @@ pub enum TokenKind {
     DecimalNumber,
 
     // need to figure these out
-    Fractional,
+    Float,
 
     String,
     Char,
@@ -59,9 +59,13 @@ impl TokenKind {
         )
     }
 
+    pub fn is_literal(&self) -> bool {
+        self.is_number() || *self == TokenKind::Char
+    }
+
     // Token can appear in an immediates position
     pub fn is_immediate(&self) -> bool {
-        matches!(self, TokenKind::Ident | TokenKind::Char) || self.is_number()
+        self.is_literal() || *self == TokenKind::Ident
     }
 }
 

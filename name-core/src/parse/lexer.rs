@@ -177,7 +177,7 @@ impl<'a> Lexer<'a> {
     fn consume_char_lit(&mut self) -> LexerResult<'a, ()> {
         if '\\' == self.try_next_char()? {
             let c = self.try_next_char()?;
-            if !matches!(c, 'n' | 't' | '\\' | 'r') {
+            if !matches!(c, 'n' | 't' | '\\' | 'r' | '\'' | '\"') {
                 return Err(self.single_error(ErrorKind::InvalidEscape(c)));
             }
         }
@@ -220,7 +220,7 @@ impl<'a> Lexer<'a> {
 
                         if self.next_char_if(|c| c == '.').is_some() {
                             self.consume_while_radix(10)?;
-                            TokenKind::Fractional
+                            TokenKind::Float
                         } else {
                             TokenKind::DecimalNumber
                         }

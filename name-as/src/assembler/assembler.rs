@@ -1,12 +1,18 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::{
+    collections::HashMap,
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use name_core::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
     instruction::{information::InstructionInformation, instruction_set::INSTRUCTION_TABLE},
-    parse::parse::Ast,
-    structs::{Section, Symbol, Visibility},
+    parse::{
+        lexer::{Lexer, LexerError},
+        parse::{Ast, ParseError, Parser},
+    },
+    structs::{LineInfo, Section, Symbol, Visibility},
 };
 
 use crate::assembler::assemble_instruction::assemble_instruction;
@@ -18,11 +24,19 @@ use crate::assembler::assembly_helpers::{
 use crate::definitions::structs::{LineComponent, PseudoInstruction};
 
 /// Possible assemble error codes
-pub enum AssembleError {}
+#[derive(Debug)]
+pub enum AssembleError<'a> {
+    ParseError(ParseError<'a>),
+    LexerError(LexerError<'a>),
+    DuplicateSymbol(String),
+    Io(io::Error),
+    String(String),
+    LabelOutsideOfSection,
+}
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Assembler {
     pub(crate) pseudo_instruction_table: HashMap<&'static str, &'static PseudoInstruction>,
     pub section_dot_text: Vec<u8>,
@@ -30,8 +44,7 @@ pub struct Assembler {
     pub section_dot_rel: Vec<u8>,
     pub section_dot_line: Vec<u8>,
     pub symbol_table: Vec<Symbol>,
-    pub(crate) equivalences: HashMap<String, String>,
-    pub(crate) errors: Vec<String>,
+    pub(crate) equivalences: HashMap<String, u32>,
     pub(crate) current_section: Section,
     pub(crate) current_address: u32,
     pub(crate) current_dir: PathBuf,
@@ -44,7 +57,7 @@ pub struct Assembler {
 
 impl Assembler {
     // Initialize the assembler environment - default constructor.
-    pub(crate) fn new() -> Self {
+    pub fn new(current_dir: PathBuf) -> Self {
         Assembler {
             pseudo_instruction_table: generate_pseudo_instruction_hashmap(),
             section_dot_text: vec![],
@@ -53,10 +66,10 @@ impl Assembler {
             section_dot_line: vec![],
             symbol_table: vec![],
             equivalences: HashMap::new(),
-            errors: vec![],
+            // errors: vec![],
             current_section: Section::Null,
             current_address: 0,
-            current_dir: PathBuf::new(),
+            current_dir,
             text_address: MIPS_TEXT_START_ADDR,
             data_address: MIPS_DATA_START_ADDR,
             line_number: 1,
@@ -65,8 +78,12 @@ impl Assembler {
         }
     }
 
+    pub fn string_error(&mut self, err: String) {
+        todo!()
+    }
+
     /// Add a label to the symbol table with the corresponding value. If a double update was attempted, errors vector will be extended.
-    pub(crate) fn add_label(&mut self, ident: &String, value: u32) {
+    pub(crate) fn add_label(&mut self, ident: &str, value: u32) -> Result<(), AssembleError> {
         // If symbol exists but with placeholder, we'll just want to update it.
         let existing_symbol = self
             .symbol_table
@@ -76,29 +93,19 @@ impl Assembler {
         match existing_symbol {
             Some(sym) => {
                 if sym.value != 0 {
-                    self.errors
-                        .push(format!("[*] On line {}:", self.line_number));
-                    self.errors.push(format!(
-                        " - Duplicate symbol definition for {}",
-                        ident.clone()
-                    ));
-                    return;
+                    return Err(AssembleError::DuplicateSymbol(ident.to_string()));
                 } else {
                     sym.value = value;
-                    return;
+                    return Ok(());
                 }
             }
             None => {} // Fall through
         }
 
-        self.symbol_table.push(Symbol {
+        let sym = Symbol {
             symbol_type: match self.current_section {
                 Section::Null => {
-                    self.errors
-                        .push(format!("[*] On line {}:", self.line_number));
-                    self.errors
-                        .push(" - Cannot declare label outside a section.".to_string());
-                    0
+                    return Err(AssembleError::LabelOutsideOfSection);
                 }
                 Section::Text => STT_FUNC,
                 Section::Data => STT_OBJECT,
@@ -108,30 +115,34 @@ impl Assembler {
             size: 4,
             visibility: Visibility::Local,
             section: self.current_section.clone(),
-        });
+        };
+
+        self.symbol_table.push(sym);
 
         println!("Inserted symbol {} at 0x{:x}", ident, self.current_address);
 
-        self.most_recent_label = ident.clone();
+        self.most_recent_label = ident.to_string();
+
+        Ok(())
     }
 
     // Expand a line. Try replacing all instances of equivalences.
-    pub fn expand_line(&self, line: &str) -> String {
-        let mut expanded_line = String::new();
-
-        // Replace equivalences
-        for token in line.split_whitespace() {
-            if let Some(expansion) = self.equivalences.get(token) {
-                expanded_line.push_str(expansion);
-            } else {
-                expanded_line.push_str(token);
-            }
-
-            expanded_line.push(' ');
-        }
-
-        expanded_line.trim_end().to_string()
-    }
+    // pub fn expand_line(&self, line: &str) -> String {
+    //     let mut expanded_line = String::new();
+    //
+    //     // Replace equivalences
+    //     for token in line.split_whitespace() {
+    //         if let Some(expansion) = self.equivalences.get(token) {
+    //             expanded_line.push_str(expansion);
+    //         } else {
+    //             expanded_line.push_str(token);
+    //         }
+    //
+    //         expanded_line.push(' ');
+    //     }
+    //
+    //     expanded_line.trim_end().to_string()
+    // }
 
     /// Attempt to assemble a parsed line. If successful, add bytes to section .text - else, extend errors and keep it pushing.
     pub fn handle_assemble_instruction(
@@ -151,11 +162,11 @@ impl Assembler {
                 }
             },
             Err(e) => {
-                self.errors.push(format!(
+                self.string_error(format!(
                     "[*] On line {}{}:",
                     self.line_prefix, self.line_number
                 ));
-                self.errors.push(e);
+                // self.errors.push(AssembleError::String(e));
             }
         }
 
@@ -185,7 +196,8 @@ impl Assembler {
 
     pub fn assemble_instruction(&mut self, instr: &str, args: Vec<Ast>) {
         let info = INSTRUCTION_TABLE.get(instr).ok_or(()).copied();
-        todo!("rest of this")
+
+        todo!("assemble instruction")
     }
 
     pub fn assemble_asciiz(&mut self, s: String) {
@@ -218,13 +230,86 @@ impl Assembler {
         }
     }
 
+    // workhorse assemble a file, perform effects and report errors
+    // returns false when there are errors
+    pub fn assemble_file(&mut self, path: &Path) -> bool {
+        // erros to report
+        let mut errors = Vec::new();
+
+        let content = fs::read_to_string(&path).unwrap_or_else(|e| {
+            // report the io error
+            errors.push(AssembleError::Io(e));
+            // default to nothing
+            "".into()
+        });
+
+        // lex the file contents
+        let mut lexer = Lexer::new(&content);
+        let (errs, toks) = lexer.lex();
+
+        // report lex errors
+        errors.extend(errs.into_iter().map(|err| AssembleError::LexerError(err)));
+
+        // parsed lexed tokens into ast
+        let mut parser = Parser::new(toks);
+        let (perrs, ast) = parser.parse();
+
+        // report parse erros
+        errors.extend(perrs.into_iter().map(|err| AssembleError::ParseError(err)));
+
+        // fold the ast into the environment
+        self.assemble_ast(ast);
+
+        // process line info
+        for line in content.split('\n') {
+            let start_address = match self.current_section {
+                Section::Text => self.current_address,
+                Section::Data => self.text_address,
+                Section::Null => 0,
+            };
+
+            // Extend section .line to include the new line
+            self.section_dot_line.extend(
+                LineInfo {
+                    content: line.to_string(),
+                    line_number: self.line_number as u32,
+                    start_address: match self.current_section {
+                        Section::Text => start_address,
+                        _ => 0,
+                    },
+                    end_address: match self.current_section {
+                        Section::Text => self.current_address,
+                        Section::Data => self.text_address,
+                        _ => 0,
+                    },
+                }
+                .to_bytes(),
+            );
+
+            self.line_number += 1;
+        }
+
+        let res = errors.is_empty();
+
+        for error in errors {
+            dbg!(error);
+        }
+
+        res
+    }
+
     /// entry point for folding ast into the environment
-    pub fn assemble(&mut self, ast: Ast) {
+    pub fn assemble_ast(&mut self, ast: Ast) -> Result<(), AssembleError> {
         match ast {
             // individual ast nodes that can be folded into environment
-            Ast::Label(s) => self.add_label(&s, self.current_address),
-            Ast::Include(s) => todo!(),
+            Ast::Label(s) => self.add_label(&s, self.current_address)?,
+            Ast::Include(s) => {
+                let _ = self.assemble_file(self.current_dir.join(s).as_path());
+            }
             Ast::Asciiz(s) => self.assemble_asciiz(s),
+            Ast::Eqv(ident, value) => {
+                let _ = self.equivalences.insert(ident, value);
+            }
             Ast::Section(section) => match section {
                 Section::Text => self.switch_to_text_section(),
                 Section::Data => self.switch_to_data_section(),
@@ -233,16 +318,16 @@ impl Assembler {
             Ast::Instruction(instr, args) => self.assemble_instruction(&instr, args),
             Ast::Root(entries) => {
                 for entry in entries {
-                    self.assemble(entry);
+                    self.assemble_ast(entry);
                 }
             }
             // ast nodes that should be ohterwise consumed
             Ast::Immediate(_) => panic!(),
-            Ast::Eqv(_, _) => panic!(),
             Ast::Symbol(_) => panic!(),
             Ast::BaseAddress(_, _) => panic!(),
             Ast::Register(_) => panic!(),
         }
+        Ok(())
     }
 
     pub fn get_symbol_offset(&mut self, ident: String) -> u32 {

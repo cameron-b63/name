@@ -15,7 +15,7 @@ impl Assembler {
                 self.new_eqv(arguments);
             }
             ".include" => {
-                self.include_file(arguments);
+                self.include_file_old(arguments);
             }
             ".text" => {
                 self.switch_to_text_section();
@@ -24,9 +24,8 @@ impl Assembler {
                 self.new_word(arguments);
             }
             _ => {
-                self.errors
-                    .push(format!("[*] On line {}:", self.line_number));
-                self.errors.push(format!(" - Unrecognized directive."));
+                self.string_error(format!("[*] On line {}:", self.line_number));
+                self.string_error(format!(" - Unrecognized directive."));
             }
         }
     }
