@@ -321,7 +321,18 @@ impl Assembler {
                     self.assemble_ast(entry);
                 }
             }
+            Ast::Macro(args, body) => {
+                //matches against the deref'd args
+                match args {
+                    Ast::MacroArgs(arguments_list) => {
+                        self.parse_macro(arguments_list, body);
+                    }
+                    // if args is the MacroArgs Variant, clearly its a syntax error
+                    _ => panic!(),
+                };
+            }
             // ast nodes that should be ohterwise consumed
+            Ast::MacroEnd() => panic!(),
             Ast::Immediate(_) => panic!(),
             Ast::Symbol(_) => panic!(),
             Ast::BaseAddress(_, _) => panic!(),

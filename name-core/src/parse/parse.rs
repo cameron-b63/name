@@ -24,6 +24,14 @@ pub enum Ast {
     Section(Section),
     Eqv(String, u32),
 
+    //Macros
+    //we treat every macro definition as it's own root, with params and body
+    //rough gameplan:
+    //* Macro decleration is handled on the parse_macro() fn, where they're saved into a map
+    //* on the lexer, when we find the macro uses, and expand them inplace on the AST 
+    Macro(Vec<u32>, Vec<Ast>),
+    MacroEnd(),
+
     // constructs
     Instruction(String, Vec<Ast>),
     Register(Register),
