@@ -259,13 +259,6 @@ impl<'a> Parser<'a> {
         Ok(num)
     }
 
-    pub fn parse_base_address(&mut self) -> ParseResult<'a, ()> {
-        self.try_advance_if(TokenKind::LParen)?;
-        let reg = self.parse_register()?;
-        self.try_advance_if(TokenKind::RParen)?;
-        Ok(())
-    }
-
     pub fn parse_literal(&mut self) -> ParseResult<'a, u32> {
         let literal = self.try_peek()?;
 
