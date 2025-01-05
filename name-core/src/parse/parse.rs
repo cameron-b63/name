@@ -295,7 +295,7 @@ impl<'a> Parser<'a> {
             ".data" => Ast::Section(Section::Data),
             ".asciiz" => Ast::Asciiz(self.parse_string()?),
             ".align" => todo!(),
-            ".macro" => todo!(),
+            ".macro" => self.parse_macro()?,
             _ => {
                 return Err(ParseError {
                     kind: ErrorKind::InvalidDirective,
@@ -354,37 +354,52 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
+    pub fn parse_macro(&mut self) -> ParseResult<'a, Ast> {
+        let args = self.parse_macro_args();
+
+        let body = Vec::new();
+
+        while let Some(tok) = self.peek().filter(is not ".end_macro") {
+            body.push(self.parse_root_element()?);
+        }
+    }
+
+    pub fn parse_root_element(&mut self) -> ParseResult<'a, Ast> {
+        let tok = self.try_peek()?;
+
+        match tok.kind {
+            TokenKind::Directive => self.parse_directive(),
+            TokenKind::Ident => self.parse_ident().and_then(|sym| {
+                // if it's a label declaration
+                if self.next_if(TokenKind::Colon).is_some() {
+                    Ok(Ast::Label(sym))
+
+                // if it's an instruction
+                } else {
+                    let args = self.parse_args()?;
+                    Ok(Ast::Instruction(sym, args))
+                }
+            }),
+            TokenKind::Newline => {
+                self.advance();
+                continue;
+            }
+            _ => {
+                // TODO add more info to error
+                let src_span = tok.src_span.clone();
+                self.advance();
+                Err(ParseError::unexpected_token(src_span))
+            }
+        }
+    }
+
     pub fn parse(&mut self) -> (Vec<ParseError<'a>>, Ast) {
         // root units of our ast, directives, instructions and labels
         let mut entries = Vec::new();
         let mut errs = Vec::new();
 
         while let Some(tok) = self.peek() {
-            let res = match tok.kind {
-                TokenKind::Directive => self.parse_directive(),
-                TokenKind::Ident => self.parse_ident().and_then(|sym| {
-                    // if it's a label declaration
-                    if self.next_if(TokenKind::Colon).is_some() {
-                        Ok(Ast::Label(sym))
-
-                    // if it's an instruction
-                    } else {
-                        let args = self.parse_args()?;
-                        Ok(Ast::Instruction(sym, args))
-                    }
-                }),
-                TokenKind::Newline => {
-                    self.advance();
-                    continue;
-                }
-                _ => {
-                    // TODO add more info to error
-                    let src_span = tok.src_span.clone();
-                    self.advance();
-                    Err(ParseError::unexpected_token(src_span))
-                }
-            };
-
+            let res = self.parse_root_element();
             // add the result to our vectors
             match res {
                 Ok(ast) => entries.push(ast),
