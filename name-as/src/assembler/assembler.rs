@@ -1,7 +1,9 @@
 use std::{
+    cell::RefCell,
     collections::HashMap,
     fs, io,
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
 use name_core::{
@@ -251,11 +253,11 @@ impl Assembler {
         errors.extend(errs.into_iter().map(|err| AssembleError::LexerError(err)));
 
         //table of (macro name, num args) -> macro definitions
-        let mut table = HashMap::new();
+        let table = Rc::new(RefCell::new(HashMap::new()));
         // parsed lexed tokens into ast
-        let mut parser = Parser::new(toks, &mut table);
+        let mut parser = Parser::new(toks, table);
         let (perrs, ast) = parser.parse();
-
+        print!("{:?}", parser.get_macro_table().borrow());
         // report parse erros
         errors.extend(perrs.into_iter().map(|err| AssembleError::ParseError(err)));
 
