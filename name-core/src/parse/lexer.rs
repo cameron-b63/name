@@ -248,6 +248,7 @@ impl<'a> Lexer<'a> {
                 ')' => TokenKind::RParen,
                 ':' => TokenKind::Colon,
                 ',' => TokenKind::Comma,
+                '%' => TokenKind::Percent,
                 '\n' => TokenKind::Newline,
                 _ => return Err(self.single_error(ErrorKind::InvalidChar(c))),
             };

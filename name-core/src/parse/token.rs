@@ -44,6 +44,8 @@ pub enum TokenKind {
     Minus,
     Plus,
 
+    Percent,
+
     Newline,
 }
 

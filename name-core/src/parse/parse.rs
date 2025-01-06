@@ -26,13 +26,10 @@ pub enum Ast {
 
     //Macros
     //Arguments of name and arguments
-    //rough gameplan:
-    //* Macro decleration is handled on the parse_macro() fn, where they're saved into a map
-    //* on the lexer, when we find the macro uses, and expand them inplace on the AST
-    // macro identifier, arguments the macro takes, and the macros body that the macro expands to
     MacroDefintion(String, Vec<Ast>, Vec<Ast>),
     // macro identifier and arguments to call macro with
     MacroCall(String, Vec<Ast>),
+    MacroArg(String),
 
     // constructs
     Instruction(String, Vec<Ast>),
@@ -305,7 +302,7 @@ impl<'a> Parser<'a> {
             ".data" => Ast::Section(Section::Data),
             ".asciiz" => Ast::Asciiz(self.parse_string()?),
             ".align" => todo!(),
-            ".macro" => self.parse_macro()?,
+            ".macro" => self.parse_macro_defintion()?,
             _ => {
                 return Err(ParseError {
                     kind: ErrorKind::InvalidDirective,
@@ -364,20 +361,44 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    pub fn parse_macro_defintion(&mut self) -> ParseResult<'a, Ast> {
-        let args = self.parse_macro_args();
-
-        let body = Vec::new();
-
-        while let Some(tok) = self.peek().filter(is not ".end_macro") {
-            body.push(self.parse_root_element()?);
-        }
+    pub fn parse_macro_arg(&mut self) -> ParseResult<'a, Ast> {
+        self.try_advance_if(TokenKind::Percent)?;
+        let ident = self.parse_ident()?;
+        Ok(Ast::MacroArg(ident))
     }
 
-    pub fn parse_macro(&mut self) -> ParseResult<'a, Ast> {
+    pub fn parse_macro_args(&mut self) -> ParseResult<'a, Vec<Ast>> {
+        let mut args = Vec::new();
+
+        if self.peek_is_kind(TokenKind::Newline) {
+            return Ok(args);
+        }
+
+        loop {
+            args.push(self.parse_arg()?);
+            if self.peek_is_kind(TokenKind::Newline) {
+                break;
+            }
+        }
+        Ok(args)
+    }
+    pub fn parse_macro_defintion(&mut self) -> ParseResult<'a, Ast> {
+        let ident = self.parse_ident()?;
+        let args = self.parse_macro_args()?;
+
+        let mut body = Vec::new();
+
+        while let Some(tok) = self.peek().filter(|x| x.src_span.src == ".end_macro") {
+            body.push(self.parse_root_element()?);
+        }
+
+        Ok(Ast::MacroDefintion(ident, args, body))
+    }
+
+    pub fn parse_macro_call(&mut self) -> ParseResult<'a, Ast> {
         let ident = self.parse_ident()?;
         self.try_advance_if(TokenKind::LParen)?;
-        let args = self.parse_args()?;
+        let args = self.parse_macro_args()?;
         self.try_advance_if(TokenKind::RParen)?;
         Ok(Ast::MacroCall(ident, args))
     }
@@ -398,10 +419,6 @@ impl<'a> Parser<'a> {
                     Ok(Ast::Instruction(sym, args))
                 }
             }),
-            TokenKind::Newline => {
-                self.advance();
-                continue;
-            }
             _ => {
                 // TODO add more info to error
                 let src_span = tok.src_span.clone();
@@ -410,18 +427,22 @@ impl<'a> Parser<'a> {
             }
         }
     }
-
     pub fn parse(&mut self) -> (Vec<ParseError<'a>>, Ast) {
         // root units of our ast, directives, instructions and labels
         let mut entries = Vec::new();
         let mut errs = Vec::new();
 
         while let Some(tok) = self.peek() {
-            let res = self.parse_root_element();
-            // add the result to our vectors
-            match res {
-                Ok(ast) => entries.push(ast),
-                Err(err) => errs.push(err),
+            if tok.is_kind(TokenKind::Newline) {
+                self.advance();
+                continue;
+            } else {
+                let res = self.parse_root_element();
+                // add the result to our vectors
+                match res {
+                    Ok(ast) => entries.push(ast),
+                    Err(err) => errs.push(err),
+                }
             }
         }
 

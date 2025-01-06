@@ -298,7 +298,7 @@ impl Assembler {
         res
     }
 
-    pub fn macro_expand(ident: &str, args: &[Ast]) -> Vec<Ast> {
+    pub fn macro_expand(&mut self, ident: &str, args: &[Ast]) -> Vec<Ast> {
         todo!("write this");
     }
 
@@ -328,13 +328,14 @@ impl Assembler {
             Ast::MacroDefintion(ident, args, body) => {
                 todo!("store macro defintion");
             }
-            Ast::Macro(ident, args) => {
-                let vec_ast = self.macro_expand(ident, args);
+            Ast::MacroCall(ident, args) => {
+                let vec_ast = self.macro_expand(&ident, &args);
                 for ast in vec_ast {
                     self.assemble_ast(ast);
                 }
             }
             // ast nodes that should be ohterwise consumed
+            Ast::MacroArg(_) => panic!(),
             Ast::Immediate(_) => panic!(),
             Ast::Symbol(_) => panic!(),
             Ast::BaseAddress(_, _) => panic!(),
@@ -342,7 +343,6 @@ impl Assembler {
         }
         Ok(())
     }
-
     pub fn get_symbol_offset(&mut self, ident: String) -> u32 {
         match self
             .symbol_table
