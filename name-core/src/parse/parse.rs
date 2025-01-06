@@ -25,12 +25,14 @@ pub enum Ast {
     Eqv(String, u32),
 
     //Macros
-    //Arguments of name and arguments 
+    //Arguments of name and arguments
     //rough gameplan:
     //* Macro decleration is handled on the parse_macro() fn, where they're saved into a map
-    //* on the lexer, when we find the macro uses, and expand them inplace on the AST 
-    MacroCall(String, Vec<Ast>, Vec<Ast>),
-    MacroEnd(),
+    //* on the lexer, when we find the macro uses, and expand them inplace on the AST
+    // macro identifier, arguments the macro takes, and the macros body that the macro expands to
+    MacroDefintion(String, Vec<Ast>, Vec<Ast>),
+    // macro identifier and arguments to call macro with
+    MacroCall(String, Vec<Ast>),
 
     // constructs
     Instruction(String, Vec<Ast>),
@@ -362,7 +364,7 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    pub fn parse_macro(&mut self) -> ParseResult<'a, Ast> {
+    pub fn parse_macro_defintion(&mut self) -> ParseResult<'a, Ast> {
         let args = self.parse_macro_args();
 
         let body = Vec::new();
@@ -370,6 +372,14 @@ impl<'a> Parser<'a> {
         while let Some(tok) = self.peek().filter(is not ".end_macro") {
             body.push(self.parse_root_element()?);
         }
+    }
+
+    pub fn parse_macro(&mut self) -> ParseResult<'a, Ast> {
+        let ident = self.parse_ident()?;
+        self.try_advance_if(TokenKind::LParen)?;
+        let args = self.parse_args()?;
+        self.try_advance_if(TokenKind::RParen)?;
+        Ok(Ast::MacroCall(ident, args))
     }
 
     pub fn parse_root_element(&mut self) -> ParseResult<'a, Ast> {

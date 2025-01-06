@@ -298,6 +298,10 @@ impl Assembler {
         res
     }
 
+    pub fn macro_expand(ident: &str, args: &[Ast]) -> Vec<Ast> {
+        todo!("write this");
+    }
+
     /// entry point for folding ast into the environment
     pub fn assemble_ast(&mut self, ast: Ast) -> Result<(), AssembleError> {
         match ast {
@@ -321,18 +325,16 @@ impl Assembler {
                     self.assemble_ast(entry);
                 }
             }
-            Ast::Macro(args, body) => {
-                //matches against the deref'd args
-                match args {
-                    Ast::MacroArgs(arguments_list) => {
-                        self.parse_macro(arguments_list, body);
-                    }
-                    // if args is the MacroArgs Variant, clearly its a syntax error
-                    _ => panic!(),
-                };
+            Ast::MacroDefintion(ident, args, body) => {
+                todo!("store macro defintion");
+            }
+            Ast::Macro(ident, args) => {
+                let vec_ast = self.macro_expand(ident, args);
+                for ast in vec_ast {
+                    self.assemble_ast(ast);
+                }
             }
             // ast nodes that should be ohterwise consumed
-            Ast::MacroEnd() => panic!(),
             Ast::Immediate(_) => panic!(),
             Ast::Symbol(_) => panic!(),
             Ast::BaseAddress(_, _) => panic!(),
