@@ -250,8 +250,10 @@ impl Assembler {
         // report lex errors
         errors.extend(errs.into_iter().map(|err| AssembleError::LexerError(err)));
 
+        //table of (macro name, num args) -> macro definitions
+        let mut table = HashMap::new();
         // parsed lexed tokens into ast
-        let mut parser = Parser::new(toks);
+        let mut parser = Parser::new(toks, &mut table);
         let (perrs, ast) = parser.parse();
 
         // report parse erros
@@ -325,9 +327,7 @@ impl Assembler {
                     self.assemble_ast(entry);
                 }
             }
-            Ast::MacroDefintion(ident, args, body) => {
-                todo!("store macro defintion");
-            }
+            Ast::MacroDefintion(ident, args, body) => {}
             Ast::MacroCall(ident, args) => {
                 let vec_ast = self.macro_expand(&ident, &args);
                 for ast in vec_ast {

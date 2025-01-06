@@ -7,7 +7,7 @@ use crate::{
     structs::{ParseRegisterError, Register, Section},
 };
 
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 #[derive(Debug, Clone)]
 pub enum Ast {
@@ -99,11 +99,16 @@ type ParseResult<'a, T> = Result<T, ParseError<'a>>;
 pub struct Parser<'a> {
     tokens: Vec<Token<'a>>,
     pos: usize,
+    macro_definitions: &'a mut HashMap<(String, usize), Vec<Ast>>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(tokens: Vec<Token<'a>>) -> Self {
-        Parser { tokens, pos: 0 }
+    pub fn new(tokens: Vec<Token<'a>>, table: &'a mut HashMap<(String, usize), Vec<Ast>>) -> Self {
+        Parser {
+            tokens,
+            pos: 0,
+            macro_definitions: table,
+        }
     }
 
     pub fn advance(&mut self) {
@@ -382,6 +387,7 @@ impl<'a> Parser<'a> {
         }
         Ok(args)
     }
+
     pub fn parse_macro_defintion(&mut self) -> ParseResult<'a, Ast> {
         let ident = self.parse_ident()?;
         let args = self.parse_macro_args()?;
@@ -391,6 +397,9 @@ impl<'a> Parser<'a> {
         while let Some(tok) = self.peek().filter(|x| x.src_span.src == ".end_macro") {
             body.push(self.parse_root_element()?);
         }
+
+        self.macro_definitions
+            .insert((ident.clone(), args.len()), body.clone());
 
         Ok(Ast::MacroDefintion(ident, args, body))
     }
