@@ -100,19 +100,11 @@ pub struct Parser<'a> {
     tokens: Vec<Token<'a>>,
     pos: usize,
     //interior mutability pattern
-    macro_definitions: Rc<RefCell<HashMap<(String, usize), Vec<Ast>>>>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(
-        tokens: Vec<Token<'a>>,
-        table: Rc<RefCell<HashMap<(String, usize), Vec<Ast>>>>,
-    ) -> Self {
-        Parser {
-            tokens,
-            pos: 0,
-            macro_definitions: table,
-        }
+    pub fn new(tokens: Vec<Token<'a>>) -> Self {
+        Parser { tokens, pos: 0 }
     }
     pub fn advance(&mut self) {
         self.pos += 1;
@@ -375,10 +367,6 @@ impl<'a> Parser<'a> {
         Ok(Ast::MacroArg(ident))
     }
 
-    pub fn get_macro_table(&self) -> Rc<RefCell<HashMap<(String, usize), Vec<Ast>>>> {
-        self.macro_definitions.clone()
-    }
-
     pub fn parse_macro_args(&mut self) -> ParseResult<'a, Vec<Ast>> {
         let mut args = Vec::new();
 
@@ -404,8 +392,6 @@ impl<'a> Parser<'a> {
         while let Some(tok) = self.peek().filter(|x| x.src_span.src == ".end_macro") {
             body.push(self.parse_root_element()?);
         }
-        let mut macros = self.macro_definitions.borrow_mut();
-        macros.insert((ident.clone(), args.len()), body.clone());
 
         Ok(Ast::MacroDefintion(ident, args, body))
     }

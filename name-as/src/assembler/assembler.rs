@@ -55,6 +55,7 @@ pub struct Assembler {
     pub(crate) line_number: usize,
     pub(crate) line_prefix: String,
     pub(crate) most_recent_label: String,
+    macro_definitions: HashMap<(String, usize), Vec<Ast>>,
 }
 
 impl Assembler {
@@ -77,6 +78,7 @@ impl Assembler {
             line_number: 1,
             line_prefix: String::from(""),
             most_recent_label: String::from(""),
+            macro_definitions: HashMap::new(),
         }
     }
 
@@ -253,11 +255,9 @@ impl Assembler {
         errors.extend(errs.into_iter().map(|err| AssembleError::LexerError(err)));
 
         //table of (macro name, num args) -> macro definitions
-        let table = Rc::new(RefCell::new(HashMap::new()));
         // parsed lexed tokens into ast
-        let mut parser = Parser::new(toks, table);
+        let mut parser = Parser::new(toks);
         let (perrs, ast) = parser.parse();
-        print!("{:?}", parser.get_macro_table().borrow());
         // report parse erros
         errors.extend(perrs.into_iter().map(|err| AssembleError::ParseError(err)));
 
@@ -329,7 +329,9 @@ impl Assembler {
                     self.assemble_ast(entry);
                 }
             }
-            Ast::MacroDefintion(ident, args, body) => {}
+            Ast::MacroDefintion(ident, args, body) => {
+                self.macro_definitions.insert((ident, args.len()), body);
+            }
             Ast::MacroCall(ident, args) => {
                 let vec_ast = self.macro_expand(&ident, &args);
                 for ast in vec_ast {
