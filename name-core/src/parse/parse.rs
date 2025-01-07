@@ -31,6 +31,31 @@ pub enum Ast {
     Root(Vec<Ast>),
 }
 
+impl Ast {
+    pub fn get_register(self) -> Option<Register> {
+        if let Ast::Register(reg) = self {
+            Some(reg)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_immediate(self) -> Option<u32> {
+        if let Ast::Immediate(imm) = self {
+            Some(imm)
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Display for Ast {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        //TODO: write the actual display information
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ErrorKind {
     UnexpectedToken,

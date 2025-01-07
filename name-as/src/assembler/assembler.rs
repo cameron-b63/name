@@ -25,13 +25,12 @@ use crate::definitions::structs::{LineComponent, PseudoInstruction};
 
 /// Possible assemble error codes
 #[derive(Debug)]
-pub enum AssembleError<'a> {
-    ParseError(ParseError<'a>),
-    LexerError(LexerError<'a>),
+pub enum AssembleError {
     DuplicateSymbol(String),
     Io(io::Error),
     String(String),
     LabelOutsideOfSection,
+    UnknownInstruction(String),
 }
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
@@ -145,12 +144,37 @@ impl Assembler {
     // }
 
     /// Attempt to assemble a parsed line. If successful, add bytes to section .text - else, extend errors and keep it pushing.
-    pub fn handle_assemble_instruction(
+    pub fn assemble_instruction(
         &mut self,
-        info: &InstructionInformation,
-        args: &Vec<LineComponent>,
-    ) {
-        let assembled_instruction_result = assemble_instruction(info, &args);
+        instr: &str,
+        args: Vec<Ast>,
+    ) -> Result<(), AssembleError> {
+        let info = INSTRUCTION_TABLE
+            .get(instr)
+            .ok_or(AssembleError::UnknownInstruction(instr.to_string()))?;
+
+        // If a relocation entry needs to be added, work with it.
+        if info.relocation_type.is_some() {
+            // There can be only one.
+            let symbol_ident = args
+                .iter()
+                .filter_map(|arg| match arg {
+                    Ast::Symbol(identifier) => Some(identifier.clone()),
+                    _ => None,
+                })
+                .collect();
+            let symbol_offset: u32 = self.get_symbol_offset(symbol_ident);
+
+            let new_bytes: Vec<u8> = RelocationEntry {
+                r_offset: self.current_address - MIPS_TEXT_START_ADDR,
+                r_sym: symbol_offset,
+                r_type: info.relocation_type.unwrap().clone(),
+            }
+            .to_bytes();
+            self.section_dot_rel.extend(new_bytes);
+        }
+
+        let assembled_instruction_result = assemble_instruction(info, args);
 
         match assembled_instruction_result {
             Ok(assembled_instruction) => match assembled_instruction {
@@ -170,34 +194,8 @@ impl Assembler {
             }
         }
 
-        // If a relocation entry needs to be added, work with it.
-        if info.relocation_type.is_some() {
-            // There can be only one.
-            let symbol_ident = args
-                .iter()
-                .filter_map(|arg| match arg {
-                    LineComponent::Identifier(identifier) => Some(identifier.clone()),
-                    _ => None,
-                })
-                .collect();
-            let symbol_offset: u32 = self.get_symbol_offset(symbol_ident);
-
-            let new_bytes: Vec<u8> = RelocationEntry {
-                r_offset: self.current_address - MIPS_TEXT_START_ADDR,
-                r_sym: symbol_offset,
-                r_type: info.relocation_type.unwrap().clone(),
-            }
-            .to_bytes();
-            self.section_dot_rel.extend(new_bytes);
-        }
-
         self.current_address += MIPS_ADDRESS_ALIGNMENT;
-    }
-
-    pub fn assemble_instruction(&mut self, instr: &str, args: Vec<Ast>) {
-        let info = INSTRUCTION_TABLE.get(instr).ok_or(()).copied();
-
-        todo!("assemble instruction")
+        Ok(())
     }
 
     pub fn assemble_asciiz(&mut self, s: String) {
@@ -233,12 +231,9 @@ impl Assembler {
     // workhorse assemble a file, perform effects and report errors
     // returns false when there are errors
     pub fn assemble_file(&mut self, path: &Path) -> bool {
-        // erros to report
-        let mut errors = Vec::new();
-
         let content = fs::read_to_string(&path).unwrap_or_else(|e| {
             // report the io error
-            errors.push(AssembleError::Io(e));
+            dbg!(e);
             // default to nothing
             "".into()
         });
@@ -248,17 +243,24 @@ impl Assembler {
         let (errs, toks) = lexer.lex();
 
         // report lex errors
-        errors.extend(errs.into_iter().map(|err| AssembleError::LexerError(err)));
+        for err in errs {
+            dbg!(err);
+        }
 
         // parsed lexed tokens into ast
         let mut parser = Parser::new(toks);
         let (perrs, ast) = parser.parse();
+        dbg!(&ast);
 
         // report parse erros
-        errors.extend(perrs.into_iter().map(|err| AssembleError::ParseError(err)));
+        for perr in perrs {
+            dbg!(perr);
+        }
 
         // fold the ast into the environment
-        self.assemble_ast(ast);
+        self.assemble_ast(ast).unwrap_or_else(|err| {
+            dbg!(err);
+        });
 
         // process line info
         for line in content.split('\n') {
@@ -289,13 +291,8 @@ impl Assembler {
             self.line_number += 1;
         }
 
-        let res = errors.is_empty();
-
-        for error in errors {
-            dbg!(error);
-        }
-
-        res
+        // TODO: rework the ways errors work
+        true
     }
 
     /// entry point for folding ast into the environment
@@ -315,7 +312,7 @@ impl Assembler {
                 Section::Data => self.switch_to_data_section(),
                 _ => panic!("other sections not implemented"),
             },
-            Ast::Instruction(instr, args) => self.assemble_instruction(&instr, args),
+            Ast::Instruction(instr, args) => self.assemble_instruction(&instr, args)?,
             Ast::Root(entries) => {
                 for entry in entries {
                     self.assemble_ast(entry);

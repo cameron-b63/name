@@ -2,17 +2,18 @@ use crate::assembler::assembly_helpers::arg_configuration_is_ok;
 use crate::assembler::assembly_utils::*;
 use crate::definitions::structs::LineComponent;
 use name_core::instruction::information::{ArgumentType, InstructionInformation, InstructionType};
+use name_core::parse::parse::Ast;
 
 // Big logic for instruction assembly - this is the main driver code for actual packing of instructions once parsed.
 pub fn assemble_instruction(
     info: &InstructionInformation,
-    arguments: &Vec<LineComponent>,
+    arguments: Vec<Ast>,
 ) -> Result<u32, String> {
     let has_alternate_configurations: bool = info.alt_args.is_some();
 
     // Find proper argument configuration early
     let configuration_to_use: &[ArgumentType];
-    let existing_configuration_works: bool = arg_configuration_is_ok(arguments, info.args);
+    let existing_configuration_works: bool = arg_configuration_is_ok(&arguments, info.args);
 
     if !has_alternate_configurations {
         if !existing_configuration_works {
@@ -25,7 +26,7 @@ pub fn assemble_instruction(
             .alt_args
             .unwrap()
             .iter()
-            .find(|config| arg_configuration_is_ok(arguments, config));
+            .find(|config| arg_configuration_is_ok(&arguments, config));
         match found_configuration {
             Some(configuration) => configuration_to_use = configuration,
             None => return Err(" - Bad arguments provided; Alternative argument configurations exist, but none matched.".to_string()),

@@ -4,13 +4,11 @@ use name_core::{
         information::{ArgumentType, InstructionInformation},
         instruction_set::INSTRUCTION_TABLE,
     },
+    parse::parse::Ast,
     structs::Symbol,
 };
 
-use crate::definitions::{
-    pseudo_instructions::PSEUDO_INSTRUCTION_SET,
-    structs::{LineComponent, PseudoInstruction},
-};
+use crate::definitions::{pseudo_instructions::PSEUDO_INSTRUCTION_SET, structs::PseudoInstruction};
 
 use std::collections::HashMap;
 
@@ -19,22 +17,19 @@ use super::assembler::Assembler;
 // Helper function for assemble_instruction for use when multiple argument configurations are available.
 // Checks argument configuration against what was passed.
 // Returns a boolean value representing whether the expected fields matched or not.
-pub fn arg_configuration_is_ok(
-    passed_args: &Vec<LineComponent>,
-    expected_args: &[ArgumentType],
-) -> bool {
+pub fn arg_configuration_is_ok(passed_args: &[Ast], expected_args: &[ArgumentType]) -> bool {
     if passed_args.len() != expected_args.len() {
         return false;
     }
 
     for (passed, expected) in passed_args.iter().zip(expected_args.iter()) {
         match (passed, expected) {
-            (LineComponent::Register(_), ArgumentType::Rd)
-            | (LineComponent::Register(_), ArgumentType::Rs)
-            | (LineComponent::Register(_), ArgumentType::Rt)
-            | (LineComponent::Immediate(_), ArgumentType::Immediate)
-            | (LineComponent::Identifier(_), ArgumentType::Identifier)
-            | (LineComponent::Identifier(_), ArgumentType::BranchLabel) => {}
+            (Ast::Register(_), ArgumentType::Rd)
+            | (Ast::Register(_), ArgumentType::Rs)
+            | (Ast::Register(_), ArgumentType::Rt)
+            | (Ast::Immediate(_), ArgumentType::Immediate)
+            | (Ast::Symbol(_), ArgumentType::Identifier)
+            | (Ast::Symbol(_), ArgumentType::BranchLabel) => {}
             _ => return false,
         }
     }
@@ -85,10 +80,7 @@ pub fn generate_pseudo_instruction_hashmap() -> HashMap<&'static str, &'static P
     hashmap
 }
 
-pub fn reverse_format_instruction(
-    info: &InstructionInformation,
-    args: &Vec<LineComponent>,
-) -> String {
+pub fn reverse_format_instruction(info: &InstructionInformation, args: &Vec<Ast>) -> String {
     // Prepare the mnemonic
     let mnemonic = &info.mnemonic;
 
