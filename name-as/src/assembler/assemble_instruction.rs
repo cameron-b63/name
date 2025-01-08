@@ -1,6 +1,5 @@
 use crate::assembler::assembly_helpers::arg_configuration_is_ok;
 use crate::assembler::assembly_utils::*;
-use crate::definitions::structs::LineComponent;
 use name_core::instruction::information::{ArgumentType, InstructionInformation, InstructionType};
 use name_core::parse::parse::AstKind;
 

@@ -109,7 +109,7 @@ pub fn _assemble_line(environment: &mut Assembler, line: &str, expanded_line: St
     // If a known instruction mnemonic was discovered, its contents will be assembled here.
     match instruction_information {
         None => {}
-        Some(info) => {
+        Some(_info) => {
             // environment
             //     .handle_assemble_instruction(info, &arguments)
             //     .unwrap();

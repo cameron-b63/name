@@ -1,5 +1,3 @@
-use crate::assembler::assembler::AssembleError;
-use crate::assembler::assembly_helpers::parse_register_to_u32;
 use crate::definitions::constants::{MAX_U16, MIN_U16};
 use name_core::{instruction::information::ArgumentType, parse::parse::AstKind, structs::Register};
 

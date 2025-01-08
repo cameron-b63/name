@@ -4,7 +4,7 @@ use name_core::{
         information::{ArgumentType, InstructionInformation},
         instruction_set::INSTRUCTION_TABLE,
     },
-    parse::parse::{Ast, AstKind},
+    parse::parse::AstKind,
     structs::Symbol,
 };
 
@@ -52,7 +52,7 @@ pub fn _translate_identifier_to_address(
 }
 
 // Parse a register string like "$t0" or "$3" to u32 for packing.
-pub fn parse_register_to_u32(register: &String) -> Result<u32, String> {
+pub fn _parse_register_to_u32(register: &String) -> Result<u32, String> {
     // Check the early exit
     if !register.starts_with("$") {
         return Err("Register parse failed.".to_string());

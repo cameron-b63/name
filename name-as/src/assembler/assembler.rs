@@ -7,10 +7,10 @@ use std::{
 use name_core::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
-    instruction::{information::InstructionInformation, instruction_set::INSTRUCTION_TABLE},
+    instruction::instruction_set::INSTRUCTION_TABLE,
     parse::{
         lexer::{self, Lexer},
-        parse::{self, Ast, AstKind, Parser},
+        parse::{self, AstKind, Parser},
         span::Span,
     },
     structs::{LineInfo, Section, Symbol, Visibility},
@@ -22,7 +22,7 @@ use crate::assembler::assembly_helpers::{
     generate_pseudo_instruction_hashmap, pretty_print_instruction,
 };
 
-use crate::definitions::structs::{LineComponent, PseudoInstruction};
+use crate::definitions::structs::PseudoInstruction;
 
 /// Possible assemble error codes
 #[derive(Debug)]
@@ -241,11 +241,12 @@ impl Assembler {
     pub fn assemble_file(&mut self, path: &Path) -> bool {
         let mut errors = Vec::new();
 
-        let content = fs::read_to_string(&path).unwrap_or_else(|e| {
+        let content = fs::read_to_string(&path).unwrap_or_else(|_e| {
+            todo!("figure out what to do with unspanned erors in assembler");
             // report the io error
-            errors.push(ErrorKind::Io(e));
+            // errors.push(ErrorKind::Io(e));
             // default to nothing
-            "".into()
+            // "".into()
         });
 
         // lex the file contents
@@ -253,19 +254,29 @@ impl Assembler {
         let (errs, toks) = lexer.lex();
 
         // report lex errors
-        errors.extend(errs.into_iter().map(|err| ErrorKind::LexError(err.kind)));
+        errors.extend(
+            errs.into_iter()
+                .map(|err| err.map(|k| ErrorKind::LexError(k))),
+        );
 
         // parsed lexed tokens into ast
         let mut parser = Parser::new(toks, &content);
         let (perrs, vast) = parser.parse();
 
         // report parse erros
-        errors.extend(perrs.into_iter().map(|err| ErrorKind::ParseError(err.kind)));
+        errors.extend(
+            perrs
+                .into_iter()
+                .map(|err| err.map(|k| ErrorKind::ParseError(k))),
+        );
 
         // fold the ast into the environment
         for ast in vast {
             self.assemble_ast(ast.kind).unwrap_or_else(|err| {
-                errors.push(err);
+                errors.push(Span {
+                    src_span: ast.src_span,
+                    kind: err,
+                });
             })
         }
 
