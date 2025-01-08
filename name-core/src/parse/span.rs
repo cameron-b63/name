@@ -15,20 +15,31 @@ impl fmt::Display for SrcSpan<'_> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Span<'a, T> {
-    src_span: SrcSpan<'a>,
-    unspan: T,
+    pub src_span: SrcSpan<'a>,
+    pub kind: T,
 }
 
 impl<'a, T> Span<'a, T> {
-    pub fn new(src_span: SrcSpan<'a>, unspan: T) -> Self {
-        Span { src_span, unspan }
+    pub fn new(src_span: SrcSpan<'a>, kind: T) -> Self {
+        Span { src_span, kind }
     }
 
     pub fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Span<'a, U> {
         Span {
             src_span: self.src_span,
-            unspan: f(self.unspan),
+            kind: f(self.kind),
         }
+    }
+
+    pub fn src_string(&self) -> String {
+        self.src_span.src.to_string()
+    }
+}
+
+impl<'a, T: PartialEq> Span<'a, T> {
+    pub fn is_kind(&self, x: T) -> bool {
+        self.kind == x
     }
 }

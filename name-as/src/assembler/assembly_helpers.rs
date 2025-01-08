@@ -43,7 +43,7 @@ pub fn arg_configuration_is_ok(
 }
 
 // Oft-used map operation nobody would want to repeat. Turns a symbol table entry into its address.
-pub fn translate_identifier_to_address(
+pub fn _translate_identifier_to_address(
     identifier: &String,
     symbol_table: &Vec<Symbol>,
 ) -> Option<u32> {
@@ -85,7 +85,7 @@ pub fn generate_pseudo_instruction_hashmap() -> HashMap<&'static str, &'static P
     hashmap
 }
 
-pub fn reverse_format_instruction(
+pub fn _reverse_format_instruction(
     info: &InstructionInformation,
     args: &Vec<LineComponent>,
 ) -> String {
@@ -133,7 +133,7 @@ pub fn pretty_print_instruction(addr: &u32, packed: &u32) {
     println!();
 }
 
-pub fn search_mnemonic(
+pub fn _search_mnemonic(
     mnemonic: String,
     environment: &mut Assembler,
 ) -> (
@@ -148,7 +148,7 @@ pub fn search_mnemonic(
     let mut pseudo_instruction_information: Option<&'static PseudoInstruction> = None;
 
     let retrieved_pseudo_instruction_option: Option<&'static PseudoInstruction> = environment
-        .pseudo_instruction_table
+        ._pseudo_instruction_table
         .get(mnemonic.as_str())
         .copied();
     match retrieved_pseudo_instruction_option {

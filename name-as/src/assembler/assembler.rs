@@ -9,8 +9,8 @@ use name_core::{
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
     instruction::{information::InstructionInformation, instruction_set::INSTRUCTION_TABLE},
     parse::{
-        lexer::{Lexer, LexerError},
-        parse::{Ast, ParseError, Parser},
+        lexer::{self, Lexer},
+        parse::{self, Ast, AstKind, Parser},
     },
     structs::{LineInfo, Section, Symbol, Visibility},
 };
@@ -25,9 +25,9 @@ use crate::definitions::structs::{LineComponent, PseudoInstruction};
 
 /// Possible assemble error codes
 #[derive(Debug)]
-pub enum AssembleError<'a> {
-    ParseError(ParseError<'a>),
-    LexerError(LexerError<'a>),
+pub enum AssembleError {
+    LexError(lexer::ErrorKind),
+    ParseError(parse::ErrorKind),
     DuplicateSymbol(String),
     Io(io::Error),
     String(String),
@@ -38,7 +38,7 @@ pub enum AssembleError<'a> {
 
 #[derive(Debug)]
 pub struct Assembler {
-    pub(crate) pseudo_instruction_table: HashMap<&'static str, &'static PseudoInstruction>,
+    pub(crate) _pseudo_instruction_table: HashMap<&'static str, &'static PseudoInstruction>,
     pub section_dot_text: Vec<u8>,
     pub section_dot_data: Vec<u8>,
     pub section_dot_rel: Vec<u8>,
@@ -59,7 +59,7 @@ impl Assembler {
     // Initialize the assembler environment - default constructor.
     pub fn new(current_dir: PathBuf) -> Self {
         Assembler {
-            pseudo_instruction_table: generate_pseudo_instruction_hashmap(),
+            _pseudo_instruction_table: generate_pseudo_instruction_hashmap(),
             section_dot_text: vec![],
             section_dot_data: vec![],
             section_dot_rel: vec![],
@@ -78,7 +78,7 @@ impl Assembler {
         }
     }
 
-    pub fn string_error(&mut self, err: String) {
+    pub fn string_error(&mut self, _err: String) {
         todo!()
     }
 
@@ -149,7 +149,7 @@ impl Assembler {
         &mut self,
         info: &InstructionInformation,
         args: &Vec<LineComponent>,
-    ) {
+    ) -> Result<(), AssembleError> {
         let assembled_instruction_result = assemble_instruction(info, &args);
 
         match assembled_instruction_result {
@@ -161,7 +161,7 @@ impl Assembler {
                     pretty_print_instruction(&self.current_address, &packed);
                 }
             },
-            Err(e) => {
+            Err(_e) => {
                 self.string_error(format!(
                     "[*] On line {}{}:",
                     self.line_prefix, self.line_number
@@ -180,7 +180,7 @@ impl Assembler {
                     _ => None,
                 })
                 .collect();
-            let symbol_offset: u32 = self.get_symbol_offset(symbol_ident);
+            let symbol_offset: u32 = self.get_symbol_offset(symbol_ident)?;
 
             let new_bytes: Vec<u8> = RelocationEntry {
                 r_offset: self.current_address - MIPS_TEXT_START_ADDR,
@@ -192,10 +192,11 @@ impl Assembler {
         }
 
         self.current_address += MIPS_ADDRESS_ALIGNMENT;
+        Ok(())
     }
 
-    pub fn assemble_instruction(&mut self, instr: &str, args: Vec<Ast>) {
-        let info = INSTRUCTION_TABLE.get(instr).ok_or(()).copied();
+    pub fn assemble_instruction(&mut self, instr: &str, _args: Vec<Ast>) {
+        let _info = INSTRUCTION_TABLE.get(instr).ok_or(()).copied();
 
         todo!("assemble instruction")
     }
@@ -230,8 +231,11 @@ impl Assembler {
         }
     }
 
-    // workhorse assemble a file, perform effects and report errors
-    // returns false when there are errors
+    /// workhorse assemble a file, perform effects and report errors
+    /// The idea is, once the assembler is done running, if any errors were encountered, their content is pushed to the errors vector,
+    /// and the errors vector is returned as the Err variant of the Result for the caller to handle. This way, all forseeable errors are printed in one pass.
+    /// There should be next to no fatal errors. I will be vetting this code later to ensure there are no execution paths which crash.
+    /// returns false when there are errors
     pub fn assemble_file(&mut self, path: &Path) -> bool {
         // erros to report
         let mut errors = Vec::new();
@@ -248,17 +252,28 @@ impl Assembler {
         let (errs, toks) = lexer.lex();
 
         // report lex errors
-        errors.extend(errs.into_iter().map(|err| AssembleError::LexerError(err)));
+        errors.extend(
+            errs.into_iter()
+                .map(|err| AssembleError::LexError(err.kind)),
+        );
 
         // parsed lexed tokens into ast
-        let mut parser = Parser::new(toks);
-        let (perrs, ast) = parser.parse();
+        let mut parser = Parser::new(toks, &content);
+        let (perrs, vast) = parser.parse();
 
         // report parse erros
-        errors.extend(perrs.into_iter().map(|err| AssembleError::ParseError(err)));
+        errors.extend(
+            perrs
+                .into_iter()
+                .map(|err| AssembleError::ParseError(err.kind)),
+        );
 
         // fold the ast into the environment
-        self.assemble_ast(ast);
+        for ast in vast {
+            self.assemble_ast(ast).unwrap_or_else(|err| {
+                errors.push(err);
+            })
+        }
 
         // process line info
         for line in content.split('\n') {
@@ -300,46 +315,41 @@ impl Assembler {
 
     /// entry point for folding ast into the environment
     pub fn assemble_ast(&mut self, ast: Ast) -> Result<(), AssembleError> {
-        match ast {
+        match ast.kind {
             // individual ast nodes that can be folded into environment
-            Ast::Label(s) => self.add_label(&s, self.current_address)?,
-            Ast::Include(s) => {
+            AstKind::Label(s) => self.add_label(&s, self.current_address)?,
+            AstKind::Include(s) => {
                 let _ = self.assemble_file(self.current_dir.join(s).as_path());
             }
-            Ast::Asciiz(s) => self.assemble_asciiz(s),
-            Ast::Eqv(ident, value) => {
+            AstKind::Asciiz(s) => self.assemble_asciiz(s),
+            AstKind::Eqv(ident, value) => {
                 let _ = self.equivalences.insert(ident, value);
             }
-            Ast::Section(section) => match section {
+            AstKind::Section(section) => match section {
                 Section::Text => self.switch_to_text_section(),
                 Section::Data => self.switch_to_data_section(),
                 _ => panic!("other sections not implemented"),
             },
-            Ast::Instruction(instr, args) => self.assemble_instruction(&instr, args),
-            Ast::Root(entries) => {
-                for entry in entries {
-                    self.assemble_ast(entry);
-                }
-            }
+            AstKind::Instruction(instr, args) => self.assemble_instruction(&instr, args),
             // ast nodes that should be ohterwise consumed
-            Ast::Immediate(_) => panic!(),
-            Ast::Symbol(_) => panic!(),
-            Ast::BaseAddress(_, _) => panic!(),
-            Ast::Register(_) => panic!(),
+            AstKind::Immediate(_) => panic!(),
+            AstKind::Symbol(_) => panic!(),
+            AstKind::BaseAddress(_, _) => panic!(),
+            AstKind::Register(_) => panic!(),
         }
         Ok(())
     }
 
-    pub fn get_symbol_offset(&mut self, ident: String) -> u32 {
+    pub fn get_symbol_offset(&mut self, ident: String) -> Result<u32, AssembleError> {
         match self
             .symbol_table
             .iter()
             .position(|sym| sym.identifier == ident)
         {
-            Some(idx) => return (idx as u32) + 1,
+            Some(idx) => return Ok((idx as u32) + 1),
             None => {
-                self.add_label(&ident, 0);
-                return self.symbol_table.len() as u32;
+                self.add_label(&ident, 0)?;
+                return Ok(self.symbol_table.len() as u32);
             }
         };
     }
