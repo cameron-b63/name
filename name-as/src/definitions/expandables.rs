@@ -153,7 +153,7 @@ pub(crate) fn expand_la(
 
     let symbol_ident: String = label.to_string();
 
-    let symbol_offset: u32 = environment.get_symbol_offset(symbol_ident);
+    let symbol_offset: u32 = environment.get_symbol_offset(symbol_ident).unwrap();
 
     let lui_info =  match INSTRUCTION_TABLE.get("lui") {
             Some(info) => info,

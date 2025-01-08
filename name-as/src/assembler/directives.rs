@@ -1,7 +1,3 @@
-use std::fs::read_to_string;
-use std::path::PathBuf;
-
-use crate::assembler::assemble_file::assemble;
 use crate::assembler::assembler::Assembler;
 
 use crate::definitions::structs::LineComponent;
@@ -9,141 +5,6 @@ use crate::definitions::structs::LineComponent;
 use name_core::structs::Section;
 
 impl Assembler {
-    // .asciiz
-    pub(crate) fn add_new_asciiz(&mut self, arguments: &Vec<LineComponent>) {
-        if arguments.len() != 1 {
-            self.string_error(format!(
-                " - `.asciiz` directive expects only one argument, received {}",
-                arguments.len()
-            ));
-            return;
-        }
-
-        let mut to_push: Vec<u8> = arguments[0]
-            .to_string()
-            // Escape sequences
-            .replace(r"\n", "\n")
-            .replace(r"\t", "\t")
-            .replace(r"\\", "\\")
-            .chars()
-            .map(|c| c as u8)
-            .collect::<Vec<u8>>();
-
-        to_push.push(b'\0');
-
-        // TODO: This should really be refactored to implement.
-        match self
-            .symbol_table
-            .iter_mut()
-            .find(|s| s.identifier == self.most_recent_label)
-        {
-            Some(res) => res.size = to_push.len() as u32,
-            None => {}
-        }
-    }
-
-    // .eqv
-    pub(crate) fn new_eqv(&mut self, arguments: &Vec<LineComponent>) {
-        if arguments.len() < 2 {
-            self.string_error(format!(
-                "[*] On line {}{}:",
-                self.line_prefix, self.line_number
-            ));
-            self.string_error(format!(
-                " - `.eqv` expected 2 or more arguments, received {}.",
-                arguments.len()
-            ));
-            return;
-        }
-
-        let name: String;
-        let expansion: String;
-
-        match &arguments[0] {
-            LineComponent::Identifier(ident) => name = ident.clone(),
-            _ => {
-                self.string_error(format!(
-                    "[*] On line {}{}:",
-                    self.line_prefix, self.line_number
-                ));
-                self.string_error(format!(
-                    " - `.eqv` expected identifier, found {:?}",
-                    &arguments[0]
-                ));
-                return;
-            }
-        }
-
-        expansion = arguments
-            .iter()
-            .skip(1)
-            .map(|component| component.to_string())
-            .collect::<Vec<String>>()
-            .join(" ");
-
-        // self.equivalences.insert(name, expansion);
-    }
-
-    // .include
-    pub(crate) fn include_file_old(&mut self, arguments: &Vec<LineComponent>) {
-        // if arguments.len() != 1 {
-        //     self.string_error(format!(
-        //         "[*] On line {}{}:",
-        //         self.line_prefix, self.line_number
-        //     ));
-        //     self.string_error(format!(" - Too many arguments for .include directive provided on line {} (expected 1 argument)", self.line_number));
-        //     return;
-        // }
-        //
-        // let filename: PathBuf = match arguments[0].clone() {
-        //     LineComponent::DoubleQuote(quoted_filename) => {
-        //         self.current_dir.join(PathBuf::from(quoted_filename))
-        //     }
-        //     _ => {
-        //         self.string_error(format!(
-        //             "[*] On line {}{}:",
-        //             self.line_prefix, self.line_number
-        //         ));
-        //         self.string_error(format!(
-        //             " - .include expects a double quoted string filename"
-        //         ));
-        //         return;
-        //     }
-        // };
-        //
-        // println!("\n[+] Found .include, attempting to include {:?}", filename);
-        //
-        // let file_contents = match read_to_string(&filename) {
-        //     Ok(content) => content,
-        //     Err(_) => {
-        //         self.string_error(format!(
-        //             "[*] On line {}{}:",
-        //             self.line_prefix, self.line_number
-        //         ));
-        //         self.string_error(format!(
-        //             "Could not open file {:?} referenced on line {}.",
-        //             filename, self.line_number
-        //         ));
-        //         return;
-        //     }
-        // };
-        //
-        // let line_prefix: String = format!("{}  {}->", self.line_prefix, self.line_number);
-        //
-        // let returned_assembler = assemble(&file_contents, filename, Some(line_prefix));
-        // match returned_assembler {
-        //     Ok(returned_env) => {
-        //         self.equivalences.extend(returned_env.equivalences);
-        //     }
-        //     Err(errors) => {
-        //         self.errors.extend(errors);
-        //     }
-        // }
-        //
-        // println!("[+] Module included.\n");
-        todo!("remove this")
-    }
-
     // .text
     pub(crate) fn switch_to_text_section(&mut self) {
         match self.current_section {
@@ -187,7 +48,7 @@ impl Assembler {
     }
 
     // .word
-    pub(crate) fn new_word(&mut self, arguments: &Vec<LineComponent>) {
+    pub(crate) fn _new_word(&mut self, arguments: &Vec<LineComponent>) {
         if arguments.len() == 1 {
             let value = match arguments[0] {
                 LineComponent::Immediate(imm) => imm,

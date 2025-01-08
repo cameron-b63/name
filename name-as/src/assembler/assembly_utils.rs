@@ -1,7 +1,7 @@
 use crate::assembler::assembler::AssembleError;
 use crate::assembler::assembly_helpers::parse_register_to_u32;
 use crate::definitions::constants::{MAX_U16, MIN_U16};
-use name_core::{instruction::information::ArgumentType, parse::parse::Ast, structs::Register};
+use name_core::{instruction::information::ArgumentType, parse::parse::AstKind, structs::Register};
 
 /*
 
@@ -43,7 +43,7 @@ pub fn assemble_r_type(
 
 // I understand this function header can be... hairy. The added context of usage in the assemble_instruction function makes this far easier to parse.
 pub fn assign_r_type_arguments(
-    arguments: Vec<Ast>,
+    arguments: Vec<AstKind>,
     args_to_use: &[ArgumentType],
 ) -> Result<(Register, Register, Register, u32), String> {
     let mut rd = Register::Zero;
@@ -94,7 +94,7 @@ pub fn assemble_i_type(
 }
 
 pub fn assign_i_type_arguments(
-    arguments: Vec<Ast>,
+    arguments: Vec<AstKind>,
     args_to_use: &[ArgumentType],
 ) -> Result<(Register, Register, u32), String> {
     let mut rs = Register::Zero;

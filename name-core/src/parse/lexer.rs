@@ -1,4 +1,5 @@
-use crate::parse::token::{SrcSpan, Token, TokenKind};
+use crate::parse::span::{Span, SrcSpan};
+use crate::parse::token::{Token, TokenKind};
 use std::{fmt, iter::Peekable, str::Chars};
 
 #[derive(Debug, PartialEq)]
@@ -24,19 +25,8 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct LexerError<'a> {
-    src_span: SrcSpan<'a>,
-    kind: ErrorKind,
-}
-
-impl fmt::Display for LexerError<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} at {}", self.kind, self.src_span)
-    }
-}
-
-type LexerResult<'a, T> = Result<T, LexerError<'a>>;
+type LexError<'a> = Span<'a, ErrorKind>;
+type LexerResult<'a, T> = Result<T, LexError<'a>>;
 
 type CharScanner<'a> = Peekable<Chars<'a>>;
 
@@ -71,22 +61,22 @@ impl<'a> Lexer<'a> {
     }
 
     fn token(&self, start: usize, kind: TokenKind) -> Token<'a> {
-        Token {
-            kind,
+        Span {
+            src_span: self.src_span(start),
+            kind: kind,
+        }
+    }
+
+    fn error(&self, start: usize, kind: ErrorKind) -> LexError<'a> {
+        Span {
+            kind: kind,
             src_span: self.src_span(start),
         }
     }
 
-    fn error(&self, start: usize, kind: ErrorKind) -> LexerError<'a> {
-        LexerError {
-            kind,
-            src_span: self.src_span(start),
-        }
-    }
-
-    fn single_error(&self, kind: ErrorKind) -> LexerError<'a> {
-        LexerError {
-            kind,
+    fn single_error(&self, kind: ErrorKind) -> LexError<'a> {
+        Span {
+            kind: kind,
             src_span: self.src_span(self.pos),
         }
     }
@@ -272,7 +262,7 @@ impl<'a> Lexer<'a> {
         self.lex_token()
     }
 
-    pub fn lex(&mut self) -> (Vec<LexerError<'a>>, Vec<Token<'a>>) {
+    pub fn lex(&mut self) -> (Vec<LexError<'a>>, Vec<Token<'a>>) {
         let mut toks = Vec::new();
         let mut errs = Vec::new();
 
