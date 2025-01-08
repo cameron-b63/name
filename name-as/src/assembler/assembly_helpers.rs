@@ -4,6 +4,7 @@ use name_core::{
         information::{ArgumentType, InstructionInformation},
         instruction_set::INSTRUCTION_TABLE,
     },
+    parse::parse::AstKind,
     structs::Symbol,
 };
 
@@ -19,22 +20,19 @@ use super::assembler::Assembler;
 // Helper function for assemble_instruction for use when multiple argument configurations are available.
 // Checks argument configuration against what was passed.
 // Returns a boolean value representing whether the expected fields matched or not.
-pub fn arg_configuration_is_ok(
-    passed_args: &Vec<LineComponent>,
-    expected_args: &[ArgumentType],
-) -> bool {
+pub fn arg_configuration_is_ok(passed_args: &[AstKind], expected_args: &[ArgumentType]) -> bool {
     if passed_args.len() != expected_args.len() {
         return false;
     }
 
     for (passed, expected) in passed_args.iter().zip(expected_args.iter()) {
         match (passed, expected) {
-            (LineComponent::Register(_), ArgumentType::Rd)
-            | (LineComponent::Register(_), ArgumentType::Rs)
-            | (LineComponent::Register(_), ArgumentType::Rt)
-            | (LineComponent::Immediate(_), ArgumentType::Immediate)
-            | (LineComponent::Identifier(_), ArgumentType::Identifier)
-            | (LineComponent::Identifier(_), ArgumentType::BranchLabel) => {}
+            (AstKind::Register(_), ArgumentType::Rd)
+            | (AstKind::Register(_), ArgumentType::Rs)
+            | (AstKind::Register(_), ArgumentType::Rt)
+            | (AstKind::Immediate(_), ArgumentType::Immediate)
+            | (AstKind::Symbol(_), ArgumentType::Identifier)
+            | (AstKind::Symbol(_), ArgumentType::BranchLabel) => {}
             _ => return false,
         }
     }
@@ -54,7 +52,7 @@ pub fn _translate_identifier_to_address(
 }
 
 // Parse a register string like "$t0" or "$3" to u32 for packing.
-pub fn parse_register_to_u32(register: &String) -> Result<u32, String> {
+pub fn _parse_register_to_u32(register: &String) -> Result<u32, String> {
     // Check the early exit
     if !register.starts_with("$") {
         return Err("Register parse failed.".to_string());

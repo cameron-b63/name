@@ -1,17 +1,28 @@
 use std::fmt;
 
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SrcPos {
+    pub pos: usize,
+    pub line_pos: usize,
+    pub line: usize,
+}
+
+impl fmt::Display for SrcPos {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.line, self.line_pos)
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct SrcSpan<'a> {
-    pub start: usize,
-    pub end: usize,
+    pub start: SrcPos,
+    pub end: SrcPos,
     pub src: &'a str,
-    pub line: usize,
-    pub line_pos: usize,
 }
 
 impl fmt::Display for SrcSpan<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{} {}", self.line, self.line_pos, self.src)
+        write!(f, "{}:{} {}", self.start, self.end, self.src)
     }
 }
 
@@ -26,7 +37,7 @@ impl<'a, T> Span<'a, T> {
         Span { src_span, kind }
     }
 
-    pub fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Span<'a, U> {
+    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Span<'a, U> {
         Span {
             src_span: self.src_span,
             kind: f(self.kind),

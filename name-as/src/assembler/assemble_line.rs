@@ -109,10 +109,10 @@ pub fn _assemble_line(environment: &mut Assembler, line: &str, expanded_line: St
     // If a known instruction mnemonic was discovered, its contents will be assembled here.
     match instruction_information {
         None => {}
-        Some(info) => {
-            environment
-                .handle_assemble_instruction(info, &arguments)
-                .unwrap();
+        Some(_info) => {
+            // environment
+            //     .handle_assemble_instruction(info, &arguments)
+            //     .unwrap();
         }
     }
 
@@ -154,9 +154,9 @@ pub fn _assemble_line(environment: &mut Assembler, line: &str, expanded_line: St
                     "{}{}: {}",
                     environment.line_prefix, environment.line_number, reverse_formatted_instruction
                 );
-                environment
-                    .handle_assemble_instruction(instr_info, &args)
-                    .unwrap();
+                // environment
+                //     .handle_assemble_instruction(instr_info, &args)
+                //     .unwrap();
                 environment.line_number += 1;
             }
 

@@ -29,6 +29,31 @@ pub enum AstKind<'a> {
     BaseAddress(Option<Box<Ast<'a>>>, Register),
 }
 
+impl<'a> AstKind<'a> {
+    pub fn get_register(self) -> Option<Register> {
+        if let AstKind::Register(reg) = self {
+            Some(reg)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_immediate(self) -> Option<u32> {
+        if let AstKind::Immediate(imm) = self {
+            Some(imm)
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Display for AstKind<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        //TODO: write the actual display information
+        write!(f, "{:?}", self)
+    }
+}
+
 pub type Ast<'a> = Span<'a, AstKind<'a>>;
 
 #[derive(Debug, Clone)]
@@ -86,25 +111,23 @@ impl<'a> Parser<'a> {
 
     pub fn ast(&self, pos: usize, kind: AstKind<'a>) -> Ast<'a> {
         // get the start infromation for the ast
-        let (start, line, line_pos) = self
+        let start = self
             .tokens
             .get(pos)
-            .map(|tok| {
-                let span = &tok.src_span;
-                (span.start, span.line, span.line_pos)
-            })
-            .unwrap_or((0, 0, 0));
+            .map(|tok| tok.src_span.start.clone())
+            .unwrap_or_default();
 
         // get the end information for the ast
-        let end = self.prev().map(|tok| tok.src_span.end).unwrap_or(0);
+        let end = self
+            .prev()
+            .map(|tok| tok.src_span.end.clone())
+            .unwrap_or_default();
 
         // make the src span
         let src_span = SrcSpan {
+            src: self.src.get(start.pos..end.pos).unwrap_or(""),
             start,
             end,
-            line,
-            line_pos,
-            src: self.src.get(start..end).unwrap_or(""),
         };
 
         // return the ast
@@ -135,17 +158,13 @@ impl<'a> Parser<'a> {
 
     pub fn unexpected_eof(&self) -> Span<'a, ErrorKind> {
         let prev = self.prev();
-        let pos = prev.map(|tok| tok.src_span.end).unwrap_or(0);
+        let pos = prev.map(|tok| tok.src_span.end.clone()).unwrap_or_default();
         Span {
             kind: ErrorKind::UnexpectedEof,
             src_span: SrcSpan {
-                start: pos,
+                start: pos.clone(),
                 end: pos,
                 src: "",
-                line: prev.map(|tok| tok.src_span.line).unwrap_or(0),
-                line_pos: prev
-                    .map(|tok| tok.src_span.line_pos + (tok.src_span.end - tok.src_span.start))
-                    .unwrap_or(0),
             },
         }
     }
