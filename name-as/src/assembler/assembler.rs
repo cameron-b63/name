@@ -36,7 +36,7 @@ pub enum ErrorKind {
     UnknownInstruction(String),
 }
 
-pub type AssembleError<'a> = Span<'a, ErrorKind>;
+pub type AssembleError = Span<ErrorKind>;
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
 
@@ -277,7 +277,7 @@ impl Assembler {
                     src_span: ast.src_span,
                     kind: err,
                 });
-            })
+            });
         }
 
         // process line info
@@ -309,7 +309,17 @@ impl Assembler {
             self.line_number += 1;
         }
 
-        dbg!(&errors);
+        for error in errors.iter() {
+            println!("error: {:?}", error.kind);
+            println!(
+                "\t--> {}:{}:{}",
+                path.display(),
+                error.src_span.start.line,
+                error.src_span.start.line_pos
+            );
+            println!("\t| {}", &content[error.src_span.range()])
+        }
+
         errors.is_empty()
     }
 
