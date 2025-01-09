@@ -34,7 +34,7 @@ pub enum TokenKind {
     Newline,
 }
 
-pub type Token = Span<TokenKind>;
+pub type Token<'a> = Span<'a, TokenKind>;
 
 impl TokenKind {
     // Token is a whole number type or start of one

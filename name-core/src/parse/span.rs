@@ -1,5 +1,4 @@
 use std::fmt;
-use std::ops::Range;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SrcPos {
@@ -15,43 +14,42 @@ impl fmt::Display for SrcPos {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct SrcSpan {
+pub struct SrcSpan<'a> {
     pub start: SrcPos,
     pub end: SrcPos,
+    pub src: &'a str,
 }
 
-impl SrcSpan {
-    pub fn range(&self) -> Range<usize> {
-        self.start.pos..self.end.pos
-    }
-}
-
-impl fmt::Display for SrcSpan {
+impl fmt::Display for SrcSpan<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.start)
+        write!(f, "{}:{} {}", self.start, self.end, self.src)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Span<T> {
-    pub src_span: SrcSpan,
+pub struct Span<'a, T> {
+    pub src_span: SrcSpan<'a>,
     pub kind: T,
 }
 
-impl<T> Span<T> {
-    pub fn new(src_span: SrcSpan, kind: T) -> Self {
+impl<'a, T> Span<'a, T> {
+    pub fn new(src_span: SrcSpan<'a>, kind: T) -> Self {
         Span { src_span, kind }
     }
 
-    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Span<U> {
+    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Span<'a, U> {
         Span {
             src_span: self.src_span,
             kind: f(self.kind),
         }
     }
+
+    pub fn src_string(&self) -> String {
+        self.src_span.src.to_string()
+    }
 }
 
-impl<T: PartialEq> Span<T> {
+impl<'a, T: PartialEq> Span<'a, T> {
     pub fn is_kind(&self, x: T) -> bool {
         self.kind == x
     }

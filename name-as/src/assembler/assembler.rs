@@ -38,7 +38,7 @@ pub enum ErrorKind {
     UnknownInstruction(String),
 }
 
-pub type AssembleError = Span<ErrorKind>;
+pub type AssembleError<'a> = Span<'a, ErrorKind>;
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
 
@@ -59,6 +59,7 @@ pub struct Assembler {
     pub(crate) line_number: usize,
     pub(crate) line_prefix: String,
     pub(crate) most_recent_label: String,
+    file_contents: HashMap<PathBuf, String>,
     macro_definitions: HashMap<(String, usize), Vec<Ast>>,
 }
 
@@ -280,7 +281,7 @@ impl Assembler {
                     src_span: ast.src_span,
                     kind: err,
                 });
-            });
+            })
         }
 
         // process line info
@@ -312,17 +313,7 @@ impl Assembler {
             self.line_number += 1;
         }
 
-        for error in errors.iter() {
-            println!("error: {:?}", error.kind);
-            println!(
-                "\t--> {}:{}:{}",
-                path.display(),
-                error.src_span.start.line,
-                error.src_span.start.line_pos
-            );
-            println!("\t| {}", &content[error.src_span.range()])
-        }
-
+        dbg!(&errors);
         errors.is_empty()
     }
 
@@ -354,18 +345,18 @@ impl Assembler {
                 todo!("add macro defintions to environment");
                 // self.macro_definitions.insert((ident, args.len()), body);
             }
-            AstKind::MacroCall(ident, args) => {
+            Ast::MacroCall(ident, args) => {
                 let vec_ast = self.macro_expand(&ident, &args);
                 for ast in vec_ast {
-                    self.assemble_ast(ast.kind);
+                    self.assemble_ast(ast);
                 }
             }
             // ast nodes that should be ohterwise consumed
-            AstKind::MacroArg(_) => panic!(),
-            AstKind::Immediate(_) => panic!(),
-            AstKind::Symbol(_) => panic!(),
-            AstKind::BaseAddress(_, _) => panic!(),
-            AstKind::Register(_) => panic!(),
+            Ast::MacroArg(_) => panic!(),
+            Ast::Immediate(_) => panic!(),
+            Ast::Symbol(_) => panic!(),
+            Ast::BaseAddress(_, _) => panic!(),
+            Ast::Register(_) => panic!(),
         }
         Ok(())
     }
