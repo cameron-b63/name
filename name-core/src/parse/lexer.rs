@@ -67,6 +67,14 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn token(&self, kind: TokenKind) -> Token<'a> {
+        let token = self.span(kind);
+        Token {
+            src: self.src.get(token.src_span.range()).unwrap_or(""),
+            token,
+        }
+    }
+
     /// get next char for lexer and advance the position
     fn next_char(&mut self) -> Option<char> {
         self.chars.next().map(|c| {
@@ -163,7 +171,7 @@ impl<'a> Lexer<'a> {
         self.consume_while(|c| matches!(c, 'a'..='z' | '0'..='9'))
     }
 
-    fn lex_token(&mut self) -> LexerResult<Option<Token>> {
+    fn lex_token(&mut self) -> LexerResult<Option<Token<'a>>> {
         self.lexeme_start = Some(self.pos.clone());
 
         if let Some(c) = self.next_char() {
@@ -224,13 +232,13 @@ impl<'a> Lexer<'a> {
                 '\n' => TokenKind::Newline,
                 _ => return Err(self.span(ErrorKind::InvalidChar(c))),
             };
-            Ok(Some(self.span(tok_kind)))
+            Ok(Some(self.token(tok_kind)))
         } else {
             Ok(None)
         }
     }
 
-    pub fn next_tok(&mut self) -> LexerResult<Option<Token>> {
+    pub fn next_tok(&mut self) -> LexerResult<Option<Token<'a>>> {
         // eat any whitce space that may prepend next token
         self.consume_while(|c| c.is_whitespace() && c != '\n');
 
@@ -245,7 +253,7 @@ impl<'a> Lexer<'a> {
         self.lex_token()
     }
 
-    pub fn lex(&mut self) -> (Vec<LexError>, Vec<Token>) {
+    pub fn lex(&mut self) -> (Vec<LexError>, Vec<Token<'a>>) {
         let mut toks = Vec::new();
         let mut errs = Vec::new();
 

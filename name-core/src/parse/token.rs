@@ -32,7 +32,12 @@ pub enum TokenKind {
     Newline,
 }
 
-pub type Token = Span<TokenKind>;
+pub struct Token<'a> {
+    pub token: Span<TokenKind>,
+    pub src: &'a str,
+}
+
+// pub type Token = Span<TokenKind>;
 
 impl TokenKind {
     // Token is a whole number type or start of one
@@ -42,6 +47,7 @@ impl TokenKind {
             TokenKind::BinaryNumber
                 | TokenKind::OctalNumber
                 | TokenKind::DecimalNumber
+                | TokenKind::HexNumber
                 | TokenKind::Minus
         )
     }

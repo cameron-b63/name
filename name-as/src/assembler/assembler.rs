@@ -179,7 +179,7 @@ impl Assembler {
         self.section_dot_text
             .extend_from_slice(&packed.to_be_bytes());
 
-        pretty_print_instruction(&self.current_address, &packed);
+        // pretty_print_instruction(&self.current_address, &packed);
 
         self.current_address += MIPS_ADDRESS_ALIGNMENT;
         Ok(())
@@ -328,7 +328,6 @@ impl Assembler {
             // ast nodes that should be ohterwise consumed
             AstKind::Immediate(_) => panic!(),
             AstKind::Symbol(_) => panic!(),
-            AstKind::BaseAddress(_, _) => panic!(),
             AstKind::Register(_) => panic!(),
         }
         Ok(())
