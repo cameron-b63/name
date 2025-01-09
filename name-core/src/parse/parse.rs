@@ -410,7 +410,7 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    pub fn parse(&mut self) -> (Vec<ParseError<'a>>, Vec<Ast<'a>>) {
+    pub fn parse(&mut self) -> (Vec<ParseError>, Vec<Ast>) {
         // root units of our ast, directives, instructions and labels
         let mut entries = Vec::new();
         let mut errs = Vec::new();
