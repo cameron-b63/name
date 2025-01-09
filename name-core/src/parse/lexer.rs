@@ -25,8 +25,8 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-type LexError<'a> = Span<'a, ErrorKind>;
-type LexerResult<'a, T> = Result<T, LexError<'a>>;
+type LexError = Span<ErrorKind>;
+type LexerResult<T> = Result<T, LexError>;
 
 type CharScanner<'a> = Peekable<Chars<'a>>;
 
@@ -51,17 +51,16 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn src_span(&self) -> SrcSpan<'a> {
+    fn src_span(&self) -> SrcSpan {
         let start = self.lexeme_start.as_ref().unwrap_or(&self.pos).clone();
 
         SrcSpan {
-            src: self.src.get(start.pos..self.pos.pos).unwrap_or(""),
             start,
             end: self.pos.clone(),
         }
     }
 
-    fn span<T>(&self, kind: T) -> Span<'a, T> {
+    fn span<T>(&self, kind: T) -> Span<T> {
         Span {
             src_span: self.src_span(),
             kind,
@@ -83,7 +82,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// fallibly  get the next char and return an UnexpectedEof if it's not there
-    fn try_next_char(&mut self) -> LexerResult<'a, char> {
+    fn try_next_char(&mut self) -> LexerResult<char> {
         self.next_char().ok_or(self.span(ErrorKind::UnexpectedEof))
     }
 
@@ -105,7 +104,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// helper to fallibly consume an exact char
-    fn consume_char(&mut self, c: char) -> LexerResult<'a, ()> {
+    fn consume_char(&mut self, c: char) -> LexerResult<()> {
         let _ = self
             .next_char_if(|d| d == c)
             .ok_or(self.span(ErrorKind::ExpectedChar(c)))?;
@@ -113,7 +112,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// helper to consume until char
-    fn consume_until(&mut self, c: char) -> LexerResult<'a, ()> {
+    fn consume_until(&mut self, c: char) -> LexerResult<()> {
         self.consume_while(|d| d != c);
         let _ = self.try_next_char()?;
         Ok(())
@@ -121,7 +120,7 @@ impl<'a> Lexer<'a> {
 
     /// consumes digits of the passed radix will fail with WrongRadix if a digit is valid
     /// hexidecminal but not the passed radix
-    fn consume_while_radix(&mut self, radix: u32) -> LexerResult<'a, ()> {
+    fn consume_while_radix(&mut self, radix: u32) -> LexerResult<()> {
         self.consume_while(|c| c.is_digit(radix));
 
         if let Some(c) = self.next_char_if(|c| c.is_digit(16)) {
@@ -132,7 +131,7 @@ impl<'a> Lexer<'a> {
     }
 
     // consumes a strings continuation fails if no terminating char
-    fn consume_string(&mut self) -> LexerResult<'a, ()> {
+    fn consume_string(&mut self) -> LexerResult<()> {
         self.consume_until('"')
             .map_err(|_e| self.span(ErrorKind::ExpectedChar('"')))?;
         Ok(())
@@ -148,7 +147,7 @@ impl<'a> Lexer<'a> {
         self.consume_while(|c| matches!(c, 'a'..='z' | '_'));
     }
 
-    fn consume_char_lit(&mut self) -> LexerResult<'a, ()> {
+    fn consume_char_lit(&mut self) -> LexerResult<()> {
         if '\\' == self.try_next_char()? {
             let c = self.try_next_char()?;
             if !matches!(c, 'n' | 't' | '\\' | 'r' | '\'' | '\"') {
@@ -164,7 +163,7 @@ impl<'a> Lexer<'a> {
         self.consume_while(|c| matches!(c, 'a'..='z' | '0'..='9'))
     }
 
-    fn lex_token(&mut self) -> LexerResult<'a, Option<Token<'a>>> {
+    fn lex_token(&mut self) -> LexerResult<Option<Token>> {
         self.lexeme_start = Some(self.pos.clone());
 
         if let Some(c) = self.next_char() {
@@ -232,7 +231,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn next_tok(&mut self) -> LexerResult<'a, Option<Token<'a>>> {
+    pub fn next_tok(&mut self) -> LexerResult<Option<Token>> {
         // eat any whitce space that may prepend next token
         self.consume_while(|c| c.is_whitespace() && c != '\n');
 
@@ -247,7 +246,7 @@ impl<'a> Lexer<'a> {
         self.lex_token()
     }
 
-    pub fn lex(&mut self) -> (Vec<LexError<'a>>, Vec<Token<'a>>) {
+    pub fn lex(&mut self) -> (Vec<LexError>, Vec<Token>) {
         let mut toks = Vec::new();
         let mut errs = Vec::new();
 
