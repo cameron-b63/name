@@ -1,16 +1,15 @@
 use crate::{
-    instruction::{
-        information::{ArgumentType, InstructionInformation},
-        instruction_set::INSTRUCTION_TABLE,
+    parse::{
+        span::{Span, SrcSpan},
+        token::{Token, TokenKind},
     },
-    parse::token::{SrcSpan, Token, TokenKind},
     structs::{ParseRegisterError, Register, Section},
 };
 
 use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 #[derive(Debug, Clone)]
-pub enum Ast {
+pub enum AstKind<'a> {
     // a branch label
     Label(String),
 
@@ -26,17 +25,43 @@ pub enum Ast {
 
     //Macros
     //Arguments of name and arguments
-    MacroDefintion(String, Vec<Ast>, Vec<Ast>),
+    MacroDefintion(String, Vec<Ast<'a>>, Vec<Ast<'a>>),
     // macro identifier and arguments to call macro with
-    MacroCall(String, Vec<Ast>),
+    MacroCall(String, Vec<Ast<'a>>),
     MacroArg(String),
 
     // constructs
-    Instruction(String, Vec<Ast>),
+    Instruction(String, Vec<Ast<'a>>),
     Register(Register),
-    BaseAddress(Box<Ast>, Register),
-    Root(Vec<Ast>),
+    BaseAddress(Option<Box<Ast<'a>>>, Register),
 }
+
+impl<'a> AstKind<'a> {
+    pub fn get_register(self) -> Option<Register> {
+        if let AstKind::Register(reg) = self {
+            Some(reg)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_immediate(self) -> Option<u32> {
+        if let AstKind::Immediate(imm) = self {
+            Some(imm)
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Display for AstKind<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        //TODO: write the actual display information
+        write!(f, "{:?}", self)
+    }
+}
+
+pub type Ast<'a> = Span<'a, AstKind<'a>>;
 
 #[derive(Debug, Clone)]
 pub enum ErrorKind {
@@ -57,8 +82,8 @@ impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnexpectedToken => write!(f, "unexpected token"),
-            Self::InvalidRegister(regErr) => {
-                write!(f, "invalid register {:#?}", regErr)
+            Self::InvalidRegister(reg_err) => {
+                write!(f, "invalid register {:#?}", reg_err)
             }
             Self::UnexpectedEof => write!(f, "unexpected eof"),
             Self::InvalidNumber => write!(f, "invalid number"),
@@ -73,38 +98,47 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ParseError<'a> {
-    pub src_span: SrcSpan<'a>,
-    pub kind: ErrorKind,
-}
-
-impl fmt::Display for ParseError<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} at {}", self.kind, self.src_span)
-    }
-}
-
-impl<'a> ParseError<'a> {
-    fn unexpected_token(src_span: SrcSpan<'a>) -> Self {
-        ParseError {
-            src_span,
-            kind: ErrorKind::UnexpectedToken,
-        }
-    }
-}
-
+pub type ParseError<'a> = Span<'a, ErrorKind>;
 type ParseResult<'a, T> = Result<T, ParseError<'a>>;
 
 pub struct Parser<'a> {
     tokens: Vec<Token<'a>>,
     pos: usize,
-    //interior mutability pattern
+    src: &'a str,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(tokens: Vec<Token<'a>>) -> Self {
-        Parser { tokens, pos: 0 }
+    pub fn new(tokens: Vec<Token<'a>>, src: &'a str) -> Self {
+        Parser {
+            tokens,
+            pos: 0,
+            src,
+        }
+    }
+
+    pub fn ast(&self, pos: usize, kind: AstKind<'a>) -> Ast<'a> {
+        // get the start infromation for the ast
+        let start = self
+            .tokens
+            .get(pos)
+            .map(|tok| tok.src_span.start.clone())
+            .unwrap_or_default();
+
+        // get the end information for the ast
+        let end = self
+            .prev()
+            .map(|tok| tok.src_span.end.clone())
+            .unwrap_or_default();
+
+        // make the src span
+        let src_span = SrcSpan {
+            src: self.src.get(start.pos..end.pos).unwrap_or(""),
+            start,
+            end,
+        };
+
+        // return the ast
+        Span { src_span, kind }
     }
     pub fn advance(&mut self) {
         self.pos += 1;
@@ -128,19 +162,15 @@ impl<'a> Parser<'a> {
         self.tokens.get(self.pos - 1)
     }
 
-    pub fn unexpected_eof(&self) -> ParseError<'a> {
+    pub fn unexpected_eof(&self) -> Span<'a, ErrorKind> {
         let prev = self.prev();
-        let pos = prev.map(|tok| tok.src_span.end).unwrap_or(0);
-        ParseError {
+        let pos = prev.map(|tok| tok.src_span.end.clone()).unwrap_or_default();
+        Span {
             kind: ErrorKind::UnexpectedEof,
             src_span: SrcSpan {
-                start: pos,
+                start: pos.clone(),
                 end: pos,
                 src: "",
-                line: prev.map(|tok| tok.src_span.line).unwrap_or(0),
-                line_pos: prev
-                    .map(|tok| tok.src_span.line_pos + (tok.src_span.end - tok.src_span.start))
-                    .unwrap_or(0),
             },
         }
     }
@@ -175,7 +205,10 @@ impl<'a> Parser<'a> {
         if tok.is_kind(kind) {
             Ok(tok)
         } else {
-            Err(ParseError::unexpected_token(tok.src_span.clone()))
+            Err(Span {
+                kind: ErrorKind::UnexpectedToken,
+                src_span: tok.src_span.clone(),
+            })
         }
     }
 
@@ -197,21 +230,19 @@ impl<'a> Parser<'a> {
 
     pub fn parse_register(&mut self) -> ParseResult<'a, Register> {
         self.try_next_if(TokenKind::Register).and_then(|tok| {
-            tok.src_span
-                .src
-                .parse::<Register>()
-                .map_err(|e| ParseError {
-                    kind: ErrorKind::InvalidRegister(e),
-                    src_span: tok.src_span.clone(),
-                })
+            tok.src_span.src.parse::<Register>().map_err(|e| Span {
+                kind: ErrorKind::InvalidRegister(e),
+                src_span: tok.src_span.clone(),
+            })
         })
     }
 
-    pub fn parse_label(&mut self) -> ParseResult<'a, Ast> {
+    pub fn parse_label(&mut self) -> ParseResult<'a, Ast<'a>> {
+        let pos = self.pos;
         let tok = self.try_next_if(TokenKind::Ident)?;
         let label = tok.src_string();
         self.try_advance_if(TokenKind::Colon)?;
-        Ok(Ast::Label(label))
+        Ok(self.ast(pos, AstKind::Label(label)))
     }
 
     pub fn parse_char(&mut self) -> ParseResult<'a, u32> {
@@ -228,14 +259,14 @@ impl<'a> Parser<'a> {
                 '"' => '"',
                 '\\' => '\\',
                 _ => {
-                    return Err(ParseError {
+                    return Err(Span {
                         kind: ErrorKind::InvalidEscape,
                         src_span: tok.src_span.clone(),
                     })
                 }
             },
             _ => {
-                return Err(ParseError {
+                return Err(Span {
                     kind: ErrorKind::InvalidChar,
                     src_span: tok.src_span.clone(),
                 })
@@ -252,9 +283,14 @@ impl<'a> Parser<'a> {
             TokenKind::HexNumber => u32::from_str_radix(tok.src_span.src, 16),
             TokenKind::DecimalNumber => u32::from_str_radix(tok.src_span.src, 10),
             TokenKind::OctalNumber => u32::from_str_radix(tok.src_span.src, 8),
-            _ => return Err(ParseError::unexpected_token(tok.src_span.clone())),
+            _ => {
+                return Err(Span {
+                    kind: ErrorKind::UnexpectedToken,
+                    src_span: tok.src_span.clone(),
+                })
+            }
         }
-        .map_err(|_| ParseError {
+        .map_err(|_| Span {
             kind: ErrorKind::InvalidNumber,
             src_span: tok.src_span.clone(),
         })?;
@@ -272,46 +308,54 @@ impl<'a> Parser<'a> {
         match literal.kind {
             tok if tok.is_number() => self.parse_number(),
             TokenKind::Char => self.parse_char(),
-            _ => return Err(ParseError::unexpected_token(literal.src_span.clone())),
+            _ => {
+                return Err(Span {
+                    src_span: literal.src_span.clone(),
+                    kind: ErrorKind::UnexpectedToken,
+                })
+            }
         }
     }
 
-    pub fn parse_immediate(&mut self) -> ParseResult<'a, Ast> {
+    pub fn parse_immediate(&mut self) -> ParseResult<'a, Ast<'a>> {
+        let pos = self.pos;
         let immediate = self.try_peek()?;
         let ast = match immediate.kind {
-            tok if tok.is_literal() => Ast::Immediate(self.parse_literal()?),
+            tok if tok.is_literal() => AstKind::Immediate(self.parse_literal()?),
             // these will be resolved on ast passover
-            TokenKind::Ident => Ast::Symbol(self.parse_ident()?),
+            TokenKind::Ident => AstKind::Symbol(self.parse_ident()?),
             _ => {
-                return Err(ParseError {
+                return Err(Span {
                     kind: ErrorKind::InvalidImmediate,
                     src_span: immediate.src_span.clone(),
                 })
             }
         };
-        Ok(ast)
+        Ok(self.ast(pos, ast))
     }
 
-    pub fn parse_directive(&mut self) -> ParseResult<'a, Ast> {
+    pub fn parse_directive(&mut self) -> ParseResult<'a, Ast<'a>> {
+        let pos = self.pos;
+
         let directive = self.try_next_if(TokenKind::Directive)?;
 
         let ast = match directive.src_span.src {
-            ".eqv" => Ast::Eqv(self.parse_ident()?, self.parse_literal()?),
-            ".include" => Ast::Include(self.parse_string()?),
-            ".text" => Ast::Section(Section::Text),
-            ".data" => Ast::Section(Section::Data),
-            ".asciiz" => Ast::Asciiz(self.parse_string()?),
+            ".eqv" => AstKind::Eqv(self.parse_ident()?, self.parse_literal()?),
+            ".include" => AstKind::Include(self.parse_string()?),
+            ".text" => AstKind::Section(Section::Text),
+            ".data" => AstKind::Section(Section::Data),
+            ".asciiz" => AstKind::Asciiz(self.parse_string()?),
             ".align" => todo!(),
             ".macro" => self.parse_macro_defintion()?,
             _ => {
-                return Err(ParseError {
+                return Err(Span {
                     kind: ErrorKind::InvalidDirective,
                     src_span: directive.src_span.clone(),
                 })
             }
         };
 
-        Ok(ast)
+        Ok(self.ast(pos, ast))
     }
 
     pub fn parse_base(&mut self) -> ParseResult<'a, Register> {
@@ -321,27 +365,41 @@ impl<'a> Parser<'a> {
         Ok(reg)
     }
 
-    pub fn parse_arg(&mut self) -> ParseResult<'a, Ast> {
+    pub fn parse_arg(&mut self) -> ParseResult<'a, Ast<'a>> {
+        let pos = self.pos;
         let tok = self.try_peek()?;
         let ast = match tok.kind {
-            TokenKind::Register => Ast::Register(self.parse_register()?),
+            TokenKind::Register => {
+                let reg = self.parse_register()?;
+                self.ast(pos, AstKind::Register(reg))
+            }
             tok if tok.is_immediate() => {
                 let immediate = self.parse_immediate()?;
 
                 if self.peek_is_kind(TokenKind::LParen) {
                     let reg = self.parse_base()?;
-                    Ast::BaseAddress(Box::new(immediate), reg)
+                    let base_address = AstKind::BaseAddress(Some(Box::new(immediate)), reg);
+                    self.ast(pos, base_address)
                 } else {
                     immediate
                 }
             }
-            TokenKind::LParen => Ast::BaseAddress(Box::new(Ast::Immediate(0)), self.parse_base()?),
-            _ => return Err(ParseError::unexpected_token(tok.src_span.clone())),
+            TokenKind::LParen => {
+                let base = self.parse_base()?;
+                let base_address = AstKind::BaseAddress(None, base);
+                self.ast(pos, base_address)
+            }
+            _ => {
+                return Err(Span {
+                    kind: ErrorKind::UnexpectedToken,
+                    src_span: tok.src_span.clone(),
+                })
+            }
         };
         Ok(ast)
     }
 
-    pub fn parse_args(&mut self) -> ParseResult<'a, Vec<Ast>> {
+    pub fn parse_args(&mut self) -> ParseResult<'a, Vec<Ast<'a>>> {
         let mut args = Vec::new();
 
         // check if there are no args
@@ -361,13 +419,14 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    pub fn parse_macro_arg(&mut self) -> ParseResult<'a, Ast> {
+    pub fn parse_macro_arg(&mut self) -> ParseResult<'a, Ast<'a>> {
+        let pos = self.pos;
         self.try_advance_if(TokenKind::Percent)?;
         let ident = self.parse_ident()?;
-        Ok(Ast::MacroArg(ident))
+        Ok(self.ast(pos, AstKind::MacroArg(ident)))
     }
 
-    pub fn parse_macro_args(&mut self) -> ParseResult<'a, Vec<Ast>> {
+    pub fn parse_macro_args(&mut self) -> ParseResult<'a, Vec<Ast<'a>>> {
         let mut args = Vec::new();
 
         if self.peek_is_kind(TokenKind::Newline) {
@@ -383,7 +442,7 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    pub fn parse_macro_defintion(&mut self) -> ParseResult<'a, Ast> {
+    pub fn parse_macro_defintion(&mut self) -> ParseResult<'a, AstKind<'a>> {
         let ident = self.parse_ident()?;
         let args = self.parse_macro_args()?;
 
@@ -393,42 +452,49 @@ impl<'a> Parser<'a> {
             body.push(self.parse_root_element()?);
         }
 
-        Ok(Ast::MacroDefintion(ident, args, body))
+        Ok(AstKind::MacroDefintion(ident, args, body))
     }
 
-    pub fn parse_macro_call(&mut self) -> ParseResult<'a, Ast> {
+    pub fn parse_macro_call(&mut self) -> ParseResult<'a, Ast<'a>> {
+        let pos = self.pos;
         let ident = self.parse_ident()?;
         self.try_advance_if(TokenKind::LParen)?;
         let args = self.parse_macro_args()?;
         self.try_advance_if(TokenKind::RParen)?;
-        Ok(Ast::MacroCall(ident, args))
+        Ok(self.ast(pos, AstKind::MacroCall(ident, args)))
     }
 
-    pub fn parse_root_element(&mut self) -> ParseResult<'a, Ast> {
+    pub fn parse_root_element(&mut self) -> ParseResult<'a, Ast<'a>> {
+        let pos = self.pos;
         let tok = self.try_peek()?;
-
         match tok.kind {
             TokenKind::Directive => self.parse_directive(),
             TokenKind::Ident => self.parse_ident().and_then(|sym| {
                 // if it's a label declaration
                 if self.next_if(TokenKind::Colon).is_some() {
-                    Ok(Ast::Label(sym))
+                    let label = AstKind::Label(sym);
+                    Ok(self.ast(pos, label))
 
                 // if it's an instruction
                 } else {
                     let args = self.parse_args()?;
-                    Ok(Ast::Instruction(sym, args))
+                    let instr = AstKind::Instruction(sym, args);
+                    Ok(self.ast(pos, instr))
                 }
             }),
             _ => {
                 // TODO add more info to error
                 let src_span = tok.src_span.clone();
                 self.advance();
-                Err(ParseError::unexpected_token(src_span))
+                Err(Span {
+                    kind: ErrorKind::UnexpectedToken,
+                    src_span,
+                })
             }
         }
     }
-    pub fn parse(&mut self) -> (Vec<ParseError<'a>>, Ast) {
+
+    pub fn parse(&mut self) -> (Vec<ParseError<'a>>, Vec<Ast<'a>>) {
         // root units of our ast, directives, instructions and labels
         let mut entries = Vec::new();
         let mut errs = Vec::new();
@@ -446,7 +512,6 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-
-        (errs, Ast::Root(entries))
+        (errs, entries)
     }
 }

@@ -1,4 +1,5 @@
-use crate::parse::token::{SrcSpan, Token, TokenKind};
+use crate::parse::span::{Span, SrcPos, SrcSpan};
+use crate::parse::token::{Token, TokenKind};
 use std::{fmt, iter::Peekable, str::Chars};
 
 #[derive(Debug, PartialEq)]
@@ -24,28 +25,16 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct LexerError<'a> {
-    src_span: SrcSpan<'a>,
-    kind: ErrorKind,
-}
-
-impl fmt::Display for LexerError<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} at {}", self.kind, self.src_span)
-    }
-}
-
-type LexerResult<'a, T> = Result<T, LexerError<'a>>;
+type LexError<'a> = Span<'a, ErrorKind>;
+type LexerResult<'a, T> = Result<T, LexError<'a>>;
 
 type CharScanner<'a> = Peekable<Chars<'a>>;
 
 pub struct Lexer<'a> {
     chars: CharScanner<'a>,
     src: &'a str,
-    pos: usize,
-    line: usize,
-    line_pos: usize,
+    pos: SrcPos,
+    lexeme_start: Option<SrcPos>,
 }
 
 impl<'a> Lexer<'a> {
@@ -53,53 +42,40 @@ impl<'a> Lexer<'a> {
         Lexer {
             chars: src.chars().peekable(),
             src,
-            pos: 0,
-            line: 0,
-            line_pos: 0,
+            pos: SrcPos {
+                pos: 0,
+                line_pos: 0,
+                line: 0,
+            },
+            lexeme_start: None,
         }
     }
 
-    fn src_span(&self, start: usize) -> SrcSpan<'a> {
-        let pos = self.pos;
+    fn src_span(&self) -> SrcSpan<'a> {
+        let start = self.lexeme_start.as_ref().unwrap_or(&self.pos).clone();
+
         SrcSpan {
+            src: self.src.get(start.pos..self.pos.pos).unwrap_or(""),
             start,
-            end: pos,
-            line: self.line,
-            line_pos: self.line_pos,
-            src: self.src.get(start..pos).unwrap_or(""),
+            end: self.pos.clone(),
         }
     }
 
-    fn token(&self, start: usize, kind: TokenKind) -> Token<'a> {
-        Token {
+    fn span<T>(&self, kind: T) -> Span<'a, T> {
+        Span {
+            src_span: self.src_span(),
             kind,
-            src_span: self.src_span(start),
-        }
-    }
-
-    fn error(&self, start: usize, kind: ErrorKind) -> LexerError<'a> {
-        LexerError {
-            kind,
-            src_span: self.src_span(start),
-        }
-    }
-
-    fn single_error(&self, kind: ErrorKind) -> LexerError<'a> {
-        LexerError {
-            kind,
-            src_span: self.src_span(self.pos),
         }
     }
 
     /// get next char for lexer and advance the position
     fn next_char(&mut self) -> Option<char> {
-        self.pos += 1;
-        self.line_pos += 1;
-
         self.chars.next().map(|c| {
+            self.pos.pos += 1;
+            self.pos.line_pos += 1;
             if c == '\n' {
-                self.line_pos = 0;
-                self.line += 1;
+                self.pos.line_pos = 0;
+                self.pos.line += 1;
             }
 
             c
@@ -108,8 +84,7 @@ impl<'a> Lexer<'a> {
 
     /// fallibly  get the next char and return an UnexpectedEof if it's not there
     fn try_next_char(&mut self) -> LexerResult<'a, char> {
-        self.next_char()
-            .ok_or(self.single_error(ErrorKind::UnexpectedEof))
+        self.next_char().ok_or(self.span(ErrorKind::UnexpectedEof))
     }
 
     /// lookahead without consuming
@@ -133,7 +108,7 @@ impl<'a> Lexer<'a> {
     fn consume_char(&mut self, c: char) -> LexerResult<'a, ()> {
         let _ = self
             .next_char_if(|d| d == c)
-            .ok_or(self.single_error(ErrorKind::ExpectedChar(c)))?;
+            .ok_or(self.span(ErrorKind::ExpectedChar(c)))?;
         Ok(())
     }
 
@@ -150,7 +125,7 @@ impl<'a> Lexer<'a> {
         self.consume_while(|c| c.is_digit(radix));
 
         if let Some(c) = self.next_char_if(|c| c.is_digit(16)) {
-            Err(self.single_error(ErrorKind::WrongRadix(c, radix)))
+            Err(self.span(ErrorKind::WrongRadix(c, radix)))
         } else {
             Ok(())
         }
@@ -158,9 +133,8 @@ impl<'a> Lexer<'a> {
 
     // consumes a strings continuation fails if no terminating char
     fn consume_string(&mut self) -> LexerResult<'a, ()> {
-        let pos = self.pos;
         self.consume_until('"')
-            .map_err(|_e| self.error(pos, ErrorKind::ExpectedChar('"')))?;
+            .map_err(|_e| self.span(ErrorKind::ExpectedChar('"')))?;
         Ok(())
     }
 
@@ -178,7 +152,7 @@ impl<'a> Lexer<'a> {
         if '\\' == self.try_next_char()? {
             let c = self.try_next_char()?;
             if !matches!(c, 'n' | 't' | '\\' | 'r' | '\'' | '\"') {
-                return Err(self.single_error(ErrorKind::InvalidEscape(c)));
+                return Err(self.span(ErrorKind::InvalidEscape(c)));
             }
         }
 
@@ -191,7 +165,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn lex_token(&mut self) -> LexerResult<'a, Option<Token<'a>>> {
-        let pos = self.pos;
+        self.lexeme_start = Some(self.pos.clone());
 
         if let Some(c) = self.next_char() {
             let tok_kind = match c {
@@ -250,9 +224,9 @@ impl<'a> Lexer<'a> {
                 ',' => TokenKind::Comma,
                 '%' => TokenKind::Percent,
                 '\n' => TokenKind::Newline,
-                _ => return Err(self.single_error(ErrorKind::InvalidChar(c))),
+                _ => return Err(self.span(ErrorKind::InvalidChar(c))),
             };
-            Ok(Some(self.token(pos, tok_kind)))
+            Ok(Some(self.span(tok_kind)))
         } else {
             Ok(None)
         }
@@ -273,7 +247,7 @@ impl<'a> Lexer<'a> {
         self.lex_token()
     }
 
-    pub fn lex(&mut self) -> (Vec<LexerError<'a>>, Vec<Token<'a>>) {
+    pub fn lex(&mut self) -> (Vec<LexError<'a>>, Vec<Token<'a>>) {
         let mut toks = Vec::new();
         let mut errs = Vec::new();
 
