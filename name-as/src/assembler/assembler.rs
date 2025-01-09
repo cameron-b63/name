@@ -59,7 +59,6 @@ pub struct Assembler {
     pub(crate) line_number: usize,
     pub(crate) line_prefix: String,
     pub(crate) most_recent_label: String,
-    file_contents: HashMap<PathBuf, String>,
     macro_definitions: HashMap<(String, usize), Vec<Ast>>,
 }
 
@@ -355,18 +354,18 @@ impl Assembler {
                 todo!("add macro defintions to environment");
                 // self.macro_definitions.insert((ident, args.len()), body);
             }
-            Ast::MacroCall(ident, args) => {
+            AstKind::MacroCall(ident, args) => {
                 let vec_ast = self.macro_expand(&ident, &args);
                 for ast in vec_ast {
-                    self.assemble_ast(ast);
+                    self.assemble_ast(ast.kind);
                 }
             }
             // ast nodes that should be ohterwise consumed
-            Ast::MacroArg(_) => panic!(),
-            Ast::Immediate(_) => panic!(),
-            Ast::Symbol(_) => panic!(),
-            Ast::BaseAddress(_, _) => panic!(),
-            Ast::Register(_) => panic!(),
+            AstKind::MacroArg(_) => panic!(),
+            AstKind::Immediate(_) => panic!(),
+            AstKind::Symbol(_) => panic!(),
+            AstKind::BaseAddress(_, _) => panic!(),
+            AstKind::Register(_) => panic!(),
         }
         Ok(())
     }

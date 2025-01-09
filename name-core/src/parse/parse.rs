@@ -25,9 +25,9 @@ pub enum AstKind {
 
     //Macros
     //Arguments of name and arguments
-    MacroDefintion(String, Vec<Ast<'a>>, Vec<Ast<'a>>),
+    MacroDefintion(String, Vec<Ast>, Vec<Ast>),
     // macro identifier and arguments to call macro with
-    MacroCall(String, Vec<Ast<'a>>),
+    MacroCall(String, Vec<Ast>),
     MacroArg(String),
 
     // constructs
@@ -416,14 +416,14 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    pub fn parse_macro_arg(&mut self) -> ParseResult<'a, Ast<'a>> {
+    pub fn parse_macro_arg(&mut self) -> ParseResult<Ast> {
         let pos = self.pos;
         self.try_advance_if(TokenKind::Percent)?;
         let ident = self.parse_ident()?;
         Ok(self.ast(pos, AstKind::MacroArg(ident)))
     }
 
-    pub fn parse_macro_args(&mut self) -> ParseResult<'a, Vec<Ast<'a>>> {
+    pub fn parse_macro_args(&mut self) -> ParseResult<Vec<Ast>> {
         let mut args = Vec::new();
 
         if self.peek_is_kind(TokenKind::Newline) {
@@ -439,20 +439,23 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    pub fn parse_macro_defintion(&mut self) -> ParseResult<'a, AstKind<'a>> {
+    pub fn parse_macro_defintion(&mut self) -> ParseResult<AstKind> {
         let ident = self.parse_ident()?;
         let args = self.parse_macro_args()?;
 
         let mut body = Vec::new();
 
-        while let Some(tok) = self.peek().filter(|x| x.src_span.src == ".end_macro") {
+        while let Some(tok) = self
+            .peek()
+            .filter(|x| &self.src[x.src_span.range()] == ".end_macro")
+        {
             body.push(self.parse_root_element()?);
         }
 
         Ok(AstKind::MacroDefintion(ident, args, body))
     }
 
-    pub fn parse_macro_call(&mut self) -> ParseResult<'a, Ast<'a>> {
+    pub fn parse_macro_call(&mut self) -> ParseResult<Ast> {
         let pos = self.pos;
         let ident = self.parse_ident()?;
         self.try_advance_if(TokenKind::LParen)?;
@@ -461,7 +464,7 @@ impl<'a> Parser<'a> {
         Ok(self.ast(pos, AstKind::MacroCall(ident, args)))
     }
 
-    pub fn parse_root_element(&mut self) -> ParseResult<'a, Ast<'a>> {
+    pub fn parse_root_element(&mut self) -> ParseResult<Ast> {
         let pos = self.pos;
         let tok = self.try_peek()?;
         match tok.kind {
@@ -491,7 +494,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> (Vec<ParseError<'a>>, Vec<Ast<'a>>) {
+    pub fn parse(&mut self) -> (Vec<ParseError>, Vec<Ast>) {
         // root units of our ast, directives, instructions and labels
         let mut entries = Vec::new();
         let mut errs = Vec::new();
