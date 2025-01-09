@@ -24,6 +24,13 @@ impl SrcSpan {
     pub fn range(&self) -> Range<usize> {
         self.start.pos..self.end.pos
     }
+
+    pub fn combine(&self, other: &Self) -> Self {
+        SrcSpan {
+            start: self.start.clone(),
+            end: other.end.clone(),
+        }
+    }
 }
 
 impl fmt::Display for SrcSpan {

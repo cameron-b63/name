@@ -24,8 +24,8 @@ impl Assembler {
                 self._new_word(arguments);
             }
             _ => {
-                self.string_error(format!("[*] On line {}:", self.line_number));
-                self.string_error(format!(" - Unrecognized directive."));
+                // self.string_error(format!("[*] On line {}:", self.line_number));
+                // self.string_error(format!(" - Unrecognized directive."));
             }
         }
     }

@@ -32,11 +32,15 @@ pub enum ErrorKind {
     DuplicateSymbol(String),
     Io(io::Error),
     String(String),
+    BadArguments,
     LabelOutsideOfSection,
     UnknownInstruction(String),
+    InvalidShamt,
+    InvalidArgument,
+    ImmediateOverflow,
 }
 
-pub type AssembleError = Span<ErrorKind>;
+pub type AssembleResult<T> = Result<T, ErrorKind>;
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
 
@@ -80,10 +84,6 @@ impl Assembler {
             line_prefix: String::from(""),
             most_recent_label: String::from(""),
         }
-    }
-
-    pub fn string_error(&mut self, _err: String) {
-        todo!()
     }
 
     /// Add a label to the symbol table with the corresponding value. If a double update was attempted, errors vector will be extended.
@@ -149,11 +149,7 @@ impl Assembler {
     // }
 
     /// Attempt to assemble a parsed line. If successful, add bytes to section .text - else, extend errors and keep it pushing.
-    pub fn assemble_instruction(
-        &mut self,
-        instr: &str,
-        args: Vec<AstKind>,
-    ) -> Result<(), ErrorKind> {
+    pub fn assemble_instruction(&mut self, instr: &str, args: Vec<AstKind>) -> AssembleResult<()> {
         let info = INSTRUCTION_TABLE
             .get(instr)
             .ok_or(ErrorKind::UnknownInstruction(instr.to_string()))?;
@@ -179,25 +175,11 @@ impl Assembler {
             self.section_dot_rel.extend(new_bytes);
         }
 
-        let assembled_instruction_result = assemble_instruction(info, args);
+        let packed = assemble_instruction(info, args)?;
+        self.section_dot_text
+            .extend_from_slice(&packed.to_be_bytes());
 
-        match assembled_instruction_result {
-            Ok(assembled_instruction) => match assembled_instruction {
-                packed => {
-                    self.section_dot_text
-                        .extend_from_slice(&packed.to_be_bytes());
-
-                    pretty_print_instruction(&self.current_address, &packed);
-                }
-            },
-            Err(_e) => {
-                self.string_error(format!(
-                    "[*] On line {}{}:",
-                    self.line_prefix, self.line_number
-                ));
-                // self.errors.push(AssembleError::String(e));
-            }
-        }
+        pretty_print_instruction(&self.current_address, &packed);
 
         self.current_address += MIPS_ADDRESS_ALIGNMENT;
         Ok(())

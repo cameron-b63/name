@@ -149,7 +149,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn prev(&self) -> Option<&Token> {
-        self.tokens.get(self.pos - 1)
+        self.tokens.get(self.pos.checked_sub(1).unwrap_or(0))
     }
 
     pub fn unexpected_eof(&self) -> Span<ErrorKind> {
@@ -240,7 +240,7 @@ impl<'a> Parser<'a> {
         // skip the first quote
         let mut chars = self.src[src_span.range()].chars().skip(1);
         let char = match (chars.next(), chars.next()) {
-            (Some(c), None) => c,
+            (Some(c), _) => c,
             (Some('\\'), Some(c)) => match c {
                 't' => '\t',
                 'r' => '\r',
