@@ -351,7 +351,7 @@ impl Assembler {
                 self.assemble_instruction(&instr, args.into_iter().map(|ast| ast.kind).collect())?
             }
             AstKind::MacroDefintion(ident, args, body) => {
-                panic!("add macro defintions to environment");
+                todo!("add macro defintions to environment");
                 // self.macro_definitions.insert((ident, args.len()), body);
             }
             AstKind::MacroCall(ident, args) => {
