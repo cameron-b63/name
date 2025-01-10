@@ -431,11 +431,12 @@ impl<'a> Parser<'a> {
         }
 
         loop {
-            args.push(self.parse_arg()?);
+            args.push(self.parse_macro_arg()?);
             if self.peek_is_kind(TokenKind::Newline) {
                 break;
             }
         }
+        println!("{:?}", args);
         Ok(args)
     }
 
