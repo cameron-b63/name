@@ -351,8 +351,12 @@ impl Assembler {
                 self.assemble_instruction(&instr, args.into_iter().map(|ast| ast.kind).collect())?
             }
             AstKind::MacroDefintion(ident, args, body) => {
-                todo!("add macro defintions to environment");
-                // self.macro_definitions.insert((ident, args.len()), body);
+                println!(
+                    "Macro Identity: {}, \n Macro Arguments: {:?}, \n Macro Body: {:?} \n",
+                    ident, args, body
+                );
+                self.macro_definitions.insert((ident, args.len()), body);
+                println!("Macro definitions: {:?}", self.macro_definitions);
             }
             AstKind::MacroCall(ident, args) => {
                 let vec_ast = self.macro_expand(&ident, &args);

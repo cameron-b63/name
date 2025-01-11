@@ -436,7 +436,6 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        println!("{:?}", args);
         Ok(args)
     }
 
@@ -446,13 +445,18 @@ impl<'a> Parser<'a> {
 
         let mut body = Vec::new();
 
-        while let Some(tok) = self
-            .peek()
-            .filter(|x| &self.src[x.src_span.range()] == ".end_macro")
-        {
+        while let Some(tok) = self.peek() {
+            let token_src = &self.src[tok.src_span.range()];
+            if token_src == ".end_macro" {
+                break;
+            }
+            if tok.kind == TokenKind::Newline || tok.kind == TokenKind::Percent {
+                self.next();
+                continue;
+            }
             body.push(self.parse_root_element()?);
+            self.next();
         }
-
         Ok(AstKind::MacroDefintion(ident, args, body))
     }
 
