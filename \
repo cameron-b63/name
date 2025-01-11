@@ -450,7 +450,7 @@ impl<'a> Parser<'a> {
             if token_src == ".end_macro" {
                 break;
             }
-            if tok.kind == TokenKind::Newline {
+            if tok.kind == TokenKind::Newline || tok.kind == TokenKind::Percent {
                 self.next();
                 continue;
             }
