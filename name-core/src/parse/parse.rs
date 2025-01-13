@@ -370,6 +370,7 @@ impl<'a> Parser<'a> {
                 let reg = self.parse_register()?;
                 self.ast(pos, AstKind::Register(reg))
             }
+            TokenKind::Percent => return self.parse_macro_arg(),
             tok if tok.is_immediate() => {
                 let immediate = self.parse_immediate()?;
 
