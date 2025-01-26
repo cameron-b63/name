@@ -466,8 +466,7 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::Ident => {
                     println!("Identity: {}", token_src);
-                    println!("AST: {:?}", self.parse_root_element()?.kind);
-                    //body.push(self.parse_root_element()?);
+                    body.push(self.parse_macro_root_element()?);
                     self.next();
                     continue;
                 }
@@ -486,6 +485,36 @@ impl<'a> Parser<'a> {
         let args = self.parse_macro_args()?;
         self.try_advance_if(TokenKind::RParen)?;
         Ok(self.ast(pos, AstKind::MacroCall(ident, args)))
+    }
+
+    pub fn parse_macro_root_element(&mut self) -> ParseResult<Ast> {
+        let pos = self.pos;
+        let tok = self.try_peek()?;
+        match tok.kind {
+            TokenKind::Directive => self.parse_directive(),
+            TokenKind::Ident => self.parse_ident().and_then(|sym| {
+                // if it's a label declaration
+                if self.next_if(TokenKind::Colon).is_some() {
+                    let label = AstKind::Label(sym);
+                    Ok(self.ast(pos, label))
+
+                // if it's an instruction
+                } else {
+                    let args = self.parse_macro_args()?;
+                    let instr = AstKind::Instruction(sym, args);
+                    Ok(self.ast(pos, instr))
+                }
+            }),
+            _ => {
+                // TODO add more info to error
+                let src_span = tok.src_span.clone();
+                self.advance();
+                Err(Span {
+                    kind: ErrorKind::UnexpectedToken,
+                    src_span,
+                })
+            }
+        }
     }
 
     pub fn parse_root_element(&mut self) -> ParseResult<Ast> {
