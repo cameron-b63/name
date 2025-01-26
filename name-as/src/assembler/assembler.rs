@@ -18,7 +18,7 @@ use name_core::{
     structs::{LineInfo, Section, Symbol, Visibility},
 };
 
-use crate::assembler::assemble_instruction::assemble_instruction;
+use crate::{assembler::assemble_instruction::assemble_instruction, definitions};
 
 use crate::assembler::assembly_helpers::{
     generate_pseudo_instruction_hashmap, pretty_print_instruction,
@@ -326,8 +326,24 @@ impl Assembler {
         errors.is_empty()
     }
 
-    pub fn macro_expand(&mut self, ident: &str, args: &[Ast]) -> Vec<Ast> {
-        todo!("write this");
+    pub fn macro_expand(
+        &mut self,
+        ident: &str,
+        args: &[Ast],
+    ) -> Result<Vec<Span<AstKind>>, ErrorKind> {
+        match self
+            .macro_definitions
+            .get(&(String::from(ident), args.len()))
+        {
+            Some(def) => {
+                println!("Found Macro definition for call");
+                Ok(def.to_vec())
+            }
+            None => {
+                println!("Could not find definition");
+                Err(ErrorKind::ParseError((parse::ErrorKind::UnexpectedToken)))
+            }
+        }
     }
 
     /// entry point for folding ast into the environment
@@ -356,10 +372,11 @@ impl Assembler {
                     ident, args, body
                 );
                 self.macro_definitions.insert((ident, args.len()), body);
-                println!("Macro definitions: {:?}", self.macro_definitions);
+                //println!("Macro definitions: {:?}", self.macro_definitions);
             }
             AstKind::MacroCall(ident, args) => {
-                let vec_ast = self.macro_expand(&ident, &args);
+                println!("found macro call");
+                let vec_ast = self.macro_expand(&ident, &args)?;
                 for ast in vec_ast {
                     self.assemble_ast(ast.kind);
                 }
