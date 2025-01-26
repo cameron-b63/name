@@ -372,7 +372,6 @@ impl Assembler {
                     ident, args, body
                 );
                 self.macro_definitions.insert((ident, args.len()), body);
-                //println!("Macro definitions: {:?}", self.macro_definitions);
             }
             AstKind::MacroCall(ident, args) => {
                 println!("found macro call");

@@ -442,22 +442,39 @@ impl<'a> Parser<'a> {
 
     pub fn parse_macro_defintion(&mut self) -> ParseResult<AstKind> {
         let ident = self.parse_ident()?;
+        println!("macro name found during definition: {}", ident);
         let args = self.parse_macro_args()?;
 
         let mut body = Vec::new();
 
         while let Some(tok) = self.peek() {
             let token_src = &self.src[tok.src_span.range()];
-            if token_src == ".end_macro" {
-                break;
+            match tok.kind {
+                TokenKind::Newline => {
+                    println!("new line");
+                    self.next();
+                    continue;
+                }
+                TokenKind::Percent => {
+                    println!("found percent");
+                    self.next();
+                    continue;
+                }
+                TokenKind::Directive => {
+                    println!("macro ended");
+                    break;
+                }
+                TokenKind::Ident => {
+                    println!("Identity: {}", token_src);
+                    println!("AST: {:?}", self.parse_root_element()?.kind);
+                    //body.push(self.parse_root_element()?);
+                    self.next();
+                    continue;
+                }
+                _ => panic!(),
             }
-            if tok.kind == TokenKind::Newline {
-                self.next();
-                continue;
-            }
-            println!("token_src: {}", token_src);
-            body.push(self.parse_root_element()?);
-            self.next();
+            //body.push(self.parse_root_element()?);
+            //self.next();
         }
         Ok(AstKind::MacroDefintion(ident, args, body))
     }
