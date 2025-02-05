@@ -480,7 +480,7 @@ fn parse_elf_header(expected_bytes: &[u8]) -> Result<Elf32Header, String> {
     Ok(Elf32Header {
         e_ident: match &expected_bytes[0..16].try_into().unwrap() {
             &E_IDENT_DEFAULT => E_IDENT_DEFAULT,
-            _ => return Err("E_IDENT field did not match expected format.".to_string()),
+            _ => return Err("E_IDENT field did not match expected format.".to_string())
         },
         e_type: u16::from_be_bytes(expected_bytes[16..18].try_into().unwrap()),
         e_machine: match u16::from_be_bytes(expected_bytes[18..20].try_into().unwrap()) {
