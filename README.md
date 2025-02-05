@@ -33,11 +33,11 @@ NAME is a vscode extension, which means it is built with typescript. Additionall
 
 ### Common Problems Building From Source
 
-In its current state, when building from source, NAME will not function unless `npm run build` has been executed in the `name-ext` directory.
+In its current state, when building from source, NAME will not function unless `npm run compile` has been executed in the `name-ext` directory.
 
 ## Test Files
 
-Some test files have been included. You can find them in [test files](test_files/test_files.md).
+Some test files have been included. You can find them in [test files](test_files/tests/samples/test_files.md).
 
 ## Assembly
 NAME assembles each module in the user's directory into an ET_REL relocatable object file for the linker to handle, using code found in [elf_utils.rs](name-as/src/elf_utils.rs) and [assembler.rs](name-as/src/assembler/assembler.rs). Each ET_REL has the same following sections, present in this order:
