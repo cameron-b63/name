@@ -99,6 +99,7 @@ export function runLinker(name_bin_dir: string, infiles: string[], outfile: stri
     });
 }
 
+
 export function runWithoutDebugging(name_bin_dir: string, infile: string): Promise<string> {
     return new Promise((resolve, reject) => {
         const runnerPath = path.join(name_bin_dir, 'name-emu');
