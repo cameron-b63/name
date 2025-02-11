@@ -5,26 +5,14 @@ import { runAssembler, runLinker, runWithoutDebugging } from './simple_commands'
 
 const path = require('path');
 
-const placeholder_for_config = '/home/cameron/Projects/name';
-
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+	const name_bin_directory = path.join(context.extensionPath, 'bin');
+	console.log(name_bin_directory);
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "name-ext" is now active!');
-
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('name-ext.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from name-ext! We made it mom!');
-	});
-
-	context.subscriptions.push(disposable);
+	const treeDataProvider = new NAMETreeDataProvider();
+	vscode.window.createTreeView('name-ext.tree', { treeDataProvider });
 
 	// Driver code for spawning assembler process
 	vscode.commands.registerCommand('name-ext.assemblecurrentfile', () => {
@@ -39,7 +27,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let output_file = currently_open_file ? path.format({ ...path.parse(currently_open_file), base: undefined, ext: '.o' }) : undefined;
 
 		// Call runner
-		runAssembler(placeholder_for_config, currently_open_file, output_file).then((success_message) => {
+		runAssembler(name_bin_directory, currently_open_file, output_file).then((success_message) => {
 			vscode.window.showInformationMessage(success_message);
 		}).catch((error_message) => {
 			vscode.window.showErrorMessage(error_message);
@@ -72,7 +60,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let output_file = currently_open_file ? path.format({ ...path.parse(currently_open_file), base: undefined, ext: '' }) : undefined;
 
 		// Call runner
-		runLinker(placeholder_for_config, infiles, output_file).then((success_message) => {
+		runLinker(name_bin_directory, infiles, output_file).then((success_message) => {
 			vscode.window.showInformationMessage(success_message);
 		}).catch((error_message) => {
 			vscode.window.showErrorMessage(error_message);
@@ -91,7 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let file_to_run: string = path.format({ ...path.parse(currently_open_file), base: undefined, ext: '' });
 
 		// Run the file
-		runWithoutDebugging(placeholder_for_config, file_to_run).then((success_message) => {
+		runWithoutDebugging(name_bin_directory, file_to_run).then((success_message) => {
 			vscode.window.showInformationMessage(success_message);
 		}).catch((error_message) => {
 			vscode.window.showErrorMessage(error_message);
@@ -102,3 +90,32 @@ export function activate(context: vscode.ExtensionContext) {
 
 // This method is called when your extension is deactivated
 export function deactivate() {}
+
+class NAMETreeDataProvider implements vscode.TreeDataProvider<NAMECommandItem> {
+	private commands: NAMECommandItem[] = [];
+
+	/*
+	constructor() {
+		this.commands = [
+			new NAMECommandItem('Assemble Current File', 'name-ext.assemblecurrentfile'),
+			new NAMECommandItem('Link Current File', 'name-ext.linkcurrentfile'),
+			new NAMECommandItem('Run Without Debugging', 'name-ext.runnodebug')
+		];
+	}
+	*/
+
+	getTreeItem(element: NAMECommandItem): vscode.TreeItem {
+		return element;
+	}
+
+	getChildren(): NAMECommandItem[] {
+		return this.commands;
+	}
+}
+
+class NAMECommandItem extends vscode.TreeItem {
+	constructor(label: string, commandId: string) {
+		super(label, vscode.TreeItemCollapsibleState.None);
+		this.command = { command: commandId, title: label };
+	}
+}

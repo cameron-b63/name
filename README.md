@@ -31,9 +31,9 @@ NAME is a vscode extension, which means it is built with typescript. Additionall
  - nodejs
  - rust
 
-### Common Problems Building From Source
+### Common Pitfalls Building From Source
 
-In its current state, when building from source, NAME will not function unless `npm run compile` has been executed in the `name-ext` directory.
+Run `npm install` and `npm run compile` before launching the extension test window using F5 on [extension.ts](name-ext/src/extension.ts) in VSCode.
 
 ## Test Files
 

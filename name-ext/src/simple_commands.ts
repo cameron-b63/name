@@ -5,10 +5,10 @@ import * as vscode from 'vscode';
 
 const outputChannel = vscode.window.createOutputChannel('NAME');
 
-export function runAssembler(name_install_dir: string, infile: string, outfile: string): Promise<string> {
+export function runAssembler(name_bin_dir: string, infile: string, outfile: string): Promise<string> {
     // Wrap in promise because external process involved
     return new Promise((resolve, reject) => {
-        const assemblerPath = path.join(name_install_dir, 'bin', 'name-as');
+        const assemblerPath = path.join(name_bin_dir, 'name-as');
         if (!fs.existsSync(assemblerPath)) {
 
             console.log('Assembler not found at path: ' + assemblerPath);
@@ -46,9 +46,9 @@ export function runAssembler(name_install_dir: string, infile: string, outfile: 
     });
 }
 
-export function runLinker(name_install_dir: string, infiles: string[], outfile: string): Promise<string> {
+export function runLinker(name_bin_dir: string, infiles: string[], outfile: string): Promise<string> {
     return new Promise((resolve, reject) => {
-        const linkerPath = path.join(name_install_dir, 'bin', 'name-ld');
+        const linkerPath = path.join(name_bin_dir, 'name-ld');
         if (!fs.existsSync(linkerPath)) {
             console.log('Linker not found at path: ' + linkerPath);
             reject(new Error(`Linker not found at path: ${linkerPath}`));
@@ -83,9 +83,9 @@ export function runLinker(name_install_dir: string, infiles: string[], outfile: 
     });
 }
 
-export function runWithoutDebugging(name_install_dir: string, infile: string): Promise<string> {
+export function runWithoutDebugging(name_bin_dir: string, infile: string): Promise<string> {
     return new Promise((resolve, reject) => {
-        const runnerPath = path.join(name_install_dir, 'bin', 'name-emu');
+        const runnerPath = path.join(name_bin_dir, 'name-emu');
         if (!fs.existsSync(runnerPath)) {
             console.log('Runner not found at path: ' + runnerPath);
             reject(new Error(`Runner not found at path: ${runnerPath}`));

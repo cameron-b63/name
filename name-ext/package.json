@@ -1,3 +1,4 @@
+
 {
   "name": "name-ext",
   "displayName": "VSName",
@@ -35,9 +36,10 @@
         "title": "name-ext",
         "scope": "machine",
         "properties": {
-          "name-ext.path": {
+          "name-ext.binDirectory": {
             "type": "string",
-            "markdownDescription": "Path to bin directory containing NAME executables."
+            "default": "",
+            "markdownDescription": "Path to the bin directory."
           }
         }
       }
@@ -66,6 +68,31 @@
           "command": "name-ext.runnodebug",
           "group": "navigation",
           "when": "editorLangId == mips"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "name-ext",
+          "title": "NAME",
+          "icon": "$(chip)"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "name-ext.tree",
+        "contents": "Quick Options: \n\n[$(chip) Assemble](command:name-ext.assemblecurrentfile)\n\n[$(combine) Link](command:name-ext.linkcurrentfile)\n\n[$(run) Run Without Debugging](command:name-ext.runnodebug)",
+        "when": "true"
+      }
+    ],
+    "views": {
+      "name-ext": [
+        {
+          "id": "name-ext.tree",
+          "name": "NAME",
+          "treeView": true
         }
       ]
     }
