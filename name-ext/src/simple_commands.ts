@@ -92,34 +92,10 @@ export function runWithoutDebugging(name_install_dir: string, infile: string): P
             return;
         }
 
-        const runner = spawn(runnerPath, [infile]);
+        const terminal = vscode.window.createTerminal('NAME Runner');
+        terminal.sendText(`${runnerPath} ${infile}`);
+        terminal.show();
 
-        let hasErrors = false;
-        let errorBuffer = '';
-        let outputBuffer = '';
-
-        runner.stderr.on('data', (data: Buffer) => {
-            hasErrors = true;
-            errorBuffer += data.toString();
-        });
-
-        runner.stdout.on('data', (data: Buffer) => {
-            outputBuffer += data.toString();
-        });
-
-        runner.on('close', (code) => {
-            outputChannel.clear();
-            if (hasErrors) {
-                outputChannel.append(errorBuffer);
-                outputChannel.show(true);
-                console.log('Running failed.');
-                reject(new Error('Running failed. Check output for details.'));
-            } else {
-                outputChannel.append(outputBuffer);
-                outputChannel.show(true);
-                console.log('Successful run');
-                resolve('File ran successfully.');
-            }
-        });
+        resolve('Runner launched in terminal.');
     });
 }
