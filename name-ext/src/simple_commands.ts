@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 
 const outputChannel = vscode.window.createOutputChannel('NAME');
 
-export function runAssembler(name_bin_dir: string, infile: string, outfile: string): Promise<string> {
+export function runAssembler(name_bin_dir: string, infile: string, outfile: string, chained: boolean): Promise<string> {
     // Wrap in promise because external process involved
     return new Promise((resolve, reject) => {
         const assemblerPath = path.join(name_bin_dir, 'name-as');
@@ -32,13 +32,21 @@ export function runAssembler(name_bin_dir: string, infile: string, outfile: stri
             if (hasErrors) {
                 outputChannel.clear();
                 outputChannel.append(errorBuffer);
-                outputChannel.show(true);
+                
+                if(!chained){
+                    outputChannel.show(true);
+                }
+
                 console.log('Assembly failed.');
                 reject(new Error('Assembly failed. Check output for details.'));
             } else {
                 outputChannel.clear();
                 outputChannel.append('File assembled successfully.');
-                outputChannel.show(true);
+
+                if(!chained){
+                    outputChannel.show(true);
+                }
+
                 console.log('Successful assembly');
                 resolve('Assembly was successful.');
             }
@@ -46,7 +54,7 @@ export function runAssembler(name_bin_dir: string, infile: string, outfile: stri
     });
 }
 
-export function runLinker(name_bin_dir: string, infiles: string[], outfile: string): Promise<string> {
+export function runLinker(name_bin_dir: string, infiles: string[], outfile: string, chained: boolean): Promise<string> {
     return new Promise((resolve, reject) => {
         const linkerPath = path.join(name_bin_dir, 'name-ld');
         if (!fs.existsSync(linkerPath)) {
@@ -69,13 +77,21 @@ export function runLinker(name_bin_dir: string, infiles: string[], outfile: stri
             if (hasErrors) {
                 outputChannel.clear();
                 outputChannel.append(errorBuffer);
-                outputChannel.show(true);
+
+                if(!chained){
+                    outputChannel.show(true);
+                }
+
                 console.log('Linking failed.');
                 reject(new Error('Linking failed. Check output for details.'));
             } else {
                 outputChannel.clear();
                 outputChannel.append('Files linked successfully.');
-                outputChannel.show(true);
+                
+                if(!chained){
+                    outputChannel.show(true);
+                }
+
                 console.log('Successful linking');
                 resolve('Linking was successful.');
             }

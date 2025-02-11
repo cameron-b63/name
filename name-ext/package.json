@@ -29,6 +29,11 @@
         "command": "name-ext.runnodebug",
         "title": "NAME: Run Without Debugging",
         "icon": "$(run)"
+      },
+      {
+        "command": "name-ext.assemblerunnodebug",
+        "title": "NAME: Assemble & Run (No Debug)",
+        "icon": "$(console)"
       }
     ],
     "configuration": [
@@ -56,17 +61,22 @@
       "editor/title": [
         {
           "command": "name-ext.assemblecurrentfile",
-          "group": "navigation",
+          "group": "navigation@1",
           "when": "editorLangId == mips"
         },
         {
           "command": "name-ext.linkcurrentfile",
-          "group": "navigation",
+          "group": "navigation@2",
           "when": "editorLangId == mips"
         },
         {
           "command": "name-ext.runnodebug",
-          "group": "navigation",
+          "group": "navigation@3",
+          "when": "editorLangId == mips"
+        },
+        {
+          "command": "name-ext.assemblerunnodebug",
+          "group": "navigation@4",
           "when": "editorLangId == mips"
         }
       ]
@@ -83,7 +93,7 @@
     "viewsWelcome": [
       {
         "view": "name-ext.tree",
-        "contents": "Quick Options: \n\n[$(chip) Assemble](command:name-ext.assemblecurrentfile)\n\n[$(combine) Link](command:name-ext.linkcurrentfile)\n\n[$(run) Run Without Debugging](command:name-ext.runnodebug)",
+        "contents": "Quick Options: \n\n[$(chip) Assemble](command:name-ext.assemblecurrentfile)\n\n[$(combine) Link](command:name-ext.linkcurrentfile)\n\n[$(run) Run Without Debugging](command:name-ext.runnodebug)\n\n[$(console) Assemble & Run (No Debug)](command:name-ext.assemblerunnodebug)",
         "when": "true"
       }
     ],

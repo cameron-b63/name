@@ -2,8 +2,11 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { runAssembler, runLinker, runWithoutDebugging } from './simple_commands';
+import { NAMETreeDataProvider } from './tree';
 
 const path = require('path');
+
+let chained = false;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -27,7 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let output_file = currently_open_file ? path.format({ ...path.parse(currently_open_file), base: undefined, ext: '.o' }) : undefined;
 
 		// Call runner
-		runAssembler(name_bin_directory, currently_open_file, output_file).then((success_message) => {
+		runAssembler(name_bin_directory, currently_open_file, output_file, chained).then((success_message) => {
 			vscode.window.showInformationMessage(success_message);
 		}).catch((error_message) => {
 			vscode.window.showErrorMessage(error_message);
@@ -60,7 +63,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let output_file = currently_open_file ? path.format({ ...path.parse(currently_open_file), base: undefined, ext: '' }) : undefined;
 
 		// Call runner
-		runLinker(name_bin_directory, infiles, output_file).then((success_message) => {
+		runLinker(name_bin_directory, infiles, output_file, chained).then((success_message) => {
 			vscode.window.showInformationMessage(success_message);
 		}).catch((error_message) => {
 			vscode.window.showErrorMessage(error_message);
@@ -86,36 +89,20 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 	});
 
+	// Assemble, link, and run the current file all in one go.
+	vscode.commands.registerCommand('name-ext.assemblerunnodebug', () => {
+		// Indicate to commands that they are chained and do not need to show their output channels
+		chained = true;
+
+		vscode.commands.executeCommand('name-ext.assemblecurrentfile')
+			.then(() => vscode.commands.executeCommand('name-ext.linkcurrentfile'))
+			.then(() => vscode.commands.executeCommand('name-ext.runnodebug'));
+
+		// Reset chained flag so as not to affect future commands
+		chained = false;
+	});
+
 }
 
 // This method is called when your extension is deactivated
 export function deactivate() {}
-
-class NAMETreeDataProvider implements vscode.TreeDataProvider<NAMECommandItem> {
-	private commands: NAMECommandItem[] = [];
-
-	/*
-	constructor() {
-		this.commands = [
-			new NAMECommandItem('Assemble Current File', 'name-ext.assemblecurrentfile'),
-			new NAMECommandItem('Link Current File', 'name-ext.linkcurrentfile'),
-			new NAMECommandItem('Run Without Debugging', 'name-ext.runnodebug')
-		];
-	}
-	*/
-
-	getTreeItem(element: NAMECommandItem): vscode.TreeItem {
-		return element;
-	}
-
-	getChildren(): NAMECommandItem[] {
-		return this.commands;
-	}
-}
-
-class NAMECommandItem extends vscode.TreeItem {
-	constructor(label: string, commandId: string) {
-		super(label, vscode.TreeItemCollapsibleState.None);
-		this.command = { command: commandId, title: label };
-	}
-}
