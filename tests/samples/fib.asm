@@ -7,6 +7,8 @@ fibs: 	.word   0 : 12        # "array" of 12 words to contain fib values
 size: 	.word  12             # size of "array"
 nl:     .asciiz "\n"          # newline character
 
+.globl main
+
 # Start of code.
       	.text
 	    la   	$t0, fibs        # load address of array

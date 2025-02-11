@@ -6,6 +6,7 @@ const path = require('path');	// For OS-agnostic paths
 
 // Activate method registers everything
 export function activate(context: vscode.ExtensionContext) {
+
 	// Register tree view for sidebar
 	const treeDataProvider = new NAMETreeDataProvider();
 	vscode.window.createTreeView('name-ext.tree', { treeDataProvider });
@@ -14,5 +15,5 @@ export function activate(context: vscode.ExtensionContext) {
 	registerCommands(context);
 }
 
-// This method is called when your extension is deactivated
+// Not yet needed
 export function deactivate() {}
