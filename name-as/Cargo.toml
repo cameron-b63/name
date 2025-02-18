@@ -8,6 +8,7 @@ license-file.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bumpalo = "3.16.0"
 clap = { version = "4.5.8", features = ["derive"] }
 logos = "0.14.0"
 name_core = { version = "0.1.0", path = "../name-core" }
