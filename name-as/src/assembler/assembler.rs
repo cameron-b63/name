@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs, io,
+    fmt, fs, io,
     path::{Path, PathBuf},
 };
 
@@ -10,8 +10,9 @@ use name_core::{
     instruction::instruction_set::INSTRUCTION_TABLE,
     parse::{
         lexer::{self, Lexer},
-        parse::{self, AstKind, Parser},
+        parse::{self, Ast, AstKind, Parser},
         span::Span,
+        token::TokenCursor,
     },
     structs::{LineInfo, Section, Symbol, Visibility},
 };
@@ -27,8 +28,6 @@ use crate::definitions::structs::PseudoInstruction;
 /// Possible assemble error codes
 #[derive(Debug)]
 pub enum ErrorKind {
-    LexError(lexer::ErrorKind),
-    ParseError(parse::ErrorKind),
     DuplicateSymbol(String),
     Io(io::Error),
     String(String),
@@ -40,7 +39,24 @@ pub enum ErrorKind {
     ImmediateOverflow,
 }
 
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ErrorKind::DuplicateSymbol(str) => write!(f, "duplicate symbol: {}", str),
+            ErrorKind::Io(err) => write!(f, "{:#?}", err),
+            ErrorKind::String(s) => write!(f, "{}", s),
+            ErrorKind::BadArguments => write!(f, "bad arguments"),
+            ErrorKind::LabelOutsideOfSection => write!(f, "label outside of section"),
+            ErrorKind::UnknownInstruction(s) => write!(f, "unkown instruction {}", s),
+            ErrorKind::InvalidShamt => write!(f, "invalid shift amount"),
+            ErrorKind::InvalidArgument => write!(f, "invalid argument"),
+            ErrorKind::ImmediateOverflow => write!(f, "immediate overflow"),
+        }
+    }
+}
+
 pub type AssembleResult<T> = Result<T, ErrorKind>;
+pub type AssembleError = Span<ErrorKind>;
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
 
@@ -55,7 +71,6 @@ pub struct Assembler {
     pub(crate) equivalences: HashMap<String, u32>,
     pub(crate) current_section: Section,
     pub(crate) current_address: u32,
-    pub(crate) current_dir: PathBuf,
     pub(crate) text_address: u32,
     pub(crate) data_address: u32,
     pub(crate) line_number: usize,
@@ -65,7 +80,7 @@ pub struct Assembler {
 
 impl Assembler {
     // Initialize the assembler environment - default constructor.
-    pub fn new(current_dir: PathBuf) -> Self {
+    pub fn new() -> Self {
         Assembler {
             _pseudo_instruction_table: generate_pseudo_instruction_hashmap(),
             section_dot_text: vec![],
@@ -77,7 +92,6 @@ impl Assembler {
             // errors: vec![],
             current_section: Section::Null,
             current_address: 0,
-            current_dir,
             text_address: MIPS_TEXT_START_ADDR,
             data_address: MIPS_DATA_START_ADDR,
             line_number: 1,
@@ -130,33 +144,13 @@ impl Assembler {
         Ok(())
     }
 
-    // Expand a line. Try replacing all instances of equivalences.
-    // pub fn expand_line(&self, line: &str) -> String {
-    //     let mut expanded_line = String::new();
-    //
-    //     // Replace equivalences
-    //     for token in line.split_whitespace() {
-    //         if let Some(expansion) = self.equivalences.get(token) {
-    //             expanded_line.push_str(expansion);
-    //         } else {
-    //             expanded_line.push_str(token);
-    //         }
-    //
-    //         expanded_line.push(' ');
-    //     }
-    //
-    //     expanded_line.trim_end().to_string()
-    // }
-
     /// Attempt to assemble a parsed line. If successful, add bytes to section .text - else, extend errors and keep it pushing.
     pub fn assemble_instruction(&mut self, instr: &str, args: Vec<AstKind>) -> AssembleResult<()> {
         let info = INSTRUCTION_TABLE
             .get(instr)
             .ok_or(ErrorKind::UnknownInstruction(instr.to_string()))?;
 
-        // If a relocation entry needs to be added, work with it.
-        if info.relocation_type.is_some() {
-            // There can be only one.
+        if let Some(rel) = info.relocation_type {
             let symbol_ident = args
                 .iter()
                 .filter_map(|arg| match arg {
@@ -164,7 +158,8 @@ impl Assembler {
                     _ => None,
                 })
                 .collect();
-            let symbol_offset: u32 = self.get_symbol_offset(symbol_ident)?;
+
+            let symbol_offset: u32 = self.get_symbol_offset(symbol_ident).unwrap();
 
             let new_bytes: Vec<u8> = RelocationEntry {
                 r_offset: self.current_address - MIPS_TEXT_START_ADDR,
@@ -172,6 +167,7 @@ impl Assembler {
                 r_type: info.relocation_type.unwrap().clone(),
             }
             .to_bytes();
+
             self.section_dot_rel.extend(new_bytes);
         }
 
@@ -215,108 +211,11 @@ impl Assembler {
         }
     }
 
-    /// workhorse assemble a file, perform effects and report errors
-    /// The idea is, once the assembler is done running, if any errors were encountered, their content is pushed to the errors vector,
-    /// and the errors vector is returned as the Err variant of the Result for the caller to handle. This way, all forseeable errors are printed in one pass.
-    /// There should be next to no fatal errors. I will be vetting this code later to ensure there are no execution paths which crash.
-    /// returns false when there are errors
-    pub fn assemble_file(&mut self, path: &Path) -> bool {
-        let mut errors = Vec::new();
-
-        let content = fs::read_to_string(&path).unwrap_or_else(|_e| {
-            todo!("figure out what to do with unspanned erors in assembler");
-            // report the io error
-            // errors.push(ErrorKind::Io(e));
-            // default to nothing
-            // "".into()
-        });
-
-        // lex the file contents
-        let mut lexer = Lexer::new(&content);
-        let (errs, toks) = lexer.lex();
-
-        // report lex errors
-        errors.extend(
-            errs.into_iter()
-                .map(|err| err.map(|k| ErrorKind::LexError(k))),
-        );
-
-        // parsed lexed tokens into ast
-        let mut parser = Parser::new(toks, &content);
-        let (perrs, vast) = parser.parse();
-
-        // report parse erros
-        errors.extend(
-            perrs
-                .into_iter()
-                .map(|err| err.map(|k| ErrorKind::ParseError(k))),
-        );
-
-        // fold the ast into the environment
-        for ast in vast {
-            self.assemble_ast(ast.kind).unwrap_or_else(|err| {
-                errors.push(Span {
-                    src_span: ast.src_span,
-                    kind: err,
-                });
-            });
-        }
-
-        // process line info
-        for line in content.split('\n') {
-            let start_address = match self.current_section {
-                Section::Text => self.current_address,
-                Section::Data => self.text_address,
-                Section::Null => 0,
-            };
-
-            // Extend section .line to include the new line
-            self.section_dot_line.extend(
-                LineInfo {
-                    content: line.to_string(),
-                    line_number: self.line_number as u32,
-                    start_address: match self.current_section {
-                        Section::Text => start_address,
-                        _ => 0,
-                    },
-                    end_address: match self.current_section {
-                        Section::Text => self.current_address,
-                        Section::Data => self.text_address,
-                        _ => 0,
-                    },
-                }
-                .to_bytes(),
-            );
-
-            self.line_number += 1;
-        }
-
-        for error in errors.iter() {
-            println!("error: {:?}", error.kind);
-            println!(
-                "\t--> {}:{}:{}",
-                path.display(),
-                error.src_span.start.line,
-                error.src_span.start.line_pos
-            );
-            println!("\t| {}", &content[error.src_span.range()])
-        }
-
-        errors.is_empty()
-    }
-
     /// entry point for folding ast into the environment
-    pub fn assemble_ast(&mut self, ast: AstKind) -> Result<(), ErrorKind> {
+    pub fn assemble_ast(&mut self, mut ast: AstKind) -> Result<(), ErrorKind> {
         match ast {
-            // individual ast nodes that can be folded into environment
             AstKind::Label(s) => self.add_label(&s, self.current_address)?,
-            AstKind::Include(s) => {
-                let _ = self.assemble_file(self.current_dir.join(s).as_path());
-            }
             AstKind::Asciiz(s) => self.assemble_asciiz(s),
-            AstKind::Eqv(ident, value) => {
-                let _ = self.equivalences.insert(ident, value);
-            }
             AstKind::Section(section) => match section {
                 Section::Text => self.switch_to_text_section(),
                 Section::Data => self.switch_to_data_section(),
@@ -325,12 +224,24 @@ impl Assembler {
             AstKind::Instruction(instr, args) => {
                 self.assemble_instruction(&instr, args.into_iter().map(|ast| ast.kind).collect())?
             }
-            // ast nodes that should be ohterwise consumed
             AstKind::Immediate(_) => panic!(),
             AstKind::Symbol(_) => panic!(),
             AstKind::Register(_) => panic!(),
         }
         Ok(())
+    }
+
+    pub fn assemble(&mut self, asts: Vec<Ast>) -> Vec<Span<ErrorKind>> {
+        let mut errs = Vec::new();
+        for ast in asts {
+            if let Err(err) = self.assemble_ast(ast.kind) {
+                errs.push(Span {
+                    src_span: ast.src_span,
+                    kind: err,
+                });
+            }
+        }
+        errs
     }
 
     pub fn get_symbol_offset(&mut self, ident: String) -> Result<u32, ErrorKind> {

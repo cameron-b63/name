@@ -1,6 +1,8 @@
 # Hello, world!
 # .include    "SysCalls.asm"
     .data
+    .eqv sym 0
+    .eqv osym sym + 4
 
 OurBelovedString:
     .asciiz     "Hello, World!\n"
