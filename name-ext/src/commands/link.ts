@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { getBinName } from '../helpers';
 
 const path = require('path');
 const fs = require('fs');
@@ -41,11 +42,11 @@ export function registerLink(context: vscode.ExtensionContext, name_bin_director
 	});
 }
 
-const outputChannel = vscode.window.createOutputChannel('NAME');
+const outputChannel = vscode.window.createOutputChannel('NAME-LD');
 
 export function runLinker(name_bin_dir: string, infiles: string[], outfile: string, chained: boolean): Promise<string> {
     return new Promise((resolve, reject) => {
-        const linkerPath = path.join(name_bin_dir, 'name-ld');
+        const linkerPath = path.join(name_bin_dir, getBinName('name-ld'));
         if (!fs.existsSync(linkerPath)) {
             console.log('Linker not found at path: ' + linkerPath);
             reject(new Error(`Linker not found at path: ${linkerPath}`));
@@ -66,17 +67,17 @@ export function runLinker(name_bin_dir: string, infiles: string[], outfile: stri
             if (hasErrors) {
                 outputChannel.clear();
                 outputChannel.append(errorBuffer);
-                                
-                if(!chained){
-                    outputChannel.show(true);
-                }
-
+                outputChannel.show(true);
                 console.log('Linking failed.');
                 reject(new Error('Linking failed. Check output for details.'));
             } else {
                 outputChannel.clear();
                 outputChannel.append('Files linked successfully.');
-                outputChannel.show(true);
+
+                if(!chained){
+                    outputChannel.show(true);
+                }
+                
                 console.log('Successful linking');
                 resolve('Linking was successful.');
             }

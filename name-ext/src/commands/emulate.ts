@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
+import { getBinName } from '../helpers';
 
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
-const outputChannel = vscode.window.createOutputChannel('NAME');
+// Currently unneeded.
+// const outputChannel = vscode.window.createOutputChannel('NAME-EMU');
 
 export function registerRunNoDebug(context: vscode.ExtensionContext, name_bin_directory: string) {
     // Driver code for spawning emulator with no debugging
@@ -29,7 +31,7 @@ export function registerRunNoDebug(context: vscode.ExtensionContext, name_bin_di
 
 export function runWithoutDebugging(name_bin_dir: string, infile: string): Promise<string> {
     return new Promise((resolve, reject) => {
-        const runnerPath = path.join(name_bin_dir, 'name-emu');
+        const runnerPath = path.join(name_bin_dir, getBinName('name-emu'));
         if (!fs.existsSync(runnerPath)) {
             console.log('Runner not found at path: ' + runnerPath);
             reject(new Error(`Runner not found at path: ${runnerPath}`));

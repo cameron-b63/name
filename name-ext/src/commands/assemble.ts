@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { getBinName } from '../helpers';
 
 const path = require('path');
 const fs = require('fs');
@@ -29,12 +30,12 @@ export function registerAssemble(context: vscode.ExtensionContext, name_bin_dire
 	});
 }
 
-const outputChannel = vscode.window.createOutputChannel('NAME');
+const outputChannel = vscode.window.createOutputChannel('NAME-AS');
 
 export function runAssembler(name_bin_dir: string, infile: string, outfile: string, chained: boolean): Promise<string> {
     // Wrap in promise because external process involved
     return new Promise((resolve, reject) => {
-        const assemblerPath = path.join(name_bin_dir, 'name-as');
+        const assemblerPath = path.join(name_bin_dir, getBinName('name-as'));
         if (!fs.existsSync(assemblerPath)) {
 
             console.log('Assembler not found at path: ' + assemblerPath);
@@ -58,17 +59,18 @@ export function runAssembler(name_bin_dir: string, infile: string, outfile: stri
             if (hasErrors) {
                 outputChannel.clear();
                 outputChannel.append(errorBuffer);
-
-                if(!chained){
-                    outputChannel.show(true);
-                }
+                outputChannel.show(true);
 
                 console.log('Assembly failed.');
                 reject(new Error('Assembly failed. Check output for details.'));
             } else {
                 outputChannel.clear();
                 outputChannel.append('File assembled successfully.');
-                outputChannel.show(true);
+
+                if (!chained) {
+                    outputChannel.show(true);
+                }
+                
                 console.log('Successful assembly');
                 resolve('Assembly was successful.');
             }
