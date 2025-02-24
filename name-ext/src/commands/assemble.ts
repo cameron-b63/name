@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
+// This function registers the command "name-ext.assemblecurrentfile" with vscode.
 export function registerAssemble(context: vscode.ExtensionContext, name_bin_directory: string) {
     // Driver code for spawning assembler process
 	vscode.commands.registerCommand('name-ext.assemblecurrentfile', () => {
@@ -32,6 +33,7 @@ export function registerAssemble(context: vscode.ExtensionContext, name_bin_dire
 
 const outputChannel = vscode.window.createOutputChannel('NAME-AS');
 
+// This function invokes the assembler as a subprocess to assemble the given infile into the given outfile.
 export function runAssembler(name_bin_dir: string, infile: string, outfile: string, chained: boolean): Promise<string> {
     // Wrap in promise because external process involved
     return new Promise((resolve, reject) => {

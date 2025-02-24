@@ -6,10 +6,10 @@ import { registerAssembleRunNoDebug } from './assemble_run_no_debug';
 
 const path = require('path');	// For OS-agnostic paths
 
-// Register commands
+// Register commands with vscode
 
 export function registerCommands(context: vscode.ExtensionContext) {
-    // Get bin directory for name binaries
+    // Get bin directory for name binaries - needed to run subprocesses
     const name_bin_directory = path.join(context.extensionPath, 'bin');
 
 	// Register assembler

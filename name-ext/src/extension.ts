@@ -2,16 +2,16 @@ import * as vscode from 'vscode';
 import { registerCommands } from './commands';
 import { NAMETreeDataProvider } from './tree';
 
-const path = require('path');	// For OS-agnostic paths
-
 // Activate method registers everything
+// NOTE: ENTRY POINT
 export function activate(context: vscode.ExtensionContext) {
 
-	// Register tree view for sidebar
+	// Register dummy tree view for sidebar
+	// This is actually unused because all the functionality we need is contained in the welcome screen for the sidebar.
 	const treeDataProvider = new NAMETreeDataProvider();
 	vscode.window.createTreeView('name-ext.tree', { treeDataProvider });
 
-	// Register commands
+	// Register commands - keeping this in a separate file to keep extension.ts readable
 	registerCommands(context);
 }
 

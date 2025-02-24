@@ -5,9 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
-// Currently unneeded.
-// const outputChannel = vscode.window.createOutputChannel('NAME-EMU');
 
+// This function registers the "name-ext.runnodebug" command with vscode.
 export function registerRunNoDebug(context: vscode.ExtensionContext, name_bin_directory: string) {
     // Driver code for spawning emulator with no debugging
     vscode.commands.registerCommand('name-ext.runnodebug', () => {
@@ -29,6 +28,7 @@ export function registerRunNoDebug(context: vscode.ExtensionContext, name_bin_di
     });
 }
 
+// This function simply invokes the emulator as a subprocess in a new terminal window on the given infile. It does NOT do debugging.
 export function runWithoutDebugging(name_bin_dir: string, infile: string): Promise<string> {
     return new Promise((resolve, reject) => {
         const runnerPath = path.join(name_bin_dir, getBinName('name-emu'));

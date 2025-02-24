@@ -8,7 +8,9 @@ import { runAssembler } from './assemble';
 import { runLinker } from './link';
 import { runWithoutDebugging } from './emulate';
 
-
+// This function registers a command which performs the entire assembly, linking, and executing pipeline and stops when the first error is encountered.
+// It may not make the final release as it could potentially blur the lines between assembly, linking, and execution for less experienced students,
+// and lead them to falsely believe that only one step is involved.
 export function registerAssembleRunNoDebug(context: vscode.ExtensionContext, name_bin_directory: string) {
     // Assemble, link, and run the current file all in one go
     vscode.commands.registerCommand('name-ext.assemblerunnodebug', () => {

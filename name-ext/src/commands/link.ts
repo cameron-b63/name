@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
+// This function registers the "name-ext.linkcurrentfile" command with vscode.
 export function registerLink(context: vscode.ExtensionContext, name_bin_directory: string) {
 	// Driver code for spawning linker process
 	vscode.commands.registerCommand('name-ext.linkcurrentfile', async () => {
@@ -44,6 +45,7 @@ export function registerLink(context: vscode.ExtensionContext, name_bin_director
 
 const outputChannel = vscode.window.createOutputChannel('NAME-LD');
 
+// This function links the given infiles into the given outfile by invoking the linker as a subprocess.
 export function runLinker(name_bin_dir: string, infiles: string[], outfile: string, chained: boolean): Promise<string> {
     return new Promise((resolve, reject) => {
         const linkerPath = path.join(name_bin_dir, getBinName('name-ld'));
