@@ -1,7 +1,7 @@
 // This file is just responsible for performing .text relocation. That's it.
 
 use name_core::{
-    constants::MIPS_TEXT_START_ADDR, elf_def::{Elf, Elf32Sym, ElfType, RelocationEntry, RelocationEntryType}, elf_utils::{create_new_elf, parse_elf_symbols, parse_rel_info}
+    constants::MIPS_TEXT_START_ADDR, elf_def::{Elf, Elf32SectionHeader, Elf32Sym, ElfType, RelocationEntry, RelocationEntryType, E_ENTRY_DEFAULT}, elf_utils::{create_new_elf, find_global_symbol_address, find_target_section_index, parse_elf_symbols, parse_rel_info}
 };
 
 use crate::constants::{REL, SHSTRTAB, STRTAB, SYMTAB, TEXT};
@@ -139,6 +139,9 @@ pub fn relocate_text_entries(
 
     }
 
+    // Discover entry point
+    let entry_point: u32 = find_entry_point(&adjusted_checked_elf);
+
     // Return an executable ELF (ditch the relocation information once done with it)
     let exec_sections: Vec<Vec<u8>> = adjusted_checked_elf
         .sections
@@ -151,7 +154,7 @@ pub fn relocate_text_entries(
             _ => Some(section.clone()),
         })
         .collect();
-    Ok(create_new_elf(exec_sections, ElfType::Executable(MIPS_TEXT_START_ADDR), true))
+    Ok(create_new_elf(exec_sections, ElfType::Executable(entry_point), true))
 }
 
 /// This function gets the correct linked symbol for a relocation entry. It looks to the local scope first by design.
@@ -172,4 +175,33 @@ fn get_linked_symbol(
         }
         _ => return Some(symtab[symbol_idx as usize].clone()),
     }
+}
+
+// This function finds the entry point of the program. 
+// It will either be the address of the global symbol main, or E_ENTRY_DEFAULT.
+fn find_entry_point(adjusted_checked_elf: &Elf) -> u32 {
+    // Get needed section indices
+    let sh_table: &Vec<Elf32SectionHeader> = &adjusted_checked_elf.section_header_table;
+
+    let shstrtabndx: usize = (adjusted_checked_elf.file_header.e_shstrndx as usize) - 1;
+    let shstrtab: &Vec<u8> = &adjusted_checked_elf.sections[shstrtabndx];
+
+    let symtab_idx: usize = match find_target_section_index(&sh_table, shstrtab, ".symtab") {
+        Some(idx) => idx - 1,
+        None => panic!("[*] Error occurred while finding entry point, but should be impossible to reach?"),
+    };
+
+    let strtab_idx: usize = match find_target_section_index(&sh_table, shstrtab, ".strtab") {
+        Some(idx) => idx - 1,
+        None => panic!("[*] Error occurred while finding entry point, but should be impossible to reach?"),
+    };
+
+    // Parse symbol table
+    let symbol_table = parse_elf_symbols(&adjusted_checked_elf.sections[symtab_idx]);
+
+    // Search for global symbol main - return its address, and if undefined, default to E_ENTRY_DEFAULT
+    return match find_global_symbol_address(&symbol_table, &adjusted_checked_elf.sections[strtab_idx], "main") {
+        Some(addr) => addr,
+        None => return E_ENTRY_DEFAULT,
+    };
 }
