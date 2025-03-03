@@ -19,16 +19,9 @@ fn main() {
                 // Call the message handler (minimizing main logic because I don't want to read all of that)
                 match dap_server.handle_message(message) {
                     // If Ok, send response back to client.
-                    Ok(response) => match dap_server.send_response(response) {
-                        Ok(_) => (),
-                        Err(e) => eprintln!("Error occurred when sending response: {}", e),
-                    }
-                    
+                    Ok(response) => dap_server.send_response(response),
                     // If Err, properly format err and send it back to client.
-                    Err(e) => match dap_server.send_error(e) {
-                        Ok(_) => (),
-                        Err(e) => eprintln!("Error occurred when sending error (ironically): {}", e),
-                    }
+                    Err(e) => dap_server.send_error(e),
                 }
             },
             None => break,  // Unrecoverable error encountered

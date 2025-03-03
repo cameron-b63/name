@@ -22,11 +22,9 @@ pub fn start_dap_server() -> DapServer {
 }
 
 impl DapServer {
-    
+
     /// Read a message from stdin
     pub fn read_message(&self) -> Option<String> {
-        // Do-nothing for now
-        // TODO: Read a single DAP message from stdin
         // Setup I/O
         let stdin = io::stdin();
         let mut reader = stdin.lock();
@@ -93,20 +91,26 @@ impl DapServer {
     }
 
     /// Send a response through the appropriate output channel
-    pub fn send_response(&self, _response: String) -> Result<(), String> {
-        // Do-nothing for now
-        // TODO: Implement as specified
-        return Err(String::from("Not yet implemented."));
+    // TODO: Expects JSON/no?
+    pub fn send_response(&self, response: String) {
+        let formatted: String = append_content_length_header(response);
+        println!("{formatted}");
     }
 
     /// Send an error through the appropriate output channel
-    pub fn send_error(&self, _error: String) -> Result<(), String> {
-        // Do-nothing for now
-        // TODO: Implement as specified
-        return Err(String::from("Not yet implemented."));
+    // TODO: Expects JSON/no? give thought
+    pub fn send_error(&self, error: String) {
+        let formatted: String = append_content_length_header(error);
+        println!("{formatted}");
     }
 
     pub fn is_terminated(&self) -> bool {
         return self.is_terminated;
     }
+}
+
+/// Format a response/error to be sent back to the client
+fn append_content_length_header(content: String) -> String {
+    let length = content.len();
+    return format!("Content-Length: {length}\r\n\r\n{content}");
 }
