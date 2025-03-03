@@ -1,0 +1,12 @@
+[package]
+name = "name-debug-adapter"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+license-file.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
