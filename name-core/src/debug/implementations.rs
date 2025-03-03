@@ -2,6 +2,7 @@
 // use std::collections::HashMap;
 use crate::debug::debug_utils::{Breakpoint, DebuggerState};
 use crate::structs::{LineInfo, ProgramState};
+use crate::dbprintln;
 
 impl Breakpoint {
     pub fn new(
@@ -50,11 +51,12 @@ impl Breakpoint {
 }
 
 impl DebuggerState {
-    pub fn new() -> Self {
+    pub fn new(sioc: bool) -> Self {
         DebuggerState {
             global_bp_num: 0,
             breakpoints: Vec::<Breakpoint>::new(),
             global_list_loc: 5,
+            sioc: sioc,
         }
     }
 
@@ -62,11 +64,11 @@ impl DebuggerState {
 
     /// Prints all breakpoints that have been created. Invoked by "pb" in the CLI.
     pub fn print_all_breakpoints(&self) -> Result<(), String> {
-        println!("BP_NUM: LINE_NUM");
+        dbprintln!(self.sioc, "BP_NUM: LINE_NUM");
         // for (_address, bp) in &self.breakpoints {
         // for bp in &self.breakpoints {
         for bp_num in 0..self.breakpoints.len() {
-            println!("{:>6}: {}", bp_num, self.breakpoints[bp_num].line_num);
+            dbprintln!(self.sioc, "{:>6}: {}", bp_num, self.breakpoints[bp_num].line_num);
         }
         return Ok(());
     }
@@ -84,7 +86,8 @@ impl DebuggerState {
         let end = std::cmp::min(lnum.saturating_add(3), lineinfo.len() - 1);
         for i in begin..=end {
             // let arrow = self.pc_is_on_this_address(lineinfo[i].start_address,);
-            println!(
+            dbprintln!(
+                self.sioc,
                 "{:>3} #{:08x}  {}",
                 lineinfo[i].line_number, lineinfo[i].start_address, lineinfo[i].content
             );
@@ -158,7 +161,8 @@ impl DebuggerState {
         // play around with this if you're getting weird pc related logic errors.
         // program_state.cpu.pc = program_state.cpu.pc - MIPS_ADDRESS_ALIGNMENT;
 
-        println!(
+        dbprintln!(
+            self.sioc,
             "Successfully added breakpoint {} at line {}.",
             self.global_bp_num, line_num
         );

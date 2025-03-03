@@ -5,6 +5,7 @@ use crate::{
     // structs::Register,
     structs::{LineInfo, OperatingSystem, ProgramState},
     // exception::definitions::ExceptionType,
+    dbprintln,
 };
 
 use crate::debug::debug_utils::{db_step, DebuggerState};
@@ -45,7 +46,8 @@ pub fn list_text(
     } else if db_args.len() == 2 {
         if db_args[1] == "all" {
             for line in lineinfo {
-                println!(
+                dbprintln!(
+                    debugger_state.sioc,
                     "{:>3} #{:08x}  {}",
                     line.line_number, line.start_address, line.content
                 );
@@ -79,6 +81,7 @@ pub fn list_text(
 /// Prints the value at a given register. Invoked by "p" in the CLI.
 pub fn print_register(
     program_state: &mut ProgramState,
+    debugger_state: &DebuggerState,
     db_args: &Vec<String>,
 ) -> Result<(), String> {
     if db_args.len() < 2 {
@@ -97,7 +100,8 @@ pub fn print_register(
         if arg.chars().nth(0) == Some('$') {
             let register = arg;
             if register == "$pc" {
-                println!(
+                dbprintln!(
+                    debugger_state.sioc,
                     "Value in register {} is {:08x}",
                     register, program_state.cpu.pc
                 );
@@ -108,7 +112,8 @@ pub fn print_register(
                 Some(found_register) => {
                     // should we continue printing the actual number of the register?
                     // this will all eventually be a table or something anyways :^)
-                    println!(
+                    dbprintln!(
+                        debugger_state.sioc,
                         "Value in register {} is {:08x}",
                         found_register, program_state.cpu.general_purpose_registers[found_register]
                     );
@@ -133,7 +138,11 @@ pub fn print_register(
                 Err(e) => return Err(format!("{e}")),
             };
 
-            println!("Value in address {:08x} is {:08b}", address, value);
+            dbprintln!(
+                debugger_state.sioc, 
+                "Value in address {:08x} is {:08b}", 
+                address, value
+            );
         } else {
             return Err(format!(
                 "Congrats! You discovered an unimplemented feature... or you forgot the dollar sign on your register, or the hashtag in your memory address."
@@ -146,6 +155,7 @@ pub fn print_register(
 /// Modifies the value inside a given register. Invoked by "m" in the CLI.
 pub fn modify_register(
     program_state: &mut ProgramState,
+    debugger_state: &DebuggerState,
     db_args: &Vec<String>,
 ) -> Result<(), String> {
     if db_args.len() != 3 {
@@ -175,64 +185,65 @@ pub fn modify_register(
 
     let original_val = program_state.cpu.general_purpose_registers[register];
     program_state.cpu.general_purpose_registers[register] = parsed_u32;
-    println!(
+    dbprintln!(
+        debugger_state.sioc,
         "Successfully modified value in register {} from {} to {}.",
         db_args[1], original_val, parsed_u32
     );
     Ok(())
 }
 
-pub fn help_menu(db_args: Vec<String>) -> Result<(), String> {
+pub fn help_menu(db_args: Vec<String>, debugger_state: &DebuggerState) -> Result<(), String> {
     if db_args.len() == 1 {
-        println!("help - Display this menu.");
-        println!("help [CMD] - Get more information about a specific db command CMD.");
-        println!("r - Begin execution of program.");
-        println!("c - Continue program execution until the next breakpoint.");
-        println!("s - Execute only the next instruction.");
-        println!("l - Print the entire program. (this functionality will be much improved later)");
-        println!("p - Print the value of provided registers and memory addresses at the current place in program execution (please include the dollar sign).");
-        println!("pa - Print value of ALL registers at once.");
-        println!("pb - Print all breakpoints.");
-        println!("b [N] - Insert a breakpoint at line number N.");
-        println!("del [N] - Delete breakpoint number N.");
-        println!("q - Exit (quit) debugger.");
+        dbprintln!(debugger_state.sioc, "help - Display this menu.");
+        dbprintln!(debugger_state.sioc, "help [CMD] - Get more information about a specific db command CMD.");
+        dbprintln!(debugger_state.sioc, "r - Begin execution of program.");
+        dbprintln!(debugger_state.sioc, "c - Continue program execution until the next breakpoint.");
+        dbprintln!(debugger_state.sioc, "s - Execute only the next instruction.");
+        dbprintln!(debugger_state.sioc, "l - Print the entire program. (this functionality will be much improved later)");
+        dbprintln!(debugger_state.sioc, "p - Print the value of provided registers and memory addresses at the current place in program execution (please include the dollar sign).");
+        dbprintln!(debugger_state.sioc, "pa - Print value of ALL registers at once.");
+        dbprintln!(debugger_state.sioc, "pb - Print all breakpoints.");
+        dbprintln!(debugger_state.sioc, "b [N] - Insert a breakpoint at line number N.");
+        dbprintln!(debugger_state.sioc, "del [N] - Delete breakpoint number N.");
+        dbprintln!(debugger_state.sioc, "q - Exit (quit) debugger.");
     } else if db_args.len() == 2 {
         match &db_args[1] as &str {
             "r" => {
-                println!("Begin execution of program.");
+                dbprintln!(debugger_state.sioc, "Begin execution of program.");
             }
             "c" => {
-                println!("Continue program execution until the next breakpoint.");
+                dbprintln!(debugger_state.sioc, "Continue program execution until the next breakpoint.");
             }
             "s" => {
-                println!("Execute only the next instruction.");
+                dbprintln!(debugger_state.sioc, "Execute only the next instruction.");
             }
             "l" => {
-                println!("When provided no arguments: print the first ten lines of the program. Then, print the next 10, and so forth.");
-                println!("When provided a line number (positive integer): print 9 lines around the given line number.");
-                println!("When provided the argument \"all\": print the entire program.");
+                dbprintln!(debugger_state.sioc, "When provided no arguments: print the first ten lines of the program. Then, print the next 10, and so forth.");
+                dbprintln!(debugger_state.sioc, "When provided a line number (positive integer): print 9 lines around the given line number.");
+                dbprintln!(debugger_state.sioc, "When provided the argument \"all\": print the entire program.");
             }
             "p" => {
-                println!("Print the value stored in the provided registers ($) and/or memory addresses (#).");
-                println!("Please provide memory addresses in hexadecimal.");
+                dbprintln!(debugger_state.sioc, "Print the value stored in the provided registers ($) and/or memory addresses (#).");
+                dbprintln!(debugger_state.sioc, "Please provide memory addresses in hexadecimal.");
             }
             "pa" => {
-                println!("Print each register and the value stored therein.");
+                dbprintln!(debugger_state.sioc, "Print each register and the value stored therein.");
             }
             "pb" => {
-                println!("Print all user-created breakpoints. (This does not include break instructions that already existed in the code.)");
+                dbprintln!(debugger_state.sioc, "Print all user-created breakpoints. (This does not include break instructions that already existed in the code.)");
             }
             "b" => {
-                println!("Insert a breakpoint at the line number provided. Note that this line will be executed before the break occurs.");
+                dbprintln!(debugger_state.sioc, "Insert a breakpoint at the line number provided. Note that this line will be executed before the break occurs.");
             }
             "del" => {
-                println!("Delete the breakpoint with the associated number. (run pb to find out which number the desired breakpoint has)");
+                dbprintln!(debugger_state.sioc, "Delete the breakpoint with the associated number. (run pb to find out which number the desired breakpoint has)");
             }
             "help" => {
-                println!("you're funny");
+                dbprintln!(debugger_state.sioc, "you're funny");
             }
             "q" => {
-                println!("please work :wq please work :wq plea");
+                dbprintln!(debugger_state.sioc, "please work :wq please work :wq plea");
             }
             _ => {
                 eprintln!("{} is either not recognized as a valid command or the help menu for it was neglected to be implemented.", db_args[1]);
