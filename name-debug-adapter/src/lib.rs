@@ -1,3 +1,4 @@
-mod event_handler;
-mod io_forward;
-mod request_handler;
+pub mod dap_server;
+pub mod event_handler;
+pub mod io_forward;
+pub mod request_handler;
