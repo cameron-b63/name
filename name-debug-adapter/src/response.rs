@@ -74,5 +74,14 @@ fn create_error_body(error: DapError) -> Value {
                 }
             })
         },
+        DapError::ImmortalChild => {
+            serde_json::json!({
+                "error": {
+                    "id": 6,
+                    "format": "Child process could not be killed",
+                    "sendTelemetry": false,
+                }
+            })
+        },
     }
 }

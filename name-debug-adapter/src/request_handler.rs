@@ -6,7 +6,7 @@ use serde_json::{from_value, Value};
 
 use crate::{dap_server::DapServer, dap_structs::{DapError, DapRequest, DapResponse}, response::{create_error_response, create_response}};
 
-
+/// Handle a request issued by client.
 pub fn handle_request(dap_server: &mut DapServer, request: DapRequest) -> Result<DapResponse, DapResponse> {
     // Match on request.command to take appropriate action
     let command: &str = &request.command;
@@ -26,7 +26,7 @@ pub fn handle_request(dap_server: &mut DapServer, request: DapRequest) -> Result
 
             // Return configuration information
             return Ok(create_response(&request, configuration));
-        }
+        },
         // ConfigurationDone (does not have to support)
         // Launch 
         "launch" => {
@@ -52,41 +52,76 @@ pub fn handle_request(dap_server: &mut DapServer, request: DapRequest) -> Result
             };
 
             return Ok(launch_response);
-        }
+        },
         // Attach (NOT supported right now. Only launch is supported)
         // Restart (does not have to support)
         // Disconnect
         "disconnect" => {
             // Disconnect the debugger
-            dap_server.disconnect();
-            return Ok(create_response(&request, Value::Null));
-        }
+            match dap_server.disconnect() {
+                Ok(_) => return Ok(create_response(&request, Value::Null)),
+                Err(e) => return Err(create_error_response(&request, e))
+            }
+        },
         // Terminate (does not have to support)
         // BreakpointLocations (does not have to support)
         // SetBreakpoints 
+        "setBreakpoints" => {
+            todo!("setBreakpoints");
+        },
         // SetFunctionBreakpoints (does not have to support)
         // SetExceptionBreakpoints (does not have to support)
         // DataBreakpointInfo (does not have to support)
         // SetDataBreakpoints (does not have to support)
         // SetInstructionBreakpoints (does not have to support)
         // Next
+        "next" => {
+            todo!("Next");
+        },
         // StepIn
+        "stepIn" => {
+            todo!("stepIn");
+        },
         // StepOut
+        "stepOut" => {
+            todo!("stepOut");
+        },
         // StepBack (does not have to support)
         // ReverseContinue (does not have to support)
         // RestartFrame (does not have to support)
         // Goto (does not have to support)
         // Pause
+        "pause" => {
+            todo!("pause");
+        },
         // StackTrace
+        "stackTrace" => {
+            todo!("stackTrace");
+        },
         // Scopes
+        "scopes" => {
+            todo!("scopes");
+        },
         // Variables
+        "variables" => {
+            todo!("variables");
+        },
         // SetVariable (does not have to support)
         // Source
+        "source" => {
+            todo!("source");
+        },
         // Threads
+        "threads" => {
+            todo!("threads");
+        },
         // TerminateThreads (does not have to support)
         // Modules (does not have to support)
         // LoadedSources (does not have to support)
         // Evaluate
+        "evaluate" => {
+            todo!("evaluate");
+        },
         // SetExpression (does not have to support)
         // StepInTargets (does not have to support)
         // GotoTargets (does not have to support)
@@ -96,9 +131,12 @@ pub fn handle_request(dap_server: &mut DapServer, request: DapRequest) -> Result
         // WriteMemory (does not have to support)
         // Disassemble (does not have to support)
         // Locations
+        "locations" => {
+            todo!("locations");
+        },
         _ => {
             // Command could not be recognized or is not implemented
             return Err(create_error_response(&request, DapError::NotImplemented(request.command.clone())));
-        }
+        },
     }
 }

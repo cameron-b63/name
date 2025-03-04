@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{self, Deserialize, Serialize};
 use serde_json::Value;
 
 // This code describes JSON schema for DAP messages.
@@ -50,6 +50,7 @@ pub struct LaunchArguments {
 pub enum DapError {
     AlreadyInitialized,
     AlreadyStartedDebugging,
+    ImmortalChild,
     InsufficientArguments,
     LaunchFailed,
     NotImplemented(String),

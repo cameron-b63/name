@@ -3,6 +3,7 @@ use std::{io::{self, BufRead, Read}, process::{Child, ChildStderr, ChildStdin, C
 use serde_json::Value;
 
 use crate::{dap_structs::{DapError, DapMessage, DapResponse, LaunchArguments}, request_handler::handle_request};
+use std::io::Write;
 
 // This code is responsible for managing the DAP server struct. 
 
@@ -138,7 +139,12 @@ impl DapServer {
     /// Send a response through the appropriate output channel
     /// Expects properly formatted JSON.
     pub fn send_response(&self, response: String) {
-        let formatted: String = append_content_length_header(response);
+        let formatted: String = {
+            let content = response;
+            let length = content.len();
+            format!("Content-Length: {length}\r\n\r\n{content}")
+        };
+
         println!("{formatted}");
     }
 
@@ -214,19 +220,28 @@ impl DapServer {
     }
 
     /// Kill the child process and prepare to kill server.
-    pub fn disconnect(&mut self) {
+    pub fn disconnect(&mut self) -> Result<(), DapError> {
+        // Send the debugger process a graceful kill message
+        if let Some(subprocess) = &mut self.debugger_process {
+            if let Err(e) = subprocess.stdin.write_all(b"q\n") {
+                eprintln!("Error occurred while writing to subprocess stdin: {e}");
+            }
+        }
+
         // Terminate the debugger process
         if let Some(mut subprocess) = self.debugger_process.take() {
-            subprocess.process.kill().unwrap();
+            match subprocess.process.kill() {
+                Ok(_) => (),
+                Err(e) => {
+                    eprintln!("Error occurred while killing subprocess: {e}");
+                    return Err(DapError::ImmortalChild);
+                },
+
+            };
         }
 
         // Set the is_terminated flag to true
         self.is_terminated = true;
+        Ok(())
     }
-}
-
-/// Format a response/error to be sent back to the client
-fn append_content_length_header(content: String) -> String {
-    let length = content.len();
-    return format!("Content-Length: {length}\r\n\r\n{content}");
 }
