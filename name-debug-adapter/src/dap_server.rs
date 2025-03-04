@@ -1,22 +1,30 @@
-use std::io::{self, BufRead, Read};
+use std::{io::{self, BufRead, Read}, process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio}};
 
 use serde_json::Value;
 
-use crate::{dap_structs::{DapMessage, DapResponse}, request_handler::handle_request};
+use crate::{dap_structs::{DapError, DapMessage, DapResponse, LaunchArguments}, request_handler::handle_request};
 
 // This code is responsible for managing the DAP server struct. 
 
 /// The DapServer struct contains the necessary information to manage the DAP server.
 pub struct DapServer {
-    // I don't yet know what goes here
+    debugger_process: Option<Subprocess>,
     is_terminated: bool,
     is_initialized: bool,
+}
+
+/// Private struct encapsulating all the child process functionality
+struct Subprocess {
+    process: Child,
+    stdin: ChildStdin,
+    stdout: ChildStdout,
+    stderr: ChildStderr,
 }
 
 impl DapServer {
     /// Create a new DapServer struct to keep all server information in one place
     fn new() -> DapServer {
-        return DapServer {is_terminated: false, is_initialized: false};
+        return DapServer {debugger_process: None, is_terminated: false, is_initialized: false};
     }
 }
 
@@ -144,6 +152,10 @@ impl DapServer {
         return self.is_initialized;
     }
 
+    pub fn has_child(&self) -> bool {
+        return self.debugger_process.is_some();
+    }
+
     /// Edit the DapServer configuration here.
     pub fn initialize(&mut self) -> Value {
         return serde_json::json!({
@@ -169,6 +181,47 @@ impl DapServer {
             "additionalModuleColumns": [],
             "supportedChecksumAlgorithms": []
         });
+    }
+
+    /// Launch the debugging subprocess using the supplied arguments.
+    pub fn launch(&mut self, arguments: LaunchArguments) -> Result<Value, DapError> {
+        
+        let mut child = match Command::new(arguments.name_emu_path)
+            .args(&[arguments.exe_name, String::from("--debug")])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn() {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("Error occurred while launching subprocess: {e}");
+                    return Err(DapError::LaunchFailed);
+                }
+            };
+
+        // Get the stdin, stdout, and stderr of the child process
+        let stdin = child.stdin.take().unwrap();
+        let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+
+        // Store the child process and its I/O in a Subprocess struct
+        let subprocess = Subprocess {process: child, stdin, stdout, stderr};
+
+        // Store the Subprocess in the DapServer struct
+        self.debugger_process = Some(subprocess);
+
+        return Ok(serde_json::json!({"message": "Subprocess launched successfully"}));
+    }
+
+    /// Kill the child process and prepare to kill server.
+    pub fn disconnect(&mut self) {
+        // Terminate the debugger process
+        if let Some(mut subprocess) = self.debugger_process.take() {
+            subprocess.process.kill().unwrap();
+        }
+
+        // Set the is_terminated flag to true
+        self.is_terminated = true;
     }
 }
 

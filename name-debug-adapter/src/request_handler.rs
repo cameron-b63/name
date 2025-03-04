@@ -2,7 +2,7 @@
 // It should call helpers which perform the specified translation.
 // The DAP specification is here: https://microsoft.github.io/debug-adapter-protocol/specification
 
-use serde_json::Value;
+use serde_json::{from_value, Value};
 
 use crate::{dap_server::DapServer, dap_structs::{DapError, DapRequest, DapResponse}, response::{create_error_response, create_response}};
 
@@ -29,9 +29,38 @@ pub fn handle_request(dap_server: &mut DapServer, request: DapRequest) -> Result
         }
         // ConfigurationDone (does not have to support)
         // Launch 
-        // Attach
+        "launch" => {
+            // Cannot launch more than once 
+            if dap_server.has_child() {
+                return Err(create_error_response(&request, DapError::AlreadyStartedDebugging));
+            }
+            // Retrieve arguments
+            let arguments = match request.arguments.clone() {
+                Some(args) => args,
+                None => return Err(create_error_response(&request, DapError::InsufficientArguments)),
+            };
+
+            let structured_arguments = match from_value(arguments) {
+                Ok(args) => args,
+                Err(_) => return Err(create_error_response(&request, DapError::InsufficientArguments)),
+            };
+
+            // Launch subprocess
+            let launch_response: DapResponse = match dap_server.launch(structured_arguments) {
+                Ok(res) => create_response(&request, res),
+                Err(e) => create_error_response(&request, e),
+            };
+
+            return Ok(launch_response);
+        }
+        // Attach (NOT supported right now. Only launch is supported)
         // Restart (does not have to support)
         // Disconnect
+        "disconnect" => {
+            // Disconnect the debugger
+            dap_server.disconnect();
+            return Ok(create_response(&request, Value::Null));
+        }
         // Terminate (does not have to support)
         // BreakpointLocations (does not have to support)
         // SetBreakpoints 

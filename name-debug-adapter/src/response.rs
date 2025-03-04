@@ -47,5 +47,32 @@ fn create_error_body(error: DapError) -> Value {
                 }
             })
         },
+        DapError::InsufficientArguments => {
+            serde_json::json!({
+                "error": {
+                    "id": 3,
+                    "format": "Insufficient arguments",
+                    "sendTelemetry": false,
+                }
+            })
+        },
+        DapError::LaunchFailed => {
+            serde_json::json!({
+                "error": {
+                    "id": 4,
+                    "format": "Launch failed",
+                    "sendTelemetry": false,
+                }
+            })
+        },
+        DapError::AlreadyStartedDebugging => {
+            serde_json::json!({
+                "error": {
+                    "id": 5,
+                    "format": "Already started debugging",
+                    "sendTelemetry": false,
+                }
+            })
+        },
     }
 }

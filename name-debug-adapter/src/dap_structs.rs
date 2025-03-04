@@ -39,8 +39,19 @@ pub struct DapEvent {
     pub body: Option<Value>,
 }
 
+/// Launch arguments to launch the debugging process are formatted like so:
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LaunchArguments {
+    pub name_emu_path: String,
+    pub exe_name: String,
+}
+
 /// DAP Errors are sent as responses. This enum exists for convenience in structuring and describing different errors.
 pub enum DapError {
     AlreadyInitialized,
+    AlreadyStartedDebugging,
+    InsufficientArguments,
+    LaunchFailed,
     NotImplemented(String),
 }
+
