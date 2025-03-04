@@ -7,7 +7,7 @@ fn main() {
     // Parse any cli arguments (not yet specified but leaving room)
 
     // Initialize any server stuff
-    let dap_server: DapServer = start_dap_server();
+    let mut dap_server: DapServer = start_dap_server();
 
     // Setup async I/O (send normal output through user terminal, debug info to DAP)
 
@@ -17,11 +17,12 @@ fn main() {
         match dap_server.read_message() {
             Some(message) => {
                 // Call the message handler (minimizing main logic because I don't want to read all of that)
+                // The message handler has the same logic for both a response or an error. Semantic difference.
                 match dap_server.handle_message(message) {
                     // If Ok, send response back to client.
                     Ok(response) => dap_server.send_response(response),
                     // If Err, properly format err and send it back to client.
-                    Err(e) => dap_server.send_error(e),
+                    Err(e) => dap_server.send_response(e),
                 }
             },
             None => break,  // Unrecoverable error encountered

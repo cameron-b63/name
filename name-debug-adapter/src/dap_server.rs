@@ -1,17 +1,22 @@
 use std::io::{self, BufRead, Read};
 
+use serde_json::Value;
+
+use crate::{dap_structs::{DapMessage, DapResponse}, request_handler::handle_request};
+
 // This code is responsible for managing the DAP server struct. 
 
 /// The DapServer struct contains the necessary information to manage the DAP server.
 pub struct DapServer {
     // I don't yet know what goes here
     is_terminated: bool,
+    is_initialized: bool,
 }
 
 impl DapServer {
     /// Create a new DapServer struct to keep all server information in one place
     fn new() -> DapServer {
-        return DapServer {is_terminated: false};
+        return DapServer {is_terminated: false, is_initialized: false};
     }
 }
 
@@ -84,28 +89,86 @@ impl DapServer {
     }
 
     /// Parse a read message and call appropriate handler
-    pub fn handle_message(&self, _message: String) -> Result<String, String> {
-        // Do-nothing for now
-        // TODO: Handle the message with appropriate thingy
-        return Err(String::from("Not yet implemented."));
+    pub fn handle_message(&mut self, message: String) -> Result<String, String> {
+        match serde_json::from_str::<DapMessage>(&message) {
+            Ok(DapMessage::Event(event)) => {
+                // Events should never be sent from client to server.
+                eprintln!("Error: Event received from client.");
+                return Err(format!("Event received from client.\n{event:?}"));
+            }
+            Ok(DapMessage::Request(req)) => {
+                // Invoke request handler
+                let response: DapResponse = match handle_request(self, req) {
+                    Ok(res) => res,
+                    Err(e) => {
+                        eprintln!("Error occurred while handling request: {e:?}");
+                        return Err(String::from("Error occurred while handling request."));
+                    }
+                };
+
+                // Serialize response and return as string
+                return match serde_json::to_string(&response) {
+                    Ok(s) => Ok(s),
+                    Err(e) => {
+                        eprintln!("Error occurred while serializing response: {e}");
+                        return Err(String::from("Error occurred while serializing response."));
+                    }
+                };
+            },
+            Ok(DapMessage::Response(res)) => {
+                // Responses should never be sent from client to server.
+                eprintln!("Error: Response received from client.");
+                return Err(format!("Response received from client.\n{res:?}"));
+            },
+            Err(e) => {
+                eprintln!("Error occurred while parsing JSON: {e}");
+                return Err(String::from("Error occurred while parsing JSON."));
+            }
+        }
     }
 
     /// Send a response through the appropriate output channel
-    // TODO: Expects JSON/no?
+    /// Expects properly formatted JSON.
     pub fn send_response(&self, response: String) {
         let formatted: String = append_content_length_header(response);
         println!("{formatted}");
     }
 
-    /// Send an error through the appropriate output channel
-    // TODO: Expects JSON/no? give thought
-    pub fn send_error(&self, error: String) {
-        let formatted: String = append_content_length_header(error);
-        println!("{formatted}");
-    }
-
+    /// Return a boolean representing whether the emulator has terminated.
     pub fn is_terminated(&self) -> bool {
         return self.is_terminated;
+    }
+
+    /// Return a boolean representing whether an initialize request has already been handled.
+    pub fn is_initialized(&self) -> bool {
+        return self.is_initialized;
+    }
+
+    /// Edit the DapServer configuration here.
+    pub fn initialize(&mut self) -> Value {
+        return serde_json::json!({
+            "supportsConfigurationDoneRequest": false,
+            "supportsFunctionBreakpoints": false,
+            "supportsConditionalBreakpoints": false,
+            "supportsHitConditionalBreakpoints": false,
+            "supportsEvaluateForHovers": false,
+            "exceptionBreakpointFilters": [
+                {
+                    "filter": "filterID",
+                    "label": "label",
+                    "default": false
+                }
+            ],
+            "supportsStepBack": false,
+            "supportsSetVariable": false,
+            "supportsRestartFrame": false,
+            "supportsGotoTargetsRequest": false,
+            "supportsStepInTargetsRequest": false,
+            "supportsCompletionsRequest": false,
+            "supportsModulesRequest": false,
+            "additionalModuleColumns": [],
+            "supportedChecksumAlgorithms": []
+        });
     }
 }
 
