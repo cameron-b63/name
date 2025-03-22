@@ -1,7 +1,7 @@
 // This file is just responsible for performing .text relocation. That's it.
 
 use name_core::{
-    constants::MIPS_TEXT_START_ADDR, elf_def::{Elf, Elf32SectionHeader, Elf32Sym, ElfType, RelocationEntry, RelocationEntryType, E_ENTRY_DEFAULT}, elf_utils::{create_new_elf, find_global_symbol_address, find_target_section_index, parse_elf_symbols, parse_rel_info}
+    constants::MIPS_TEXT_START_ADDR, elf_def::{Elf, Elf32SectionHeader, Elf32Sym, ElfType, RelocationEntry, RelocationEntryType}, elf_utils::{create_new_elf, find_global_symbol_address, find_target_section_index, parse_elf_symbols, parse_rel_info}
 };
 
 use crate::constants::{REL, SHSTRTAB, STRTAB, SYMTAB, TEXT};
@@ -202,6 +202,6 @@ fn find_entry_point(adjusted_checked_elf: &Elf) -> u32 {
     // Search for global symbol main - return its address, and if undefined, default to E_ENTRY_DEFAULT
     return match find_global_symbol_address(&symbol_table, &adjusted_checked_elf.sections[strtab_idx], "main") {
         Some(addr) => addr,
-        None => return E_ENTRY_DEFAULT,
+        None => return MIPS_TEXT_START_ADDR,
     };
 }

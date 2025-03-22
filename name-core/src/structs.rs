@@ -9,7 +9,9 @@ use crate::{
     constants::{
         MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_HEAP_START_ADDR, MIPS_STACK_END_ADDR,
         MIPS_TEXT_START_ADDR,
-    }, debug::{debug_utils::*, debugger_methods::* /* implementations::* */}, exception::constants::EXCEPTION_BEING_HANDLED, syscalls::*
+    }, 
+    debug::{debug_utils::*, debugger_methods::* /* implementations::* */}, exception::constants::EXCEPTION_BEING_HANDLED, syscalls::*,
+    dbprint, dbprintln,
 };
 
 /// Symbol is used for assembly -> ELF, ET_REL -> ET_EXEC, and ELF -> ProgramState construction.
@@ -441,11 +443,11 @@ impl OperatingSystem {
         program_state: &mut ProgramState,
         debugger_state: &mut DebuggerState,
     ) -> Result<(), String> {
-        println!("Welcome to the NAME CLI debugger.");
-        println!("For a list of commands, type \"help\".");
+        dbprintln!(debugger_state.sioc, "Welcome to the NAME CLI debugger.");
+        dbprintln!(debugger_state.sioc, "For a list of commands, type \"help\".");
 
         loop {
-            print!("(name-db) ");
+            dbprint!(debugger_state.sioc, "(name-db) ");
             self.stdout.flush().expect("Failed to flush stdout");
 
             // take in the command and split it up into arguments
@@ -461,7 +463,7 @@ impl OperatingSystem {
                 .collect();
 
             match db_args[0].as_str() {
-                "help" => match help_menu(db_args) {
+                "help" => match help_menu(db_args, debugger_state) {
                     Ok(_) => continue,
                     Err(e) => eprintln!("{e}"),
                 },
@@ -490,7 +492,7 @@ impl OperatingSystem {
                     Ok(_) => continue,
                     Err(e) => eprintln!("{e}"),
                 },
-                "p" => match print_register(program_state, &db_args) {
+                "p" => match print_register(program_state, debugger_state, &db_args) {
                     Ok(_) => continue,
                     Err(e) => eprintln!("{e}"),
                 },
@@ -498,7 +500,7 @@ impl OperatingSystem {
                     Ok(_) => continue,
                     Err(e) => eprintln!("{e}"),
                 },
-                "m" => match modify_register(program_state, &db_args) {
+                "m" => match modify_register(program_state, debugger_state, &db_args) {
                     Ok(_) => continue,
                     Err(e) => eprintln!("{e}"),
                 },
