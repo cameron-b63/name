@@ -11,7 +11,7 @@ use crate::{
         MIPS_TEXT_START_ADDR,
     }, 
     debug::{debug_utils::*, debugger_methods::* /* implementations::* */}, exception::constants::EXCEPTION_BEING_HANDLED, syscalls::*,
-    dbprint,
+    dbprint, dbprintln,
 };
 
 /// Symbol is used for assembly -> ELF, ET_REL -> ET_EXEC, and ELF -> ProgramState construction.
@@ -443,8 +443,8 @@ impl OperatingSystem {
         program_state: &mut ProgramState,
         debugger_state: &mut DebuggerState,
     ) -> Result<(), String> {
-        println!("Welcome to the NAME CLI debugger.");
-        println!("For a list of commands, type \"help\".");
+        dbprintln!(debugger_state.sioc, "Welcome to the NAME CLI debugger.");
+        dbprintln!(debugger_state.sioc, "For a list of commands, type \"help\".");
 
         loop {
             dbprint!(debugger_state.sioc, "(name-db) ");
