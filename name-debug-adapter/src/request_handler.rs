@@ -2,141 +2,18 @@
 // It should call helpers which perform the specified translation.
 // The DAP specification is here: https://microsoft.github.io/debug-adapter-protocol/specification
 
-use serde_json::{from_value, Value};
-
-use crate::{dap_server::DapServer, dap_structs::{DapError, DapRequest, DapResponse}, response::{create_error_response, create_response}};
+use crate::{dap_server::DapServer, dap_structs::{DapError, DapRequest, DapResponse}, handler::{HandlerFn, HANDLERS}, response::create_error_response};
 
 /// Handle a request issued by client.
 pub fn handle_request(dap_server: &mut DapServer, request: DapRequest) -> Result<DapResponse, DapResponse> {
-    // Match on request.command to take appropriate action
-    let command: &str = &request.command;
-    match command {
-        // DAP requests:
+    // Find proper handler function in the lookup table
+    let command: &str = &request.command.clone();   // I don't like partial borrowing
+    let proper_function: HandlerFn = match HANDLERS.iter().find(|handler| handler.command == command) {
+        Some(handler) => handler.handler,
+        // If no entry is found for given command, return a meaningful error
+        None => return Err(create_error_response(&request, DapError::NotImplemented(String::from(command)))),
+    };
 
-        // Initialize
-        "initialize" => {
-            // Initialize the debug adapter (send configuration information).
-            // This must only be done once.
-            if dap_server.is_initialized() {
-                return Err(create_error_response(&request, DapError::AlreadyInitialized));
-            }
-
-            // Set initialized to true and get configuration information
-            let configuration: Value = dap_server.initialize();
-
-            // Return configuration information
-            return Ok(create_response(&request, configuration));
-        },
-        // ConfigurationDone (does not have to support)
-        // Launch 
-        "launch" => {
-            // Cannot launch more than once 
-            if dap_server.has_child() {
-                return Err(create_error_response(&request, DapError::AlreadyStartedDebugging));
-            }
-            // Retrieve arguments
-            let arguments = match request.arguments.clone() {
-                Some(args) => args,
-                None => return Err(create_error_response(&request, DapError::InsufficientArguments)),
-            };
-
-            let structured_arguments = match from_value(arguments) {
-                Ok(args) => args,
-                Err(_) => return Err(create_error_response(&request, DapError::InsufficientArguments)),
-            };
-
-            // Launch subprocess
-            let launch_response: DapResponse = match dap_server.launch(structured_arguments) {
-                Ok(res) => create_response(&request, res),
-                Err(e) => create_error_response(&request, e),
-            };
-
-            return Ok(launch_response);
-        },
-        // Attach (NOT supported right now. Only launch is supported)
-        // Restart (does not have to support)
-        // Disconnect
-        "disconnect" => {
-            // Disconnect the debugger
-            match dap_server.disconnect() {
-                Ok(_) => return Ok(create_response(&request, Value::Null)),
-                Err(e) => return Err(create_error_response(&request, e))
-            }
-        },
-        // Terminate (does not have to support)
-        // BreakpointLocations (does not have to support)
-        // SetBreakpoints 
-        "setBreakpoints" => {
-            todo!("setBreakpoints");
-        },
-        // SetFunctionBreakpoints (does not have to support)
-        // SetExceptionBreakpoints (does not have to support)
-        // DataBreakpointInfo (does not have to support)
-        // SetDataBreakpoints (does not have to support)
-        // SetInstructionBreakpoints (does not have to support)
-        // Next
-        "next" => {
-            todo!("Next");
-        },
-        // StepIn
-        "stepIn" => {
-            todo!("stepIn");
-        },
-        // StepOut
-        "stepOut" => {
-            todo!("stepOut");
-        },
-        // StepBack (does not have to support)
-        // ReverseContinue (does not have to support)
-        // RestartFrame (does not have to support)
-        // Goto (does not have to support)
-        // Pause
-        "pause" => {
-            todo!("pause");
-        },
-        // StackTrace
-        "stackTrace" => {
-            todo!("stackTrace");
-        },
-        // Scopes
-        "scopes" => {
-            todo!("scopes");
-        },
-        // Variables
-        "variables" => {
-            todo!("variables");
-        },
-        // SetVariable (does not have to support)
-        // Source
-        "source" => {
-            todo!("source");
-        },
-        // Threads
-        "threads" => {
-            todo!("threads");
-        },
-        // TerminateThreads (does not have to support)
-        // Modules (does not have to support)
-        // LoadedSources (does not have to support)
-        // Evaluate
-        "evaluate" => {
-            todo!("evaluate");
-        },
-        // SetExpression (does not have to support)
-        // StepInTargets (does not have to support)
-        // GotoTargets (does not have to support)
-        // Completions (does not have to support)
-        // ExceptionInfo (does not have to support)
-        // ReadMemory (does not have to support)
-        // WriteMemory (does not have to support)
-        // Disassemble (does not have to support)
-        // Locations
-        "locations" => {
-            todo!("locations");
-        },
-        _ => {
-            // Command could not be recognized or is not implemented
-            return Err(create_error_response(&request, DapError::NotImplemented(request.command.clone())));
-        },
-    }
+    // Run found function to handle the request
+    return proper_function(dap_server, request);
 }

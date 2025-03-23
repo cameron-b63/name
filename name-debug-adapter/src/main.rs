@@ -6,7 +6,7 @@ use name_debug_adapter::dap_server::{start_dap_server, DapServer};
 fn main() {
     // Parse any cli arguments (not yet specified but leaving room)
 
-    // Initialize any server stuff
+    // Initialize any server stuff - this is NOT where the subprocess is spawned, let it be known
     let mut dap_server: DapServer = start_dap_server();
 
     // Setup async I/O (send normal output through user terminal, debug info to DAP)
@@ -18,6 +18,7 @@ fn main() {
             Some(message) => {
                 // Call the message handler (minimizing main logic because I don't want to read all of that)
                 // The message handler has the same logic for both a response or an error. Semantic difference.
+                // Emulator subprocess is spawned here if the message was a launch request.
                 match dap_server.handle_message(message) {
                     // If Ok, send response back to client.
                     Ok(response) => dap_server.send_response(response),
