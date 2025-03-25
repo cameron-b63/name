@@ -3,10 +3,11 @@
 
 use serde_json::{from_value, Value};
 
-use crate::{dap_server::DapServer, dap_structs::{DapError, DapRequest, DapResponse}, response::{create_error_response, create_response}};
+use crate::{dap_server::DapServer, dap_structs::{DapRequest, DapResponse}, response::{create_error_response, create_response}, tables::error_definitions::DapError};
 
 /// This function handles the "initialize" request issued by the client. 
 /// It is the first request sent by the client to the debug adapter, and returns the capabilities of the debug adapter.
+/// The capabilities of the debug adapter are defined as a constant.
 pub fn handle_initialize(dap_server: &mut DapServer, request: DapRequest) -> Result<DapResponse, DapResponse> {
     // Initialize the debug adapter (send configuration information).
     // This must only be done once.

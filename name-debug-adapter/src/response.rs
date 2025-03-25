@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 
-use crate::dap_structs::{DapError, DapRequest, DapResponse};
+use crate::{dap_structs::{DapRequest, DapResponse}, tables::error_definitions::{DapError, ERROR_DEFINITIONS}};
 
 /// Create a new Response message to be sent in response to some initial request with the supplied body.
 pub fn create_response(initial_request: &DapRequest, body: Value) -> DapResponse {
@@ -28,60 +28,15 @@ pub fn create_error_response(initial_request: &DapRequest, error: DapError) -> D
 /// Create the body of an ErrorResponse. Matches on the DapError enum to determine proper structure/etc.
 // If you wish to add an error, look here.
 fn create_error_body(error: DapError) -> Value {
-    match error {
-        DapError::AlreadyInitialized => {
-            serde_json::json!({
-                "error": {
-                    "id": 1,
-                    "format": "Already initialized",
-                    "sendTelemetry": false,
-                }
-            })
-        },
-        DapError::NotImplemented(command) => {
-            serde_json::json!({
-                "error": {
-                    "id": 2,
-                    "format": format!("Command '{}' not implemented", command),
-                    "sendTelemetry": false,
-                }
-            })
-        },
-        DapError::InsufficientArguments => {
-            serde_json::json!({
-                "error": {
-                    "id": 3,
-                    "format": "Insufficient arguments",
-                    "sendTelemetry": false,
-                }
-            })
-        },
-        DapError::LaunchFailed => {
-            serde_json::json!({
-                "error": {
-                    "id": 4,
-                    "format": "Launch failed",
-                    "sendTelemetry": false,
-                }
-            })
-        },
-        DapError::AlreadyStartedDebugging => {
-            serde_json::json!({
-                "error": {
-                    "id": 5,
-                    "format": "Already started debugging",
-                    "sendTelemetry": false,
-                }
-            })
-        },
-        DapError::ImmortalChild => {
-            serde_json::json!({
-                "error": {
-                    "id": 6,
-                    "format": "Child process could not be killed",
-                    "sendTelemetry": false,
-                }
-            })
+    match ERROR_DEFINITIONS.iter().find(|err| err.error == error) {
+        Some(error_info) => error_info.to_value(),
+        None => {
+            // ERROR_DEFINITIONS is technically allowed to be empty. This should absolutely never happen. In the name of safe programming, I check.
+            if ERROR_DEFINITIONS.len() < 1 {
+                return ERROR_DEFINITIONS[0].to_value(); 
+            } else {
+                panic!("ERROR_DEFINITIONS table is supposedly empty. Cannot create any error responses.");
+            }
         },
     }
 }

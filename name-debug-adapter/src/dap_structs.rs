@@ -46,13 +46,3 @@ pub struct LaunchArguments {
     pub exe_name: String,
 }
 
-/// DAP Errors are sent as responses. This enum exists for convenience in structuring and describing different errors.
-pub enum DapError {
-    AlreadyInitialized,
-    AlreadyStartedDebugging,
-    ImmortalChild,
-    InsufficientArguments,
-    LaunchFailed,
-    NotImplemented(String),
-}
-

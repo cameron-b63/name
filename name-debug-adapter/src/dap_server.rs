@@ -2,7 +2,7 @@ use std::{io::{self, BufRead, Read}, process::{Child, ChildStderr, ChildStdin, C
 
 use serde_json::Value;
 
-use crate::{dap_structs::{DapError, DapMessage, DapResponse, LaunchArguments}, request_handler::handle_request};
+use crate::{dap_structs::{DapMessage, DapResponse, LaunchArguments}, request_handler::handle_request, tables::error_definitions::DapError};
 use std::io::Write;
 
 // This code is responsible for managing the DAP server struct. 

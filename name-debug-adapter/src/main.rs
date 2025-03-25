@@ -3,6 +3,8 @@ use name_debug_adapter::dap_server::{start_dap_server, DapServer};
 // This module exists to provide a translation layer between VSCode's DAP and NAME's CLI debugger.
 // VSCode communicates through JSON. NAME expects some standard CLI commands to be issued through stdin.
 // It is the burden of the debug adapter to translate requests issued with DAP to commands NAME can interpret.
+
+// Note that it is organized in such a way that changing functionality should not require editing program logic; rather, updating tables.
 fn main() {
     // Parse any cli arguments (not yet specified but leaving room)
 
