@@ -67,40 +67,56 @@ pub fn handle_disconnect(dap_server: &mut DapServer, request: DapRequest) -> Res
 /// It sets breakpoints in the debuggee process.
 pub fn handle_set_breakpoints(_dap_server: &mut DapServer, _request: DapRequest) -> Result<DapResponse, DapResponse> {
     todo!("Handle setBreakpoints request");
+    // Parse body of request to determine lines to break on
+    // Deliver `b` requests
+    // Each request may fail - create response accordingly
+    // Return response
 }
 
 /// This function handles the "next" request issued by the client.
 /// It steps over the next line of code.
-pub fn handle_next(_dap_server: &mut DapServer, _request: DapRequest) -> Result<DapResponse, DapResponse> {
-    todo!("Handle next request");
+pub fn handle_next(dap_server: &mut DapServer, request: DapRequest) -> Result<DapResponse, DapResponse> {
+    // Stops at next line of source - synonymous with step_in for assembly code.
+    return handle_step_in(dap_server, request);
 }
 
 /// This function handles the "stepIn" request issued by the client.
-/// It steps into the next line of code.
+/// Executes a single line of assembly code.
 pub fn handle_step_in(_dap_server: &mut DapServer, _request: DapRequest) -> Result<DapResponse, DapResponse> {
     todo!("Handle stepIn request");
+    // Executes a single line of assembly code. Should literally just need to send `s` to the client.
+    // Parsing response might need to be abstracted to function. This is the point where each parsing thing gets specific.
+    // Package response/err as JSON
 }
 
 /// This function handles the "stepOut" request issued by the client.
-/// It steps out of the current function.
+/// It steps out of the current function. Little nebulous - should reasonably skip to the instruction after the next jump to $ra.
+/// The actual functionality should be defined inside the name-emu debugger.
 pub fn handle_step_out(_dap_server: &mut DapServer, _request: DapRequest) -> Result<DapResponse, DapResponse> {
     todo!("Handle stepOut request");
+    // Send `so` to child process
+    // Parse response
+    // Package response/err as JSON
 }
 
 /// This function handles the "pause" request issued by the client.
 /// It pauses the debuggee process.
 pub fn handle_pause(_dap_server: &mut DapServer, _request: DapRequest) -> Result<DapResponse, DapResponse> {
     todo!("Handle pause request");
+    // Pause the child process. Effectively should just do nothing and continue blocking for next request.
+    // Still send acknowledgement.
 }
 
 /// This function handles the "stackTrace" request issued by the client.
 /// It returns the stack trace of the debuggee process.
+/// The debugger needs to implement a stack trace request for consecutive function calls.
 pub fn handle_stack_trace(_dap_server: &mut DapServer, _request: DapRequest) -> Result<DapResponse, DapResponse> {
     todo!("Handle stackTrace request");
 }
 
 /// This function handles the "scopes" request issued by the client.
 /// It returns the scopes of the current stack frame.
+/// This may be meaningless for our purposes. Thought required.
 pub fn handle_scopes(_dap_server: &mut DapServer, _request: DapRequest) -> Result<DapResponse, DapResponse> {
     todo!("Handle scopes request");
 }
