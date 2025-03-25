@@ -16,7 +16,10 @@ pub fn handle_initialize(dap_server: &mut DapServer, request: DapRequest) -> Res
     }
 
     // Set initialized to true and get configuration information
-    let configuration: Value = dap_server.initialize();
+    let configuration: Value = match dap_server.initialize() {
+        Ok(v) => v,
+        Err(e) => return Err(create_error_response(&request, e)),
+    };
 
     // Return configuration information
     return Ok(create_response(&request, configuration));

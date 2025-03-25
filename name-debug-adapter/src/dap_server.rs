@@ -2,7 +2,7 @@ use std::{io::{self, BufRead, Read}, process::{Child, ChildStderr, ChildStdin, C
 
 use serde_json::Value;
 
-use crate::{dap_structs::{DapMessage, DapResponse, LaunchArguments}, request_handler::handle_request, tables::error_definitions::DapError};
+use crate::{dap_structs::{DapMessage, DapResponse, LaunchArguments}, request_handler::handle_request, tables::{capabilities::get_capabilities, error_definitions::DapError}};
 use std::io::Write;
 
 // This code is responsible for managing the DAP server struct. 
@@ -163,30 +163,17 @@ impl DapServer {
     }
 
     /// Edit the DapServer configuration here.
-    pub fn initialize(&mut self) -> Value {
-        return serde_json::json!({
-            "supportsConfigurationDoneRequest": false,
-            "supportsFunctionBreakpoints": false,
-            "supportsConditionalBreakpoints": false,
-            "supportsHitConditionalBreakpoints": false,
-            "supportsEvaluateForHovers": false,
-            "exceptionBreakpointFilters": [
-                {
-                    "filter": "filterID",
-                    "label": "label",
-                    "default": false
-                }
-            ],
-            "supportsStepBack": false,
-            "supportsSetVariable": false,
-            "supportsRestartFrame": false,
-            "supportsGotoTargetsRequest": false,
-            "supportsStepInTargetsRequest": false,
-            "supportsCompletionsRequest": false,
-            "supportsModulesRequest": false,
-            "additionalModuleColumns": [],
-            "supportedChecksumAlgorithms": []
-        });
+    pub fn initialize(&mut self) -> Result<Value, DapError> {
+        return match serde_json::to_value(get_capabilities()) {
+            Ok(v) => {
+                self.is_initialized = true;
+                Ok(v)
+            },
+            Err(e) => {
+                eprintln!("Error occurred while serializing capabilities: {e}");
+                Err(DapError::CapabilitiesNotLoaded)
+            }
+        };
     }
 
     /// Launch the debugging subprocess using the supplied arguments.

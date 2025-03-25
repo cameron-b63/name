@@ -5,6 +5,7 @@ use serde_json::Value;
 pub enum DapError {
     AlreadyInitialized,
     AlreadyStartedDebugging,
+    CapabilitiesNotLoaded,
     ImmortalChild,
     InsufficientArguments,
     LaunchFailed,
@@ -75,5 +76,11 @@ pub const ERROR_DEFINITIONS: &[ErrorInfo] = &[
         format: "Child process could not be killed",
         send_telemetry: false,
         error: DapError::ImmortalChild,
+    },
+    ErrorInfo {
+        id: 7,
+        format: "DAP Server capabilities could not be loaded. Internal error",
+        send_telemetry: false,
+        error: DapError::CapabilitiesNotLoaded,
     },
 ];
