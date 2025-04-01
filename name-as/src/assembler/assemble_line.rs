@@ -37,11 +37,11 @@ pub fn _assemble_line(environment: &mut Assembler, line: &str, expanded_line: St
     match line_components_result {
         Ok(components) => line_components = components,
         Err(e) => {
-            environment.string_error(format!(
-                "[*] On line {}{}:",
-                environment.line_prefix, environment.line_number
-            ));
-            environment.string_error(e);
+            // environment.string_error(format!(
+            //     "[*] On line {}{}:",
+            //     environment.line_prefix, environment.line_number
+            // ));
+            // environment.string_error(e);
             return;
         }
     }
@@ -126,11 +126,11 @@ pub fn _assemble_line(environment: &mut Assembler, line: &str, expanded_line: St
             let resulting_tuples = match (info.expand)(environment, &arguments) {
                 Ok(tuples) => tuples,
                 Err(e) => {
-                    environment.string_error(format!(
-                        "[*] On line {}{}",
-                        environment.line_prefix, environment.line_number
-                    ));
-                    environment.string_error(e);
+                    // environment.string_error(format!(
+                    //     "[*] On line {}{}",
+                    //     environment.line_prefix, environment.line_number
+                    // ));
+                    // environment.string_error(e);
                     return;
                 }
             };

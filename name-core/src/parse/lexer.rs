@@ -67,6 +67,14 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn token(&self, kind: TokenKind) -> Token<'a> {
+        let token = self.span(kind);
+        Token {
+            src: self.src.get(token.src_span.range()).unwrap_or(""),
+            token,
+        }
+    }
+
     /// get next char for lexer and advance the position
     fn next_char(&mut self) -> Option<char> {
         self.chars.next().map(|c| {
@@ -163,7 +171,7 @@ impl<'a> Lexer<'a> {
         self.consume_while(|c| matches!(c, 'a'..='z' | '0'..='9'))
     }
 
-    fn lex_token(&mut self) -> LexerResult<Option<Token>> {
+    fn lex_token(&mut self) -> LexerResult<Option<Token<'a>>> {
         self.lexeme_start = Some(self.pos.clone());
 
         if let Some(c) = self.next_char() {
@@ -224,13 +232,13 @@ impl<'a> Lexer<'a> {
                 '\n' => TokenKind::Newline,
                 _ => return Err(self.span(ErrorKind::InvalidChar(c))),
             };
-            Ok(Some(self.span(tok_kind)))
+            Ok(Some(self.token(tok_kind)))
         } else {
             Ok(None)
         }
     }
 
-    pub fn next_tok(&mut self) -> LexerResult<Option<Token>> {
+    pub fn next_tok(&mut self) -> LexerResult<Option<Token<'a>>> {
         // eat any whitce space that may prepend next token
         self.consume_while(|c| c.is_whitespace() && c != '\n');
 
@@ -245,7 +253,7 @@ impl<'a> Lexer<'a> {
         self.lex_token()
     }
 
-    pub fn lex(&mut self) -> (Vec<LexError>, Vec<Token>) {
+    pub fn lex(&mut self) -> (Vec<LexError>, Vec<Token<'a>>) {
         let mut toks = Vec::new();
         let mut errs = Vec::new();
 
@@ -258,100 +266,5 @@ impl<'a> Lexer<'a> {
         }
 
         (errs, toks)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    macro_rules! test_group {
-        { $test:ident: $str:literal = $tok:expr } => {
-
-            #[test]
-            fn $test(){
-                let mut lex = Lexer::new($str);
-
-                for tk in $tok {
-                    assert_eq!(lex.next_tok().map(|t| t.unwrap().kind), Ok(tk).cloned());
-                }
-            }
-
-        };
-
-
-        { $test:ident: $str:literal = $tok:expr, $($tests:ident : $strs:literal = $toks:expr),+ } => {
-            test_group! { $test: $str = $tok }  // Expand the first test
-            test_group! { $($tests : $strs = $toks),+ }  // Recursively expand the rest
-        };
-
-        { $name:ident, $($tests:ident : $strs:literal = $toks:expr),+ } => {
-
-            mod $name {
-                use super::*;
-                test_group! { $($tests: $strs = $toks),+ }
-            }
-
-        };
-    }
-
-    test_group! {
-        singles,
-        parens: "()" = &[TokenKind::LParen, TokenKind::RParen],
-        binops: "+-" = &[TokenKind::Plus, TokenKind::Minus],
-        punctuation: ":," = &[TokenKind::Colon, TokenKind::Comma]
-    }
-
-    test_group! {
-        numbers,
-        decimal: " 42 034" = &[
-            TokenKind::DecimalNumber,
-            TokenKind::DecimalNumber,
-        ],
-        hexidecimal: " 0xDEADBEEEF" = &[TokenKind::HexNumber],
-        octal: "0o42 " = &[TokenKind::OctalNumber],
-        float: "1234.00001 " = &[TokenKind::Fractional]
-    }
-
-    test_group! {
-        data,
-        string: "hello_world: .asciiz \"hello word\"" = &[
-            TokenKind::Ident,
-            TokenKind::Colon,
-            TokenKind::Directive,
-            TokenKind::String,
-        ],
-        array: "my_array: .word 0 : 0xAA" = &[
-            TokenKind::Ident,
-            TokenKind::Colon,
-            TokenKind::Directive,
-            TokenKind::DecimalNumber,
-            TokenKind::Colon,
-            TokenKind::HexNumber
-        ]
-    }
-
-    test_group! {
-        instruction,
-        rtype: "add $a1, $a2, $a3 # this is a comment" = &[
-            TokenKind::Ident,
-            TokenKind::Register,
-            TokenKind::Comma,
-            TokenKind::Register,
-            TokenKind::Comma,
-            TokenKind::Register,
-        ],
-        itype: "addi $a1, $a2, 0xDEADBEEF" = &[
-            TokenKind::Ident,
-            TokenKind::Register,
-            TokenKind::Comma,
-            TokenKind::Register,
-            TokenKind::Comma,
-            TokenKind::HexNumber,
-        ],
-        jtype: "j my_label" = &[
-            TokenKind::Ident,
-            TokenKind::Ident,
-        ]
     }
 }

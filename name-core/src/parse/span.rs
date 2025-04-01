@@ -24,6 +24,13 @@ impl SrcSpan {
     pub fn range(&self) -> Range<usize> {
         self.start.pos..self.end.pos
     }
+
+    pub fn combine(&self, other: &Self) -> Self {
+        SrcSpan {
+            start: self.start.clone(),
+            end: other.end.clone(),
+        }
+    }
 }
 
 impl fmt::Display for SrcSpan {
@@ -38,6 +45,12 @@ pub struct Span<T> {
     pub kind: T,
 }
 
+impl<T: fmt::Display> fmt::Display for Span<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.src_span, self.kind)
+    }
+}
+
 impl<T> Span<T> {
     pub fn new(src_span: SrcSpan, kind: T) -> Self {
         Span { src_span, kind }
@@ -48,6 +61,14 @@ impl<T> Span<T> {
             src_span: self.src_span,
             kind: f(self.kind),
         }
+    }
+
+    pub fn start(&self) -> SrcPos {
+        self.src_span.start.clone()
+    }
+
+    pub fn end(&self) -> SrcPos {
+        self.src_span.end.clone()
     }
 }
 

@@ -1,12 +1,16 @@
 use std::path::PathBuf;
 
 use name_as::args::Cli;
+use name_as::assembler::assemble_file::assemble_file;
 use name_as::assembler::assembler::Assembler;
 
 use name_core::{
     elf_def::ElfType,
     elf_utils::{create_new_elf, extract_symbol_table_to_sections, write_elf_to_file},
+    parse::session::Session,
 };
+
+use bumpalo::Bump;
 
 use clap::Parser;
 
@@ -16,13 +20,12 @@ fn main() {
     let mut dir_path = PathBuf::from(&args.input_filename);
     dir_path.pop();
 
-    let mut assembler_environment = Assembler::new(dir_path);
-
-    let success = assembler_environment.assemble_file(&args.input_filename);
-
-    if !success {
-        std::process::exit(1);
-    }
+    let bump = Bump::new();
+    let mut session = Session::new(&bump, dir_path);
+    let assembler_environment =
+        assemble_file(&mut session, args.input_filename).unwrap_or_else(|_e| {
+            std::process::exit(1);
+        });
 
     let (section_dot_symtab, section_dot_strtab) =
         extract_symbol_table_to_sections(assembler_environment.symbol_table);

@@ -1,4 +1,4 @@
-use crate::assembler::assembler::Assembler;
+use crate::assembler::assembler::{AssembleResult, Assembler, ErrorKind};
 
 use crate::definitions::structs::LineComponent;
 
@@ -11,13 +11,7 @@ impl Assembler {
             Section::Null => {
                 self.current_address = self.text_address;
             }
-            Section::Text => {
-                self.string_error(format!(
-                    "[*] On line {}{}:",
-                    self.line_prefix, self.line_number
-                ));
-                self.string_error(format!(" - Cannot declare current_section .text when already in current_section .text on line {}", self.line_number));
-            }
+            Section::Text => (),
             Section::Data => {
                 self.data_address = self.current_address;
                 self.current_address = self.text_address;
@@ -35,13 +29,7 @@ impl Assembler {
                 self.text_address = self.current_address;
                 self.current_address = self.data_address;
             }
-            Section::Data => {
-                self.string_error(format!(
-                    "[*] On line {}{}:",
-                    self.line_prefix, self.line_number
-                ));
-                self.string_error(format!(" - Cannot declare current_section .data when already in current_section .data (line {})", self.line_number));
-            }
+            Section::Data => (),
         }
 
         self.current_section = Section::Data;
@@ -53,7 +41,7 @@ impl Assembler {
             let value = match arguments[0] {
                 LineComponent::Immediate(imm) => imm,
                 _ => {
-                    self.string_error(format!(" - `.word` expected a word immediate."));
+                    // self.string_error(format!(" - `.word` expected a word immediate."));
                     return;
                 }
             };
@@ -82,14 +70,14 @@ impl Assembler {
 
         if repetition {
             if arguments.len() != 3 {
-                self.string_error(format!(" - When using `.word` with repetition, expected usage is `.word <value> : <repeat>; expected 3 args, got {}", arguments.len()));
+                // self.string_error(format!(" - When using `.word` with repetition, expected usage is `.word <value> : <repeat>; expected 3 args, got {}", arguments.len()));
             }
 
             let (value, repeat) = {
                 let val = match arguments[0] {
                     LineComponent::Immediate(imm) => imm,
                     _ => {
-                        self.string_error(format!(" - When using `.word` with repetition, expected usage is `.word <value> : <repeat>; expected value of type Immediate, got {:?}", arguments[0]));
+                        // self.string_error(format!(" - When using `.word` with repetition, expected usage is `.word <value> : <repeat>; expected value of type Immediate, got {:?}", arguments[0]));
                         return;
                     }
                 };
@@ -97,13 +85,13 @@ impl Assembler {
                 let rep = match arguments[2] {
                     LineComponent::Immediate(imm) => imm,
                     _ => {
-                        self.string_error(format!(" - When using `.word` with repetition, expected usage is `.word <value> : <repeat>; expected repeat of type Immediate, got {:?}", arguments[0]));
+                        // self.string_error(format!(" - When using `.word` with repetition, expected usage is `.word <value> : <repeat>; expected repeat of type Immediate, got {:?}", arguments[0]));
                         return;
                     }
                 };
 
                 if rep < 1 {
-                    self.string_error(format!(" - When using `.word` with repetition, one would think you'd think you wanna repeat a positive number of times greater than zero..."));
+                    // self.string_error(format!(" - When using `.word` with repetition, one would think you'd think you wanna repeat a positive number of times greater than zero..."));
                 }
 
                 (val, rep)

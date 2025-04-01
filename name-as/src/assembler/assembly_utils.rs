@@ -1,3 +1,4 @@
+use crate::assembler::assembler::{AssembleResult, ErrorKind};
 use crate::definitions::constants::{MAX_U16, MIN_U16};
 use name_core::{instruction::information::ArgumentType, parse::parse::AstKind, structs::Register};
 
@@ -19,13 +20,13 @@ pub fn assemble_r_type(
     rt: Register,
     shamt: u32,
     funct: u32,
-) -> Result<u32, String> {
+) -> AssembleResult<u32> {
     // I'm using these unwrap_or statements to ensure that when packing R-type instructions that don't use all 3, the fields default to 0 in the packed word.
     // The '?' operators are to ensure the proper error message is propagated up through to the assembler's 'errors' vec.
 
     // Check shamt for range
     if shamt > 31 {
-        return Err("Shift amount out of range on shift instruction.".to_string());
+        return Err(ErrorKind::InvalidShamt);
     }
 
     // The opcode for all R-type instructions is 0.
@@ -43,7 +44,7 @@ pub fn assemble_r_type(
 pub fn assign_r_type_arguments(
     arguments: Vec<AstKind>,
     args_to_use: &[ArgumentType],
-) -> Result<(Register, Register, Register, u32), String> {
+) -> AssembleResult<(Register, Register, Register, u32)> {
     let mut rd = Register::Zero;
     let mut rs = Register::Zero;
     let mut rt = Register::Zero;
@@ -51,10 +52,12 @@ pub fn assign_r_type_arguments(
 
     for (i, passed) in arguments.into_iter().enumerate() {
         match args_to_use[i] {
-            ArgumentType::Rd => rd = passed.get_register().unwrap_or(rd),
-            ArgumentType::Rs => rs = passed.get_register().unwrap_or(rs),
-            ArgumentType::Rt => rt = passed.get_register().unwrap_or(rt),
-            ArgumentType::Immediate => shamt = passed.get_immediate().unwrap_or(shamt),
+            ArgumentType::Rd => rd = passed.get_register().ok_or(ErrorKind::InvalidArgument)?,
+            ArgumentType::Rs => rs = passed.get_register().ok_or(ErrorKind::InvalidArgument)?,
+            ArgumentType::Rt => rt = passed.get_register().ok_or(ErrorKind::InvalidArgument)?,
+            ArgumentType::Immediate => {
+                shamt = passed.get_immediate().ok_or(ErrorKind::InvalidArgument)?;
+            }
             _ => unreachable!(),
         }
     }
@@ -80,10 +83,10 @@ pub fn assemble_i_type(
     rs: Register,
     rt: Register,
     immediate: u32,
-) -> Result<u32, String> {
+) -> AssembleResult<u32> {
     // Check range on immediate value
     if (immediate as i32) > MAX_U16 || (immediate as i32) < MIN_U16 {
-        return Err("Immediate exceeds 16 bits".to_string());
+        return Err(ErrorKind::ImmediateOverflow);
     }
 
     let parsed_immediate: u32 = immediate as u16 as u32;
@@ -94,7 +97,7 @@ pub fn assemble_i_type(
 pub fn assign_i_type_arguments(
     arguments: Vec<AstKind>,
     args_to_use: &[ArgumentType],
-) -> Result<(Register, Register, u32), String> {
+) -> AssembleResult<(Register, Register, u32)> {
     let mut rs = Register::Zero;
     let mut rt = Register::Zero;
     let mut imm = 0;
