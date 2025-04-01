@@ -1,7 +1,6 @@
-use crate::assembler::assembly_helpers::parse_register_to_u32;
+use crate::assembler::assembler::{AssembleResult, ErrorKind};
 use crate::definitions::constants::{MAX_U16, MIN_U16};
-use crate::definitions::structs::LineComponent;
-use name_core::instruction::information::ArgumentType;
+use name_core::{instruction::information::ArgumentType, parse::parse::AstKind, structs::Register};
 
 /*
 
@@ -16,61 +15,49 @@ use name_core::instruction::information::ArgumentType;
 
 */
 pub fn assemble_r_type(
-    rd: Option<String>,
-    rs: Option<String>,
-    rt: Option<String>,
-    shamt: Option<i32>,
+    rd: Register,
+    rs: Register,
+    rt: Register,
+    shamt: u32,
     funct: u32,
-) -> Result<u32, String> {
+) -> AssembleResult<u32> {
     // I'm using these unwrap_or statements to ensure that when packing R-type instructions that don't use all 3, the fields default to 0 in the packed word.
     // The '?' operators are to ensure the proper error message is propagated up through to the assembler's 'errors' vec.
-    let parsed_rd: u32 = parse_register_to_u32(&rd.unwrap_or("$0".to_string()))?;
-    let parsed_rs: u32 = parse_register_to_u32(&rs.unwrap_or("$0".to_string()))?;
-    let parsed_rt: u32 = parse_register_to_u32(&rt.unwrap_or("$0".to_string()))?;
 
-    let unchecked_shamt: i32 = shamt.unwrap_or(0);
+    // Check shamt for range
+    if shamt > 31 {
+        return Err(ErrorKind::InvalidShamt);
+    }
 
     // The opcode for all R-type instructions is 0.
     let opcode: u32 = 0;
 
-    // Check shamt for range
-    let parsed_shamt: u32 = unchecked_shamt as u32;
-    if unchecked_shamt < 0 || unchecked_shamt > 31 {
-        return Err("Shift amount out of range on shift instruction.".to_string());
-    }
-
     return Ok((opcode << 26)
-        | (parsed_rs << 21)
-        | (parsed_rt << 16)
-        | (parsed_rd << 11)
-        | (parsed_shamt << 6)
+        | ((rs as u32) << 21)
+        | ((rt as u32) << 16)
+        | ((rd as u32) << 11)
+        | ((shamt as u32) << 6)
         | funct);
 }
 
 // I understand this function header can be... hairy. The added context of usage in the assemble_instruction function makes this far easier to parse.
 pub fn assign_r_type_arguments(
-    arguments: &Vec<LineComponent>,
+    arguments: Vec<AstKind>,
     args_to_use: &[ArgumentType],
-) -> Result<(Option<String>, Option<String>, Option<String>, Option<i32>), String> {
-    let mut rd: Option<String> = None;
-    let mut rs: Option<String> = None;
-    let mut rt: Option<String> = None;
-    let mut shamt: Option<i32> = None;
+) -> AssembleResult<(Register, Register, Register, u32)> {
+    let mut rd = Register::Zero;
+    let mut rs = Register::Zero;
+    let mut rt = Register::Zero;
+    let mut shamt = 0;
 
-    for (i, passed) in arguments.iter().enumerate() {
-        let mut content = String::from("");
-        let mut immediate = 0;
-        match passed {
-            LineComponent::Register(register) => content = register.clone(),
-            LineComponent::Immediate(imm) => immediate = imm.clone(),
-            _ => return Err(" - Bad argument types provided to instruction.".to_string()),
-        }
-
+    for (i, passed) in arguments.into_iter().enumerate() {
         match args_to_use[i] {
-            ArgumentType::Rd => rd = Some(content.clone()),
-            ArgumentType::Rs => rs = Some(content.clone()),
-            ArgumentType::Rt => rt = Some(content.clone()),
-            ArgumentType::Immediate => shamt = Some(immediate),
+            ArgumentType::Rd => rd = passed.get_register().ok_or(ErrorKind::InvalidArgument)?,
+            ArgumentType::Rs => rs = passed.get_register().ok_or(ErrorKind::InvalidArgument)?,
+            ArgumentType::Rt => rt = passed.get_register().ok_or(ErrorKind::InvalidArgument)?,
+            ArgumentType::Immediate => {
+                shamt = passed.get_immediate().ok_or(ErrorKind::InvalidArgument)?;
+            }
             _ => unreachable!(),
         }
     }
@@ -93,48 +80,34 @@ pub fn assign_r_type_arguments(
 
 pub fn assemble_i_type(
     opcode: u32,
-    rs: Option<String>,
-    rt: Option<String>,
-    immediate: Option<i32>,
-) -> Result<u32, String> {
-    // Default any non-provided registers to $zero - should have no bearing.
-    let parsed_rs: u32 = parse_register_to_u32(&rs.unwrap_or("$0".to_string()))?;
-    let parsed_rt: u32 = parse_register_to_u32(&rt.unwrap_or("$0".to_string()))?;
-    let unchecked_immediate: i32 = immediate.unwrap_or(0);
-
+    rs: Register,
+    rt: Register,
+    immediate: u32,
+) -> AssembleResult<u32> {
     // Check range on immediate value
-    if unchecked_immediate > MAX_U16 || unchecked_immediate < MIN_U16 {
-        return Err("Immediate exceeds 16 bits".to_string());
+    if (immediate as i32) > MAX_U16 || (immediate as i32) < MIN_U16 {
+        return Err(ErrorKind::ImmediateOverflow);
     }
 
-    let parsed_immediate: u32 = unchecked_immediate as i16 as u16 as u32;
+    let parsed_immediate: u32 = immediate as u16 as u32;
 
-    Ok((opcode << 26) | (parsed_rs << 21) | (parsed_rt << 16) | (parsed_immediate))
+    Ok((opcode << 26) | ((rs as u32) << 21) | ((rt as u32) << 16) | (parsed_immediate))
 }
 
 pub fn assign_i_type_arguments(
-    arguments: &Vec<LineComponent>,
+    arguments: Vec<AstKind>,
     args_to_use: &[ArgumentType],
-) -> Result<(Option<String>, Option<String>, Option<i32>), String> {
-    let mut rs: Option<String> = None;
-    let mut rt: Option<String> = None;
-    let mut imm: Option<i32> = None;
+) -> AssembleResult<(Register, Register, u32)> {
+    let mut rs = Register::Zero;
+    let mut rt = Register::Zero;
+    let mut imm = 0;
 
-    for (i, passed) in arguments.iter().enumerate() {
-        let mut content: String = String::from("");
-        let mut immediate: i32 = 0;
-        match passed {
-            LineComponent::Register(register) => content = register.clone(),
-            LineComponent::Immediate(number) => immediate = number.clone(),
-            LineComponent::Identifier(identifier) => content = identifier.clone(),
-            _ => return Err(" - Bad arguments provided during i-type assignment".to_string()),
-        }
-
+    for (i, passed) in arguments.into_iter().enumerate() {
         match args_to_use[i] {
-            ArgumentType::Rs => rs = Some(content.clone()),
-            ArgumentType::Rt => rt = Some(content.clone()),
-            ArgumentType::Immediate => imm = Some(immediate.clone()),
-            ArgumentType::Identifier | ArgumentType::BranchLabel => imm = None,
+            ArgumentType::Rs => rs = passed.get_register().unwrap_or(rs),
+            ArgumentType::Rt => rt = passed.get_register().unwrap_or(rt),
+            ArgumentType::Immediate => imm = passed.get_immediate().unwrap_or(imm),
+            ArgumentType::Identifier | ArgumentType::BranchLabel => (),
             _ => unreachable!(),
         }
     }

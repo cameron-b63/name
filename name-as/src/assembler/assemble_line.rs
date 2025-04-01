@@ -1,12 +1,3 @@
-use crate::assembler::assembler::Assembler;
-
-use crate::assembler::assembly_helpers::{reverse_format_instruction, search_mnemonic};
-use crate::definitions::structs::{LineComponent, PseudoInstruction};
-
-use name_core::instruction::information::InstructionInformation;
-
-use crate::parser::parse_components;
-
 /*
 
 I can understand that this assemble function may at first seem to be kind of a behemoth. This is because you are right and it is.
@@ -24,7 +15,14 @@ The logic is as follows:
 
 */
 
-pub fn assemble_line(environment: &mut Assembler, line: &str, expanded_line: String) {
+use crate::assembler::assembler::Assembler;
+use crate::assembler::assembly_helpers::{_reverse_format_instruction, _search_mnemonic};
+use crate::definitions::structs::{LineComponent, PseudoInstruction};
+use crate::parser::parse_components;
+
+use name_core::instruction::information::InstructionInformation;
+
+pub fn _assemble_line(environment: &mut Assembler, line: &str, expanded_line: String) {
     // Print the line (with expansions)
     println!(
         "{}{}: {}",
@@ -39,23 +37,22 @@ pub fn assemble_line(environment: &mut Assembler, line: &str, expanded_line: Str
     match line_components_result {
         Ok(components) => line_components = components,
         Err(e) => {
-            environment.errors.push(format!(
-                "[*] On line {}{}:",
-                environment.line_prefix, environment.line_number
-            ));
-            environment.errors.push(e);
+            // environment.string_error(format!(
+            //     "[*] On line {}{}:",
+            //     environment.line_prefix, environment.line_number
+            // ));
+            // environment.string_error(e);
             return;
         }
     }
 
-    // If the line was empty, move right along
-    if Option::is_none(&line_components) {
+    if line_components.is_none() {
         return;
     }
 
     let mut instruction_information: Option<&'static InstructionInformation> = None;
     let mut pseudo_instruction_information: Option<&'static PseudoInstruction> = None;
-    let mut found_directive: Option<String> = None;
+    let mut _found_directive: Option<String> = None;
     let mut arguments: Vec<LineComponent> = vec![];
 
     // Process components one by one
@@ -65,7 +62,7 @@ pub fn assemble_line(environment: &mut Assembler, line: &str, expanded_line: Str
             LineComponent::Mnemonic(mnemonic) => {
                 // Found mnemonics should specify either instruction or pseudoinstruction information
                 (instruction_information, pseudo_instruction_information) =
-                    search_mnemonic(mnemonic, environment);
+                    _search_mnemonic(mnemonic, environment);
             }
             LineComponent::Identifier(content) => {
                 arguments.push(LineComponent::Identifier(content.clone()));
@@ -81,7 +78,7 @@ pub fn assemble_line(environment: &mut Assembler, line: &str, expanded_line: Str
                             .find(|s| s.identifier == content)
                             .is_none()
                         {
-                            environment.add_label(&content, 0);
+                            let _ = environment.add_label(&content, 0);
                         }
                     }
                     None => {
@@ -93,11 +90,11 @@ pub fn assemble_line(environment: &mut Assembler, line: &str, expanded_line: Str
             }
             LineComponent::Label(content) => {
                 // duplicate symbol definitions will be caught in this function.
-                environment.add_label(&content, environment.current_address);
+                let _ = environment.add_label(&content, environment.current_address);
             }
             LineComponent::Directive(content) => {
                 // Save info out to directive handler for later
-                found_directive = Some(content.clone());
+                _found_directive = Some(content.clone());
             }
             LineComponent::Register(_)
             | LineComponent::Immediate(_)
@@ -112,8 +109,10 @@ pub fn assemble_line(environment: &mut Assembler, line: &str, expanded_line: Str
     // If a known instruction mnemonic was discovered, its contents will be assembled here.
     match instruction_information {
         None => {}
-        Some(info) => {
-            environment.handle_assemble_instruction(info, &arguments);
+        Some(_info) => {
+            // environment
+            //     .handle_assemble_instruction(info, &arguments)
+            //     .unwrap();
         }
     }
 
@@ -127,11 +126,11 @@ pub fn assemble_line(environment: &mut Assembler, line: &str, expanded_line: Str
             let resulting_tuples = match (info.expand)(environment, &arguments) {
                 Ok(tuples) => tuples,
                 Err(e) => {
-                    environment.errors.push(format!(
-                        "[*] On line {}{}",
-                        environment.line_prefix, environment.line_number
-                    ));
-                    environment.errors.push(e);
+                    // environment.string_error(format!(
+                    //     "[*] On line {}{}",
+                    //     environment.line_prefix, environment.line_number
+                    // ));
+                    // environment.string_error(e);
                     return;
                 }
             };
@@ -149,12 +148,15 @@ pub fn assemble_line(environment: &mut Assembler, line: &str, expanded_line: Str
             environment.line_number = 1;
 
             for (instr_info, args) in resulting_tuples {
-                let reverse_formatted_instruction: String = reverse_format_instruction(instr_info, &args);
+                let reverse_formatted_instruction: String =
+                    _reverse_format_instruction(instr_info, &args);
                 println!(
                     "{}{}: {}",
                     environment.line_prefix, environment.line_number, reverse_formatted_instruction
                 );
-                environment.handle_assemble_instruction(instr_info, &args);
+                // environment
+                //     .handle_assemble_instruction(instr_info, &args)
+                //     .unwrap();
                 environment.line_number += 1;
             }
 
@@ -164,8 +166,8 @@ pub fn assemble_line(environment: &mut Assembler, line: &str, expanded_line: Str
         }
     }
 
-    match found_directive {
-        Some(directive) => environment.handle_directive(&directive, &arguments),
-        None => {}
-    }
+    // match found_directive {
+    //     Some(directive) => environment.handle_directive(&directive, &arguments),
+    //     None => {}
+    // }
 }

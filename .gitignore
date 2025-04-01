@@ -32,5 +32,6 @@ test_files/bubblesort/*
 tests/samples/*
 !test/samples/*.asm
 
+*/rusty-tags.vi
 */launch.json
 .vscode

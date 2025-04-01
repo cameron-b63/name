@@ -1,33 +1,76 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::{
+    collections::HashMap,
+    fmt, fs, io,
+    path::{Path, PathBuf},
+};
 
-use name_core::constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR};
-use name_core::elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT};
-use name_core::instruction::information::InstructionInformation;
-use name_core::structs::{Section, Symbol, Visibility};
+use name_core::{
+    constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
+    elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
+    instruction::instruction_set::INSTRUCTION_TABLE,
+    parse::{
+        lexer::{self, Lexer},
+        parse::{self, Ast, AstKind, Parser},
+        span::Span,
+        token::TokenCursor,
+    },
+    structs::{LineInfo, Section, Symbol, Visibility},
+};
 
 use crate::assembler::assemble_instruction::assemble_instruction;
+
 use crate::assembler::assembly_helpers::{
     generate_pseudo_instruction_hashmap, pretty_print_instruction,
 };
 
-use crate::definitions::structs::{LineComponent, PseudoInstruction};
+use crate::definitions::structs::PseudoInstruction;
+
+/// Possible assemble error codes
+#[derive(Debug)]
+pub enum ErrorKind {
+    DuplicateSymbol(String),
+    Io(io::Error),
+    String(String),
+    BadArguments,
+    LabelOutsideOfSection,
+    UnknownInstruction(String),
+    InvalidShamt,
+    InvalidArgument,
+    ImmediateOverflow,
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ErrorKind::DuplicateSymbol(str) => write!(f, "duplicate symbol: {}", str),
+            ErrorKind::Io(err) => write!(f, "{:#?}", err),
+            ErrorKind::String(s) => write!(f, "{}", s),
+            ErrorKind::BadArguments => write!(f, "bad arguments"),
+            ErrorKind::LabelOutsideOfSection => write!(f, "label outside of section"),
+            ErrorKind::UnknownInstruction(s) => write!(f, "unkown instruction {}", s),
+            ErrorKind::InvalidShamt => write!(f, "invalid shift amount"),
+            ErrorKind::InvalidArgument => write!(f, "invalid argument"),
+            ErrorKind::ImmediateOverflow => write!(f, "immediate overflow"),
+        }
+    }
+}
+
+pub type AssembleResult<T> = Result<T, ErrorKind>;
+pub type AssembleError = Span<ErrorKind>;
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
 
 #[derive(Debug)]
 pub struct Assembler {
-    pub(crate) pseudo_instruction_table: HashMap<&'static str, &'static PseudoInstruction>,
+    pub(crate) _pseudo_instruction_table: HashMap<&'static str, &'static PseudoInstruction>,
     pub section_dot_text: Vec<u8>,
     pub section_dot_data: Vec<u8>,
     pub section_dot_rel: Vec<u8>,
     pub section_dot_line: Vec<u8>,
     pub symbol_table: Vec<Symbol>,
-    pub(crate) equivalences: HashMap<String, String>,
-    pub(crate) errors: Vec<String>,
+    pub(crate) equivalences: HashMap<String, u32>,
     pub(crate) current_section: Section,
     pub(crate) current_address: u32,
-    pub(crate) current_dir: PathBuf,
     pub(crate) text_address: u32,
     pub(crate) data_address: u32,
     pub(crate) line_number: usize,
@@ -37,19 +80,18 @@ pub struct Assembler {
 
 impl Assembler {
     // Initialize the assembler environment - default constructor.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Assembler {
-            pseudo_instruction_table: generate_pseudo_instruction_hashmap(),
+            _pseudo_instruction_table: generate_pseudo_instruction_hashmap(),
             section_dot_text: vec![],
             section_dot_data: vec![],
             section_dot_rel: vec![],
             section_dot_line: vec![],
             symbol_table: vec![],
             equivalences: HashMap::new(),
-            errors: vec![],
+            // errors: vec![],
             current_section: Section::Null,
             current_address: 0,
-            current_dir: PathBuf::new(),
             text_address: MIPS_TEXT_START_ADDR,
             data_address: MIPS_DATA_START_ADDR,
             line_number: 1,
@@ -59,7 +101,7 @@ impl Assembler {
     }
 
     /// Add a label to the symbol table with the corresponding value. If a double update was attempted, errors vector will be extended.
-    pub(crate) fn add_label(&mut self, ident: &String, value: u32) {
+    pub(crate) fn add_label(&mut self, ident: &str, value: u32) -> Result<(), ErrorKind> {
         // If symbol exists but with placeholder, we'll just want to update it.
         let existing_symbol = self
             .symbol_table
@@ -69,29 +111,19 @@ impl Assembler {
         match existing_symbol {
             Some(sym) => {
                 if sym.value != 0 {
-                    self.errors
-                        .push(format!("[*] On line {}:", self.line_number));
-                    self.errors.push(format!(
-                        " - Duplicate symbol definition for {}",
-                        ident.clone()
-                    ));
-                    return;
+                    return Err(ErrorKind::DuplicateSymbol(ident.to_string()));
                 } else {
                     sym.value = value;
-                    return;
+                    return Ok(());
                 }
             }
             None => {} // Fall through
         }
 
-        self.symbol_table.push(Symbol {
+        let sym = Symbol {
             symbol_type: match self.current_section {
                 Section::Null => {
-                    self.errors
-                        .push(format!("[*] On line {}:", self.line_number));
-                    self.errors
-                        .push(" - Cannot declare label outside a section.".to_string());
-                    0
+                    return Err(ErrorKind::LabelOutsideOfSection);
                 }
                 Section::Text => STT_FUNC,
                 Section::Data => STT_OBJECT,
@@ -101,68 +133,33 @@ impl Assembler {
             size: 4,
             visibility: Visibility::Local,
             section: self.current_section.clone(),
-        });
+        };
+
+        self.symbol_table.push(sym);
 
         println!("Inserted symbol {} at 0x{:x}", ident, self.current_address);
 
-        self.most_recent_label = ident.clone();
-    }
+        self.most_recent_label = ident.to_string();
 
-    // Expand a line. Try replacing all instances of equivalences.
-    pub fn expand_line(&self, line: &str) -> String {
-        let mut expanded_line = String::new();
-
-        // Replace equivalences
-        for token in line.split_whitespace() {
-            if let Some(expansion) = self.equivalences.get(token) {
-                expanded_line.push_str(expansion);
-            } else {
-                expanded_line.push_str(token);
-            }
-
-            expanded_line.push(' ');
-        }
-
-        expanded_line.trim_end().to_string()
+        Ok(())
     }
 
     /// Attempt to assemble a parsed line. If successful, add bytes to section .text - else, extend errors and keep it pushing.
-    pub fn handle_assemble_instruction(
-        &mut self,
-        info: &InstructionInformation,
-        args: &Vec<LineComponent>,
-    ) {
-        let assembled_instruction_result = assemble_instruction(info, &args);
+    pub fn assemble_instruction(&mut self, instr: &str, args: Vec<AstKind>) -> AssembleResult<()> {
+        let info = INSTRUCTION_TABLE
+            .get(instr)
+            .ok_or(ErrorKind::UnknownInstruction(instr.to_string()))?;
 
-        match assembled_instruction_result {
-            Ok(assembled_instruction) => match assembled_instruction {
-                packed => {
-                    self.section_dot_text
-                        .extend_from_slice(&packed.to_be_bytes());
-
-                    pretty_print_instruction(&self.current_address, &packed);
-                }
-            },
-            Err(e) => {
-                self.errors.push(format!(
-                    "[*] On line {}{}:",
-                    self.line_prefix, self.line_number
-                ));
-                self.errors.push(e);
-            }
-        }
-
-        // If a relocation entry needs to be added, work with it.
-        if info.relocation_type.is_some() {
-            // There can be only one.
+        if let Some(rel) = info.relocation_type {
             let symbol_ident = args
                 .iter()
                 .filter_map(|arg| match arg {
-                    LineComponent::Identifier(identifier) => Some(identifier.clone()),
+                    AstKind::Symbol(identifier) => Some(identifier.clone()),
                     _ => None,
                 })
                 .collect();
-            let symbol_offset: u32 = self.get_symbol_offset(symbol_ident);
+
+            let symbol_offset: u32 = self.get_symbol_offset(symbol_ident).unwrap();
 
             let new_bytes: Vec<u8> = RelocationEntry {
                 r_offset: self.current_address - MIPS_TEXT_START_ADDR,
@@ -170,22 +167,93 @@ impl Assembler {
                 r_type: info.relocation_type.unwrap().clone(),
             }
             .to_bytes();
+
             self.section_dot_rel.extend(new_bytes);
         }
 
+        let packed = assemble_instruction(info, args)?;
+        self.section_dot_text
+            .extend_from_slice(&packed.to_be_bytes());
+
+        // pretty_print_instruction(&self.current_address, &packed);
+
         self.current_address += MIPS_ADDRESS_ALIGNMENT;
+        Ok(())
     }
 
-    pub fn get_symbol_offset(&mut self, ident: String) -> u32 {
+    pub fn assemble_asciiz(&mut self, s: String) {
+        // turn string to asciiz
+        let mut to_push: Vec<u8> = s
+            // Escape sequences
+            .replace(r"\n", "\n")
+            .replace(r"\t", "\t")
+            .replace(r"\\", "\\")
+            .into_bytes();
+
+        // add a null terminator
+        to_push.push(b'\0');
+
+        //  increment current address
+        self.current_address += to_push.len() as u32;
+
+        // add string to data section
+        self.section_dot_data.extend(&to_push);
+
+        // use the string to set the size of the most recent symbol in table
+        // TODO: refactor
+        match self
+            .symbol_table
+            .iter_mut()
+            .find(|s| s.identifier == self.most_recent_label)
+        {
+            Some(res) => res.size = to_push.len() as u32,
+            None => {}
+        }
+    }
+
+    /// entry point for folding ast into the environment
+    pub fn assemble_ast(&mut self, mut ast: AstKind) -> Result<(), ErrorKind> {
+        match ast {
+            AstKind::Label(s) => self.add_label(&s, self.current_address)?,
+            AstKind::Asciiz(s) => self.assemble_asciiz(s),
+            AstKind::Section(section) => match section {
+                Section::Text => self.switch_to_text_section(),
+                Section::Data => self.switch_to_data_section(),
+                _ => panic!("other sections not implemented"),
+            },
+            AstKind::Instruction(instr, args) => {
+                self.assemble_instruction(&instr, args.into_iter().map(|ast| ast.kind).collect())?
+            }
+            AstKind::Immediate(_) => panic!(),
+            AstKind::Symbol(_) => panic!(),
+            AstKind::Register(_) => panic!(),
+        }
+        Ok(())
+    }
+
+    pub fn assemble(&mut self, asts: Vec<Ast>) -> Vec<Span<ErrorKind>> {
+        let mut errs = Vec::new();
+        for ast in asts {
+            if let Err(err) = self.assemble_ast(ast.kind) {
+                errs.push(Span {
+                    src_span: ast.src_span,
+                    kind: err,
+                });
+            }
+        }
+        errs
+    }
+
+    pub fn get_symbol_offset(&mut self, ident: String) -> Result<u32, ErrorKind> {
         match self
             .symbol_table
             .iter()
             .position(|sym| sym.identifier == ident)
         {
-            Some(idx) => return (idx as u32) + 1,
+            Some(idx) => return Ok((idx as u32) + 1),
             None => {
-                self.add_label(&ident, 0);
-                return self.symbol_table.len() as u32;
+                self.add_label(&ident, 0)?;
+                return Ok(self.symbol_table.len() as u32);
             }
         };
     }
