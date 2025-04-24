@@ -5,7 +5,7 @@ use name_core::{
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
     instruction::instruction_set::INSTRUCTION_TABLE,
     parse::{
-        parse::{Ast, AstKind},
+        parse::{Ast, AstKind, WordArgs},
         span::Span,
     },
     structs::{LineInfo, Section, Symbol, Visibility},
@@ -218,23 +218,38 @@ impl Assembler {
 
         // add a null terminator
         to_push.push(b'\0');
+        self.add_data_bytes(&to_push);
+    }
 
-        //  increment current address
-        self.current_address += to_push.len() as u32;
+    fn add_data_bytes(&mut self, bytes: &[u8]) {
+        self.current_address += bytes.len() as u32;
+        self.section_dot_data.extend(bytes);
 
-        // add string to data section
-        self.section_dot_data.extend(&to_push);
-
-        // use the string to set the size of the most recent symbol in table
-        // TODO: refactor
         match self
             .symbol_table
             .iter_mut()
             .find(|s| s.identifier == self.most_recent_label)
         {
-            Some(res) => res.size = to_push.len() as u32,
+            Some(res) => res.size = bytes.len() as u32,
             None => {}
         }
+    }
+
+    pub fn assemble_word(&mut self, word_args: WordArgs) {
+        let mut bytes = vec![];
+        match word_args {
+            WordArgs::List(words) => {
+                for word in words {
+                    bytes.extend(word.to_be_bytes());
+                }
+            }
+            WordArgs::Range(word, repeat) => {
+                for _ in 0..repeat {
+                    bytes.extend(word.to_be_bytes());
+                }
+            }
+        }
+        self.add_data_bytes(&bytes);
     }
 
     /// entry point for folding ast into the environment
@@ -259,6 +274,7 @@ impl Assembler {
                     self.assemble_instruction(&instr, ast_kinds)?
                 }
             }
+            AstKind::Word(word_args) => self.assemble_word(word_args),
             AstKind::Immediate(_) => panic!(),
             AstKind::Symbol(_) => panic!(),
             AstKind::Register(_) => panic!(),

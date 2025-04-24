@@ -5,6 +5,7 @@ use name_core::{
     elf_def::{RelocationEntry, RelocationEntryType},
     instruction::{information::InstructionInformation, instruction_set::INSTRUCTION_TABLE},
     parse::parse::AstKind,
+    structs::Register,
 };
 
 /*
@@ -145,10 +146,7 @@ pub(crate) fn expand_la(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<Ast
     ])
 }
 
-pub(crate) fn expand_move(
-    _environment: &mut Assembler,
-    args: &Vec<LineComponent>,
-) -> Result<Vec<(&'static InstructionInformation, Vec<LineComponent>)>, String> {
+pub(crate) fn expand_move(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     if args.len() < 2 {
         return Err(format!(" - `mv` expected 2 arguments, got {}", args.len()));
     }
@@ -156,19 +154,10 @@ pub(crate) fn expand_move(
     let rd = args[0].clone();
     let rs = args[1].clone();
 
-    let zero: LineComponent = LineComponent::Register(String::from("$0"));
-
-    let add_info = match INSTRUCTION_TABLE.get("add") {
-        Some(info) => info,
-        None => return Err(format!(" - Failed to expand `move` pseudoinstruction. Its expansion was likely defined incorrectly (go use git blame on https://github.com/cameron-b63/name to find out who's at fault).")),
-    };
+    let zero = AstKind::Register(Register::Zero);
 
     Ok(vec![
         // add  $rd, $rs, $0
-        (add_info, vec![rd, rs, zero]),
+        ("add", vec![rd, rs, zero]),
     ])
 }
-
-// pub(crate) fn expand_bnez(environment: &mut Assembler, args: &Vec<LineComponent>) -> Result<Vec<(&'static InstructionInformation, Vec<LineComponent>)>, String> {
-
-// }

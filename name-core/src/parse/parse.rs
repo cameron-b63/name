@@ -10,6 +10,12 @@ use std::fmt;
 use std::num::ParseIntError;
 
 #[derive(Debug, Clone)]
+pub enum WordArgs {
+    List(Vec<u32>),
+    Range(u32, u32),
+}
+
+#[derive(Debug, Clone)]
 pub enum AstKind {
     // a branch label
     Label(String),
@@ -22,6 +28,7 @@ pub enum AstKind {
     Asciiz(String),
     Section(Section),
     Globl(String),
+    Word(WordArgs),
 
     // constructs
     Instruction(String, Vec<Ast>),
@@ -274,7 +281,19 @@ impl<'a> Parser<'a> {
             }
             ".align" => todo!(),
             ".macro" => todo!(),
-            ".word" => todo!(),
+            ".word" => {
+                let first = self.parse_literal()?;
+                if self.cursor.next_if(TokenKind::Colon).is_some() {
+                    let last = self.parse_literal()?;
+                    AstKind::Word(WordArgs::Range(first, last))
+                } else {
+                    let mut words = vec![first];
+                    while self.cursor.next_if(TokenKind::Comma).is_some() {
+                        words.push(self.parse_literal()?);
+                    }
+                    AstKind::Word(WordArgs::List(words))
+                }
+            }
             _ => {
                 return Err(Span {
                     kind: ErrorKind::InvalidDirective,

@@ -70,6 +70,7 @@ impl RawInstruction {
     }
 }
 
+#[derive(Debug)]
 pub struct IArgs {
     pub opcode: u32,
     pub rs: u32,
