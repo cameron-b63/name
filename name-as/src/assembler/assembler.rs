@@ -1,18 +1,12 @@
-use std::{
-    collections::HashMap,
-    fmt, fs, io,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, fmt, io};
 
 use name_core::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
     instruction::instruction_set::INSTRUCTION_TABLE,
     parse::{
-        lexer::{self, Lexer},
-        parse::{self, Ast, AstKind, Parser},
+        parse::{Ast, AstKind},
         span::Span,
-        token::TokenCursor,
     },
     structs::{LineInfo, Section, Symbol, Visibility},
 };
@@ -62,7 +56,7 @@ pub type AssembleError = Span<ErrorKind>;
 
 #[derive(Debug)]
 pub struct Assembler {
-    pub(crate) _pseudo_instruction_table: HashMap<&'static str, &'static PseudoInstruction>,
+    pub(crate) pseudo_instruction_table: HashMap<&'static str, &'static PseudoInstruction>,
     pub section_dot_text: Vec<u8>,
     pub section_dot_data: Vec<u8>,
     pub section_dot_rel: Vec<u8>,
@@ -82,7 +76,7 @@ impl Assembler {
     // Initialize the assembler environment - default constructor.
     pub fn new() -> Self {
         Assembler {
-            _pseudo_instruction_table: generate_pseudo_instruction_hashmap(),
+            pseudo_instruction_table: generate_pseudo_instruction_hashmap(),
             section_dot_text: vec![],
             section_dot_data: vec![],
             section_dot_rel: vec![],
@@ -171,13 +165,43 @@ impl Assembler {
             self.section_dot_rel.extend(new_bytes);
         }
 
-        let packed = assemble_instruction(info, args)?;
+        let packed = assemble_instruction(
+            info,
+            args.into_iter()
+                .map(|arg| {
+                    if let AstKind::Symbol(_) = arg {
+                        AstKind::Immediate(0)
+                    } else {
+                        arg
+                    }
+                })
+                .collect(),
+        )?;
         self.section_dot_text
             .extend_from_slice(&packed.to_be_bytes());
 
         // pretty_print_instruction(&self.current_address, &packed);
 
         self.current_address += MIPS_ADDRESS_ALIGNMENT;
+        Ok(())
+    }
+
+    pub fn assemble_pseduo_instruction(
+        &mut self,
+        pinstr: &str,
+        args: Vec<AstKind>,
+    ) -> AssembleResult<()> {
+        let info = self
+            .pseudo_instruction_table
+            .get(pinstr)
+            .ok_or(ErrorKind::UnknownInstruction(pinstr.to_string()))?;
+
+        let instrs = (info.expand)(args).map_err(|e| ErrorKind::String(e))?;
+
+        for instr in instrs {
+            self.assemble_instruction(instr.0, instr.1)?;
+        }
+
         Ok(())
     }
 
@@ -222,7 +246,12 @@ impl Assembler {
                 _ => panic!("other sections not implemented"),
             },
             AstKind::Instruction(instr, args) => {
-                self.assemble_instruction(&instr, args.into_iter().map(|ast| ast.kind).collect())?
+                let ast_kinds = args.into_iter().map(|ast| ast.kind).collect();
+                if self.pseudo_instruction_table.contains_key(instr.as_str()) {
+                    self.assemble_pseduo_instruction(&instr, ast_kinds)?;
+                } else {
+                    self.assemble_instruction(&instr, ast_kinds)?
+                }
             }
             AstKind::Immediate(_) => panic!(),
             AstKind::Symbol(_) => panic!(),

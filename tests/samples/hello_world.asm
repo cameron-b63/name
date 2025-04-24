@@ -1,5 +1,5 @@
 # Hello, world!
-# .include    "SysCalls.asm"
+    .include    "SysCalls.asm"
     .data
     .eqv sym 0
     .eqv osym sym + 4

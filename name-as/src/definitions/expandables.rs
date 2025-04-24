@@ -4,6 +4,7 @@ use name_core::{
     constants::MIPS_TEXT_START_ADDR,
     elf_def::{RelocationEntry, RelocationEntryType},
     instruction::{information::InstructionInformation, instruction_set::INSTRUCTION_TABLE},
+    parse::parse::AstKind,
 };
 
 /*
@@ -15,11 +16,7 @@ It does not need to check its own argument setup. It can just piggy-back off exi
 Any errors will clearly have code ID10T on the part of the user attempting to use the pseudoinstruction.
 */
 
-pub(crate) type ExpansionFn =
-    fn(
-        &mut Assembler,
-        &Vec<LineComponent>,
-    ) -> Result<Vec<(&'static InstructionInformation, Vec<LineComponent>)>, String>;
+pub(crate) type ExpansionFn = fn(Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String>;
 
 // pub(crate) fn expand_bgt(environment: &mut Assembler, args: &Vec<LineComponent>) -> Result<Vec<(&'static InstructionInformation, Vec<LineComponent>)>, String> {
 //     if args.len() < 3 {
@@ -116,34 +113,22 @@ pub(crate) fn expand_bnez(
     ])
 }
 
-pub(crate) fn expand_li(
-    _environment: &mut Assembler,
-    args: &Vec<LineComponent>,
-) -> Result<Vec<(&'static InstructionInformation, Vec<LineComponent>)>, String> {
+pub(crate) fn expand_li(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     if args.len() < 2 {
         return Err(format!(" - `li` expected 2 arguments, got {}", args.len()));
     }
 
-    let rd: LineComponent = args[0].clone();
-    let imm: LineComponent = args[1].clone();
-
-    let zero: LineComponent = LineComponent::Register(String::from("$0"));
-
-    let ori_info: &'static InstructionInformation = match INSTRUCTION_TABLE.get("ori") {
-        Some(info) => info,
-        None => return Err(format!(" - Failed to expand `li` pseudoinstruction. Its expansion was likely defined incorrectly (go use git blame on https://github.com/cameron-b63/name to find out who's at fault)."))
-    };
+    let rd = args[0].clone();
+    let imm = args[1].clone();
+    let zero: AstKind = AstKind::Register(name_core::structs::Register::Zero);
 
     Ok(vec![
         // ori  $rd, $zero, imm
-        (ori_info, vec![rd, zero, imm]),
+        ("ori", vec![rd, zero, imm]),
     ])
 }
 
-pub(crate) fn expand_la(
-    environment: &mut Assembler,
-    args: &Vec<LineComponent>,
-) -> Result<Vec<(&'static InstructionInformation, Vec<LineComponent>)>, String> {
+pub(crate) fn expand_la(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     if args.len() < 2 {
         return Err(format!(" - `la` expected 2 arguments, got {}", args.len()));
     }
@@ -151,46 +136,12 @@ pub(crate) fn expand_la(
     let rd = args[0].clone();
     let label = args[1].clone();
 
-    let symbol_ident: String = label.to_string();
-
-    let symbol_offset: u32 = environment.get_symbol_offset(symbol_ident).unwrap();
-
-    let lui_info =  match INSTRUCTION_TABLE.get("lui") {
-            Some(info) => info,
-            None => return Err(format!(" - Failed to expand `la` pseudoinstruction. Its expansion was likely defined incorrectly (go use git blame on https://github.com/cameron-b63/name to find out who's at fault).")),
-    };
-    let ori_info = match INSTRUCTION_TABLE.get("ori") {
-            Some(info) => info,
-            None => return Err(format!(" - Failed to expand `la` pseudoinstruction. Its expansion was likely defined incorrectly (go use git blame on https://github.com/cameron-b63/name to find out who's at fault).")),
-    };
-
-    // Create appropriate relocation entries:
-    let entries: Vec<RelocationEntry> = vec![
-        RelocationEntry {
-            r_offset: environment.current_address - MIPS_TEXT_START_ADDR,
-            r_sym: symbol_offset as u32,
-            r_type: RelocationEntryType::Hi16,
-        },
-        RelocationEntry {
-            r_offset: environment.current_address + 4 - MIPS_TEXT_START_ADDR,
-            r_sym: symbol_offset as u32,
-            r_type: RelocationEntryType::Lo16,
-        },
-    ];
-
-    let new_bytes: Vec<u8> = entries.iter().flat_map(|entry| entry.to_bytes()).collect();
-
-    environment.section_dot_rel.extend(new_bytes);
-
-    // Placeholder zeros since this will be filled in during linking.
-    let null_component = LineComponent::Immediate(0i32);
-
     // Prepare for assembly.
     Ok(vec![
         // lui  $rd, 0
-        (lui_info, vec![rd.clone(), null_component.clone()]),
+        ("lui", vec![rd.clone(), label.clone()]),
         // ori  $rd, $rd, 0
-        (ori_info, vec![rd.clone(), rd.clone(), null_component]),
+        ("ori", vec![rd.clone(), rd.clone(), label]),
     ])
 }
 
