@@ -3,11 +3,12 @@
     .data
     .eqv sym 0
     .eqv osym sym + 4
-
 OurBelovedString:
     .asciiz     "Hello, World!\n"
 
-    .text
+.text
+.globl
+main:
     la  $a0, OurBelovedString
     li  $v0, SysPrintString
     syscall

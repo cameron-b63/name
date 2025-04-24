@@ -21,6 +21,7 @@ pub enum AstKind {
     // Directives
     Asciiz(String),
     Section(Section),
+    Globl(String),
 
     // constructs
     Instruction(String, Vec<Ast>),
@@ -264,6 +265,13 @@ impl<'a> Parser<'a> {
             ".text" => AstKind::Section(Section::Text),
             ".data" => AstKind::Section(Section::Data),
             ".asciiz" => AstKind::Asciiz(self.parse_string()?),
+            ".globl" => {
+                self.try_advance_if(TokenKind::Newline)?;
+                let AstKind::Label(l) = self.parse_label()? else {
+                    unreachable!()
+                };
+                AstKind::Globl(l)
+            }
             ".align" => todo!(),
             ".macro" => todo!(),
             ".word" => todo!(),

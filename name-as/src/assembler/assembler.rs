@@ -95,7 +95,12 @@ impl Assembler {
     }
 
     /// Add a label to the symbol table with the corresponding value. If a double update was attempted, errors vector will be extended.
-    pub(crate) fn add_label(&mut self, ident: &str, value: u32) -> Result<(), ErrorKind> {
+    pub(crate) fn add_label(
+        &mut self,
+        ident: &str,
+        value: u32,
+        visibility: Visibility,
+    ) -> Result<(), ErrorKind> {
         // If symbol exists but with placeholder, we'll just want to update it.
         let existing_symbol = self
             .symbol_table
@@ -123,9 +128,9 @@ impl Assembler {
                 Section::Data => STT_OBJECT,
             },
             identifier: ident.to_owned(),
-            value: value,
+            value,
             size: 4,
-            visibility: Visibility::Local,
+            visibility,
             section: self.current_section.clone(),
         };
 
@@ -144,25 +149,22 @@ impl Assembler {
             .get(instr)
             .ok_or(ErrorKind::UnknownInstruction(instr.to_string()))?;
 
-        if let Some(rel) = info.relocation_type {
-            let symbol_ident = args
+        if let Some(_rel) = info.relocation_type {
+            if let Some(AstKind::Symbol(symbol_ident)) = args
                 .iter()
-                .filter_map(|arg| match arg {
-                    AstKind::Symbol(identifier) => Some(identifier.clone()),
-                    _ => None,
-                })
-                .collect();
+                .find(|ast_kind| matches!(ast_kind, AstKind::Symbol(_)))
+            {
+                let symbol_offset: u32 = self.get_symbol_offset(symbol_ident.to_string()).unwrap();
 
-            let symbol_offset: u32 = self.get_symbol_offset(symbol_ident).unwrap();
+                let new_bytes: Vec<u8> = RelocationEntry {
+                    r_offset: self.current_address - MIPS_TEXT_START_ADDR,
+                    r_sym: symbol_offset,
+                    r_type: info.relocation_type.unwrap().clone(),
+                }
+                .to_bytes();
 
-            let new_bytes: Vec<u8> = RelocationEntry {
-                r_offset: self.current_address - MIPS_TEXT_START_ADDR,
-                r_sym: symbol_offset,
-                r_type: info.relocation_type.unwrap().clone(),
+                self.section_dot_rel.extend(new_bytes);
             }
-            .to_bytes();
-
-            self.section_dot_rel.extend(new_bytes);
         }
 
         let packed = assemble_instruction(
@@ -238,7 +240,11 @@ impl Assembler {
     /// entry point for folding ast into the environment
     pub fn assemble_ast(&mut self, mut ast: AstKind) -> Result<(), ErrorKind> {
         match ast {
-            AstKind::Label(s) => self.add_label(&s, self.current_address)?,
+            AstKind::Label(s) => self.add_label(&s, self.current_address, Visibility::Local)?,
+            AstKind::Globl(s) => {
+                dbg!(println!("0x{:x}", self.current_address));
+                self.add_label(&s, self.current_address, Visibility::Global)?
+            }
             AstKind::Asciiz(s) => self.assemble_asciiz(s),
             AstKind::Section(section) => match section {
                 Section::Text => self.switch_to_text_section(),
@@ -281,7 +287,7 @@ impl Assembler {
         {
             Some(idx) => return Ok((idx as u32) + 1),
             None => {
-                self.add_label(&ident, 0)?;
+                self.add_label(&ident, 0, Visibility::Local)?;
                 return Ok(self.symbol_table.len() as u32);
             }
         };

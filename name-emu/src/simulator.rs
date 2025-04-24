@@ -47,7 +47,7 @@ pub fn simulate(elf: Elf, debug: bool) -> Result<(), String> {
                     &lineinfo,
                     &mut DebuggerState::new(),
                 );
-                if program_state.cp0.is_debug_mode() {}  // ooops you have to put the cd in the computer
+                if program_state.cp0.is_debug_mode() {} // ooops you have to put the cd in the computer
             }
         }
     }
