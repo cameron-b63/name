@@ -2,7 +2,7 @@
 
 .data
 
-OurBelovedString: .asciiz     "hello\nworlde\ti am swagalicious\\\'\""
+OurBelovedString: .asciiz     "hello\nworlde\ti am swagalicious\\\'\"
 
 .text
     li  $a0, '\n'

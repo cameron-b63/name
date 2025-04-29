@@ -1,11 +1,17 @@
-use name_core::constants::REGISTERS;
+use name_core::{
+    constants::REGISTERS,
+    instruction::{
+        information::{ArgumentType, InstructionInformation},
+        instruction_set::INSTRUCTION_TABLE,
+    },
+    parse::parse::{Ast, AstKind},
+    structs::Symbol,
+};
 
 use crate::definitions::{
-    constants::INSTRUCTION_TABLE,
     pseudo_instructions::PSEUDO_INSTRUCTION_SET,
     structs::{LineComponent, PseudoInstruction},
 };
-use name_core::instruction::information::{ArgumentType, InstructionInformation};
 
 use std::collections::HashMap;
 
@@ -14,22 +20,19 @@ use super::assembler::Assembler;
 // Helper function for assemble_instruction for use when multiple argument configurations are available.
 // Checks argument configuration against what was passed.
 // Returns a boolean value representing whether the expected fields matched or not.
-pub fn arg_configuration_is_ok(
-    passed_args: &Vec<LineComponent>,
-    expected_args: &[ArgumentType],
-) -> bool {
+pub fn arg_configuration_is_ok(passed_args: &[AstKind], expected_args: &[ArgumentType]) -> bool {
     if passed_args.len() != expected_args.len() {
         return false;
     }
 
     for (passed, expected) in passed_args.iter().zip(expected_args.iter()) {
         match (passed, expected) {
-            (LineComponent::Register(_), ArgumentType::Rd)
-            | (LineComponent::Register(_), ArgumentType::Rs)
-            | (LineComponent::Register(_), ArgumentType::Rt)
-            | (LineComponent::Immediate(_), ArgumentType::Immediate)
-            | (LineComponent::Identifier(_), ArgumentType::Identifier)
-            | (LineComponent::Identifier(_), ArgumentType::BranchLabel) => {}
+            (AstKind::Register(_), ArgumentType::Rd)
+            | (AstKind::Register(_), ArgumentType::Rs)
+            | (AstKind::Register(_), ArgumentType::Rt)
+            | (AstKind::Immediate(_), ArgumentType::Immediate)
+            | (AstKind::Symbol(_), ArgumentType::Identifier)
+            | (AstKind::Symbol(_), ArgumentType::BranchLabel) => {}
             _ => return false,
         }
     }
@@ -37,8 +40,19 @@ pub fn arg_configuration_is_ok(
     return true;
 }
 
+// Oft-used map operation nobody would want to repeat. Turns a symbol table entry into its address.
+pub fn _translate_identifier_to_address(
+    identifier: &String,
+    symbol_table: &Vec<Symbol>,
+) -> Option<u32> {
+    symbol_table
+        .iter()
+        .find(|symbol| symbol.identifier == identifier.clone())
+        .map(|symbol| symbol.value)
+}
+
 // Parse a register string like "$t0" or "$3" to u32 for packing.
-pub fn parse_register_to_u32(register: &String) -> Result<u32, String> {
+pub fn _parse_register_to_u32(register: &String) -> Result<u32, String> {
     // Check the early exit
     if !register.starts_with("$") {
         return Err("Register parse failed.".to_string());
@@ -69,7 +83,7 @@ pub fn generate_pseudo_instruction_hashmap() -> HashMap<&'static str, &'static P
     hashmap
 }
 
-pub fn reverse_format_instruction(
+pub fn _reverse_format_instruction(
     info: &InstructionInformation,
     args: &Vec<LineComponent>,
 ) -> String {
@@ -117,7 +131,7 @@ pub fn pretty_print_instruction(addr: &u32, packed: &u32) {
     println!();
 }
 
-pub fn search_mnemonic(
+pub fn _search_mnemonic(
     mnemonic: String,
     environment: &mut Assembler,
 ) -> (
@@ -132,7 +146,7 @@ pub fn search_mnemonic(
     let mut pseudo_instruction_information: Option<&'static PseudoInstruction> = None;
 
     let retrieved_pseudo_instruction_option: Option<&'static PseudoInstruction> = environment
-        .pseudo_instruction_table
+        ._pseudo_instruction_table
         .get(mnemonic.as_str())
         .copied();
     match retrieved_pseudo_instruction_option {
@@ -158,11 +172,11 @@ pub fn search_mnemonic(
             instruction_information = Some(retrieved_instruction_information);
         }
         None => {
-            environment.errors.push(format!(
-                "[*] On line {}{}:",
-                environment.line_prefix, environment.line_number
-            ));
-            environment.errors.push(format!(" - Instruction \"{}\" not recognized. If this is a valid MIPS instruction, consider opening a pull request at https://github.com/cameron-b63/name.", mnemonic));
+            // environment.string_error(format!(
+            //     "[*] On line {}{}:",
+            //     environment.line_prefix, environment.line_number
+            // ));
+            // environment.string_error(format!(" - Instruction \"{}\" not recognized. If this is a valid MIPS instruction, consider opening a pull request at https://github.com/cameron-b63/name.", mnemonic));
             instruction_information = None;
         }
     }

@@ -66,7 +66,7 @@ pub fn create_new_elf(sections: Vec<Vec<u8>>, elf_type: ElfType, create_shstrtab
     // The section header string table entry requires some calculations.
     // Here we get the shstrtab as bytes from the constant defined at the top of the file.
     // We also get the size of the shstrtab.
-    
+
     let mut shstrtab_section: Vec<u8> = vec![];
     let shstrtab_size: u32;
 
@@ -327,8 +327,8 @@ pub fn create_new_elf(sections: Vec<Vec<u8>>, elf_type: ElfType, create_shstrtab
 
     // Craft final sections
     let mut final_sections: Vec<Vec<u8>> = sections.clone();
-    
-    final_sections.push(shstrtab_section);  // Is empty if create_shstrtab is false
+
+    final_sections.push(shstrtab_section); // Is empty if create_shstrtab is false
 
     // Final step is to create the final Elf struct
     return Elf {
@@ -548,7 +548,6 @@ fn parse_sh_table_bytes(section_header_table_bytes: &[u8]) -> Vec<Elf32SectionHe
 }
 
 pub fn parse_rel_info(rel_section: &Vec<u8>) -> Vec<RelocationEntry> {
-    
     // Handle edge case where user wrote a file with no relocation
     if rel_section.len() < 4 {
         return vec![];

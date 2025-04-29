@@ -1,7 +1,7 @@
 # Compute the first twelve Fibonacci numbers and put in array, then print.
 # This is an example from a Web site, commented and modified by John Cole.
 #
-      	.include "SysCalls.asm"
+      .include "SysCalls.asm"
      	.data
 fibs: 	.word   0 : 12        # "array" of 12 words to contain fib values
 size: 	.word  12             # size of "array"

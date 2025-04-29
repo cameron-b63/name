@@ -1,8 +1,10 @@
 use crate::assembler::assembler::Assembler;
-use crate::definitions::{constants::INSTRUCTION_TABLE, structs::LineComponent};
-use name_core::constants::MIPS_TEXT_START_ADDR;
-use name_core::elf_def::{RelocationEntry, RelocationEntryType};
-use name_core::instruction::information::InstructionInformation;
+use crate::definitions::structs::LineComponent;
+use name_core::{
+    constants::MIPS_TEXT_START_ADDR,
+    elf_def::{RelocationEntry, RelocationEntryType},
+    instruction::{information::InstructionInformation, instruction_set::INSTRUCTION_TABLE},
+};
 
 /*
 Each pseudo instruction must implement its own `expand` fn. This function expands the pseudoinstruction's content into its respective instructions.
@@ -151,7 +153,7 @@ pub(crate) fn expand_la(
 
     let symbol_ident: String = label.to_string();
 
-    let symbol_offset: u32 = environment.get_symbol_offset(symbol_ident);
+    let symbol_offset: u32 = environment.get_symbol_offset(symbol_ident).unwrap();
 
     let lui_info =  match INSTRUCTION_TABLE.get("lui") {
             Some(info) => info,

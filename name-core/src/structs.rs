@@ -2,7 +2,8 @@
 /// It's gonna be quite a few definitions, so buckle up.
 use std::{
     fmt,
-    io::{/*self,*/ stdin, stdout, Stdin, Stdout, Write},
+    io::{stdin, stdout, Stdin, Stdout, Write},
+    str::FromStr,
 };
 
 use crate::{
@@ -16,7 +17,7 @@ use crate::{
 
 /// Symbol is used for assembly -> ELF, ET_REL -> ET_EXEC, and ELF -> ProgramState construction.
 /// Its definition is provided in the ELF TIS: https://refspecs.linuxfoundation.org/elf/elf.pdf
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Symbol {
     pub symbol_type: u8,
     pub identifier: String,
@@ -307,8 +308,54 @@ pub enum Register {
     Ra,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseRegisterError(pub String);
+
+impl FromStr for Register {
+    type Err = ParseRegisterError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let reg = match s {
+            "$zero" => Register::Zero,
+            "$at" => Register::At,
+            "$v0" => Register::V0,
+            "$v1" => Register::V1,
+            "$a0" => Register::A0,
+            "$a1" => Register::A1,
+            "$a2" => Register::A2,
+            "$a3" => Register::A3,
+            "$t0" => Register::T0,
+            "$t1" => Register::T1,
+            "$t2" => Register::T2,
+            "$t3" => Register::T3,
+            "$t4" => Register::T4,
+            "$t5" => Register::T5,
+            "$t6" => Register::T6,
+            "$t7" => Register::T7,
+            "$s0" => Register::S0,
+            "$s1" => Register::S1,
+            "$s2" => Register::S2,
+            "$s3" => Register::S3,
+            "$s4" => Register::S4,
+            "$s5" => Register::S5,
+            "$s6" => Register::S6,
+            "$s7" => Register::S7,
+            "$t8" => Register::T8,
+            "$t9" => Register::T9,
+            "$k0" => Register::K0,
+            "$k1" => Register::K1,
+            "$gp" => Register::Gp,
+            "$sp" => Register::Sp,
+            "$fp" => Register::Fp,
+            "$ra" => Register::Ra,
+            _ => return Err(ParseRegisterError(s.to_string())),
+        };
+        Ok(reg)
+    }
+}
+
 /// Visibility - for use in Symbol. Enumerated version of needed variants.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub enum Visibility {
     #[default]
     Local,
@@ -316,12 +363,11 @@ pub enum Visibility {
     Weak,
 }
 
-/// Section - enumerated for checks in assembler and referenced in Symbol construction
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Section {
-    Null,
     Text,
     Data,
+    Null,
 }
 
 /// The definition for section .line

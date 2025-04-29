@@ -1,71 +1,93 @@
+use name_core::parse::preprocessor::Preprocessor;
+use name_core::parse::session::Session;
+use std::error::Error;
+
+use crate::assembler::assembler::{AssembleError, Assembler, ErrorKind};
+use name_core::{
+    constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
+    elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
+    instruction::instruction_set::INSTRUCTION_TABLE,
+    parse::{
+        lexer::{self, Lexer},
+        parse::{self, AstKind, Parser},
+        span::Span,
+        token::{TokenCursor, TokenKind},
+    },
+    structs::{LineInfo, Section, Symbol, Visibility},
+};
+
 use std::path::PathBuf;
 
-use name_core::structs::{LineInfo, Section};
+pub fn assemble_file<'a>(
+    session: &'a mut Session<'a>,
+    file_path: PathBuf,
+) -> Result<Assembler, ()> {
+    let mut should_assemble = true;
 
-use crate::assembler::assemble_line::assemble_line;
-use crate::assembler::assembler::Assembler;
+    let cont = session.add_file(&file_path);
 
-/*
-This function is essentially a wrapper over assemble_line.rs, allowing for some better handling in most steps
+    let mut lexer = Lexer::new(&cont);
+    let (errs, toks) = lexer.lex();
 
-The idea is, once the assembler is done running, if any errors were encountered, their content is pushed to the errors vector,
-and the errors vector is returned as the Err variant of the Result for the caller to handle. This way, all forseeable errors are printed in one pass.
-There should be next to no fatal errors. I will be vetting this code later to ensure there are no execution paths which crash.
-
-The Ok variant contains the Assembler environment, which contains the needed information for ELF object file output.
-*/
-
-pub fn assemble(
-    file_contents: String,
-    current_dir: PathBuf,
-    line_prefix: Option<String>,
-) -> Result<Assembler, Vec<String>> {
-    let mut environment: Assembler = Assembler::new();
-
-    environment.current_dir = current_dir;
-
-    match line_prefix {
-        Some(s) => environment.line_prefix = s,
-        None => {}
+    if !errs.is_empty() {
+        for err in errs {
+            println!("{}", err);
+        }
+        return Err(());
     }
 
-    for line in file_contents.split('\n') {
-        let start_address = match environment.current_section {
-            Section::Text => environment.current_address,
-            Section::Data => environment.text_address,
+    let mut preprocessor = Preprocessor::new(session);
+    let ppd = preprocessor.preprocess(toks);
+
+    let mut parser = Parser::new(ppd, cont);
+
+    let (perrs, asts) = parser.parse();
+
+    if !perrs.is_empty() {
+        for perr in perrs {
+            println!("{}", perr);
+        }
+        return Err(());
+    }
+
+    let mut assembler = Assembler::new();
+    let aerrs = assembler.assemble(asts);
+
+    if !aerrs.is_empty() {
+        for aerr in aerrs {
+            println!("{}", aerr);
+        }
+        return Err(());
+    }
+
+    // process line info
+    for line in cont.split('\n') {
+        let start_address = match assembler.current_section {
+            Section::Text => assembler.current_address,
+            Section::Data => assembler.text_address,
             Section::Null => 0,
         };
 
-        // Pre-process line (expand pseudoinstructions, macros, and .eqv values here)
-        let expanded_line = environment.expand_line(line);
-
-        // Assemble the line (changes environment)
-        assemble_line(&mut environment, line, expanded_line);
-
         // Extend section .line to include the new line
-        environment.section_dot_line.extend(
+        assembler.section_dot_line.extend(
             LineInfo {
                 content: line.to_string(),
-                line_number: environment.line_number as u32,
-                start_address: match environment.current_section {
+                line_number: assembler.line_number as u32,
+                start_address: match assembler.current_section {
                     Section::Text => start_address,
                     _ => 0,
                 },
-                end_address: match environment.current_section {
-                    Section::Text => environment.current_address,
-                    Section::Data => environment.text_address,
+                end_address: match assembler.current_section {
+                    Section::Text => assembler.current_address,
+                    Section::Data => assembler.text_address,
                     _ => 0,
                 },
             }
             .to_bytes(),
         );
 
-        environment.line_number += 1;
+        assembler.line_number += 1;
     }
 
-    if environment.errors.len() == 0 {
-        return Ok(environment);
-    } else {
-        return Err(environment.errors);
-    }
+    Ok(assembler)
 }

@@ -53,12 +53,16 @@ The order in which sections appear in linked, multi-module programs is not yet s
 
 The NAME MIPS assembler uses a few key steps:
 
-#### Parsing
-Parsing is implmented in [parser.rs](name-as/src/parser.rs). It uses [logos](https://github.com/maciejhirsz/logos) to create a lexer based on several regex patterns, which can be found in [tokens.rs](name-as/src/tokens.rs). It performs one pass through the file, breaking each line into its individual components - see **LineComponent** in [structs.rs](name-const/src/structs.rs) for the data structure and associated enum.
+#### Lexing
+Source code is first run through the [lexer](name-core/src/parse/lexer.rs) for tokenizing. The lexer maps the source code to a `Vec<Token>`, validating that everything in the source file can be interpreted by the parser. The lexer is position-based and performs greedy matching based on lookaheads, with each lexeme responsible for describing its own structure in [lexer.rs](name-core/src/parse/lexer.rs). 
 
-These extracted patterns are handled by the assembler.
+This "description" is a function which returns a `Token` of a specific `TokenKind`. The `Token` also includes a `SrcSpan`, which describes the byte position (start-end) in the source file of the token. 
+
+#### Parsing
+The [parser](name-core/src/parse/parse.rs) uses the `Vec<Token>` produced by the lexer to create an AST. The AST begins as a `Vec<Ast>` with one element: an `Ast::Root`. The AST, once created by the parser, is folded into the assembly environment recursively from that `Ast::Root`. During this folding process, actual assembly occurs.
 
 #### Assembling
+**CHANGES ARE NOT LIVE YET. THIS INFORMATION MAY NOT BE ENTIRELY ACCURATE.**
 When the parsed line components contain an instruction mnemonic, the assembler first attempts to retrieve the associated [InstructionInformation](name-core/src/instruction/information.rs) from [core](name-core/src/instruction/instruction_set.rs). If it cannot be found, an error is returned. Once the InstructionInformation is retrieved, the assembler checks the associated operands for the correct argument configuration. If alternate configurations exist, they are also checked for. If no configurations match, an error is returned. Then, the assembler calls the appropriate helper function to actually pack the instruction. These helpers are defined in [assembly_utils.rs](name-as/src/assembler/assembly_utils.rs).
 
 If an instruction which expects a branch label returns `Ok(None)`, this means the branch label was given but not yet defined, otherwise known as a forward reference. Take the following assembly code:
