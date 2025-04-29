@@ -1,0 +1,14 @@
+[package]
+name = "tests"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license-file.workspace = true
+publish = false
+
+[dev-dependencies]
+name_core = { version = "0.1.0", path = "../name-core" }
+
+[[test]]
+name = "integration"
+path = "integration.rs"
