@@ -13,7 +13,6 @@ fn main() {
 
     // Setup async I/O (send normal output through user terminal, debug info to DAP)
 
-
     loop {
         // handle a DAP message
         match dap_server.read_message() {
@@ -27,14 +26,14 @@ fn main() {
                     // If Err, properly format err and send it back to client.
                     Err(e) => dap_server.send_response(e),
                 }
-            },
-            None => break,  // Unrecoverable error encountered
+            }
+            None => break, // Unrecoverable error encountered
         }
 
         if dap_server.is_terminated() {
             break;
         }
-    }  
+    }
 
     // shutdown gracefully
 }

@@ -6,8 +6,8 @@ use crate::{
     structs::{ParseRegisterError, Register, Section},
 };
 
-use std::{fmt, num::ParseFloatError};
 use std::num::ParseIntError;
+use std::{fmt, num::ParseFloatError};
 
 #[derive(Debug, Clone)]
 pub enum RepeatableArgs<T> {
@@ -15,8 +15,9 @@ pub enum RepeatableArgs<T> {
     Repeat(T, u32),
 }
 
+// This impl makes it so we can generalize the repeatable process for .byte, .word, .float, etc.
 impl<'a, T: 'a> RepeatableArgs<T> {
-    pub fn to_be_bytes<F: Fn(&T) -> &'a [u8]>(&self, f: F) -> Vec<u8> {
+    pub fn to_be_bytes<F: Fn(&T) -> Vec<u8>>(&self, f: F) -> Vec<u8> {
         match self {
             Self::List(ls) => ls.iter().flat_map(|item| f(item)).collect(),
             Self::Repeat(item, repeat) => (0..repeat.clone()).flat_map(|_| f(item)).collect(),
@@ -212,7 +213,6 @@ impl<'a> Parser<'a> {
         // skip the first quote
         let mut chars = tok.src.chars().skip(1);
         let char = match (chars.next(), chars.next()) {
-            (Some(c), _) => c,
             (Some('\\'), Some(c)) => match c {
                 't' => '\t',
                 'r' => '\r',
@@ -222,6 +222,7 @@ impl<'a> Parser<'a> {
                 '\\' => '\\',
                 _ => return Err(tok.token.clone().map(|_| ErrorKind::InvalidEscape)),
             },
+            (Some(c), _) => c,
             _ => return Err(tok.token.clone().map(|_| ErrorKind::InvalidChar)),
         };
         Ok(char as u32)
@@ -230,12 +231,13 @@ impl<'a> Parser<'a> {
     pub fn parse_float(&mut self) -> ParseResult<f64> {
         let tok = self.try_next()?;
         let num = match tok.token.kind {
-            TokenKind::Float => { 
+            TokenKind::Float => {
                 &tok.src.parse::<f64>().map_err(|e| Span {
                     kind: ErrorKind::InvalidFloat(e),
-                    src_span: tok.token.src_span.clone()
+                    src_span: tok.token.src_span.clone(),
                 })?
-            }.clone(),
+            }
+            .clone(),
             _ => return Err(tok.token.clone().map(|k| ErrorKind::UnexpectedToken(k))),
         };
 
@@ -291,7 +293,10 @@ impl<'a> Parser<'a> {
         Ok(ast)
     }
 
-    pub fn parse_repeatable_args<T, F: Fn(&mut Self) -> ParseResult<T>>(&mut self, f: F) -> ParseResult<RepeatableArgs<T>> {
+    pub fn parse_repeatable_args<T, F: Fn(&mut Self) -> ParseResult<T>>(
+        &mut self,
+        f: F,
+    ) -> ParseResult<RepeatableArgs<T>> {
         let first = f(self)?;
         if self.cursor.next_if(TokenKind::Colon).is_some() {
             let last = self.parse_literal()?;

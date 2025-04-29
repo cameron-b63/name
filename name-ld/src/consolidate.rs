@@ -48,7 +48,7 @@ pub fn consolidate_sections(elfs: Vec<Elf>, offsets: &Vec<Vec<u32>>) -> Vec<Vec<
                     .flatten()
                     .collect();
                 return_vector.push(padded_datas);
-            },
+            }
             _ => {
                 // Anything else -> one-liner.
                 return_vector.push(

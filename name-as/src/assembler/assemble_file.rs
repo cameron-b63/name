@@ -3,10 +3,7 @@ use name_core::parse::session::Session;
 
 use crate::assembler::assembler::Assembler;
 use name_core::{
-    parse::{
-        lexer::Lexer,
-        parse::Parser,
-    },
+    parse::{lexer::Lexer, parse::Parser},
     structs::{LineInfo, Section},
 };
 

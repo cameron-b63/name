@@ -57,7 +57,7 @@ fn verify_calculate_offsets() {
     let test_num: usize = 63;
     // Data must be aligned.
     let data_num: usize = (test_num + 4) >> 3 << 3;
-    
+
     let mock_sections: Vec<Vec<u8>> = vec![vec![0u8; test_num]; 7];
     let elf1: Elf = name_core::elf_utils::create_new_elf(
         mock_sections,

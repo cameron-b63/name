@@ -1,7 +1,12 @@
 // This file is just responsible for performing .text relocation. That's it.
 
 use name_core::{
-    constants::MIPS_TEXT_START_ADDR, elf_def::{Elf, Elf32SectionHeader, Elf32Sym, ElfType, RelocationEntry, RelocationEntryType}, elf_utils::{create_new_elf, find_global_symbol_address, find_target_section_index, parse_elf_symbols, parse_rel_info}
+    constants::MIPS_TEXT_START_ADDR,
+    elf_def::{Elf, Elf32SectionHeader, Elf32Sym, ElfType, RelocationEntry, RelocationEntryType},
+    elf_utils::{
+        create_new_elf, find_global_symbol_address, find_target_section_index, parse_elf_symbols,
+        parse_rel_info,
+    },
 };
 
 use crate::constants::{REL, SHSTRTAB, STRTAB, SYMTAB, TEXT};
@@ -56,8 +61,12 @@ pub fn relocate_text_entries(
             RelocationEntryType::R26 => {
                 // For jump instructions:
                 let text_offset: usize = entry.r_offset as usize;
-                
-                println!("[+] At 0x{:x}: Linking symbol '{}' in R26 (jump) mode.", text_offset+(MIPS_TEXT_START_ADDR as usize), linked_symbol.get_linked_name(&string_table));
+
+                println!(
+                    "[+] At 0x{:x}: Linking symbol '{}' in R26 (jump) mode.",
+                    text_offset + (MIPS_TEXT_START_ADDR as usize),
+                    linked_symbol.get_linked_name(&string_table)
+                );
 
                 let address_to_pack: u32 = linked_symbol.st_value >> 2;
                 let old_value: u32 = u32::from_be_bytes(
@@ -68,19 +77,23 @@ pub fn relocate_text_entries(
                 let new_value: u32 = old_value | address_to_pack;
 
                 println!(" - Splicing out 0x{old_value:x} for 0x{new_value:x}");
-                
+
                 new_text_section.splice(text_offset..(text_offset + 4), new_value.to_be_bytes());
-            },
+            }
             RelocationEntryType::Pc16 => {
                 // For branch instructions:
                 let text_offset: usize = entry.r_offset as usize;
 
-                println!("[+] At 0x{:x}: Linking symbol '{}' in Pc16 (branch) mode.", text_offset+(MIPS_TEXT_START_ADDR as usize), linked_symbol.get_linked_name(&string_table));
+                println!(
+                    "[+] At 0x{:x}: Linking symbol '{}' in Pc16 (branch) mode.",
+                    text_offset + (MIPS_TEXT_START_ADDR as usize),
+                    linked_symbol.get_linked_name(&string_table)
+                );
 
                 let symbol_address: u32 = linked_symbol.st_value;
                 let pc_rel: u32 = entry.r_offset;
                 let relocation_value: u32 =
-                    (((symbol_address as i32) - (pc_rel as i32 + 4))  >> 2) as i16 as u16 as u32;
+                    (((symbol_address as i32) - (pc_rel as i32 + 4)) >> 2) as i16 as u16 as u32;
                 let old_value: u32 = u32::from_be_bytes(
                     new_text_section[text_offset..(text_offset + 4)]
                         .try_into()
@@ -91,52 +104,59 @@ pub fn relocate_text_entries(
                 println!(" - Splicing out 0x{old_value:x} for 0x{new_value:x}");
 
                 new_text_section.splice(text_offset..(text_offset + 4), new_value.to_be_bytes());
-            },
+            }
             RelocationEntryType::Hi16 => {
                 let text_offset: usize = entry.r_offset as usize;
 
-                println!("[+] At 0x{:x}: Linking symbol '{}' in Hi16 (high 16 bits) mode.", text_offset+(MIPS_TEXT_START_ADDR as usize), linked_symbol.get_linked_name(&string_table));
+                println!(
+                    "[+] At 0x{:x}: Linking symbol '{}' in Hi16 (high 16 bits) mode.",
+                    text_offset + (MIPS_TEXT_START_ADDR as usize),
+                    linked_symbol.get_linked_name(&string_table)
+                );
 
                 let symbol_value: u32 = linked_symbol.st_value;
                 let relocation_value = symbol_value >> 16;
 
                 let old_value: u32 = u32::from_be_bytes(
-                    new_text_section[text_offset..(text_offset+4)]
-                    .try_into()
-                    .unwrap(),
+                    new_text_section[text_offset..(text_offset + 4)]
+                        .try_into()
+                        .unwrap(),
                 );
 
                 let new_value: u32 = old_value | relocation_value;
 
                 println!(" - Splicing out 0x{old_value:x} for 0x{new_value:x}");
 
-                new_text_section.splice(text_offset..(text_offset+4), new_value.to_be_bytes());
+                new_text_section.splice(text_offset..(text_offset + 4), new_value.to_be_bytes());
             }
             RelocationEntryType::Lo16 => {
                 let text_offset: usize = entry.r_offset as usize;
 
-                println!("[+] At 0x{:x}: Linking symbol '{}' in Lo16 (low 16 bits) mode.", text_offset+(MIPS_TEXT_START_ADDR as usize), linked_symbol.get_linked_name(&string_table));
+                println!(
+                    "[+] At 0x{:x}: Linking symbol '{}' in Lo16 (low 16 bits) mode.",
+                    text_offset + (MIPS_TEXT_START_ADDR as usize),
+                    linked_symbol.get_linked_name(&string_table)
+                );
 
                 let symbol_value: u32 = linked_symbol.st_value;
                 let relocation_value = symbol_value & 0xFFFF;
 
                 let old_value: u32 = u32::from_be_bytes(
-                    new_text_section[text_offset..(text_offset+4)]
-                    .try_into()
-                    .unwrap(),
+                    new_text_section[text_offset..(text_offset + 4)]
+                        .try_into()
+                        .unwrap(),
                 );
 
                 let new_value: u32 = old_value | relocation_value;
 
                 println!(" - Splicing out 0x{old_value:x} for 0x{new_value:x}");
 
-                new_text_section.splice(text_offset..(text_offset+4), new_value.to_be_bytes());
-            },
+                new_text_section.splice(text_offset..(text_offset + 4), new_value.to_be_bytes());
+            }
             _ => return Err(TextRelocationError::UnimplementedRelType(entry.r_type)),
         }
 
         println!("");
-
     }
 
     // Discover entry point
@@ -150,11 +170,15 @@ pub fn relocate_text_entries(
         .filter_map(|(idx, section)| match idx {
             TEXT => Some(new_text_section.clone()),
             REL => None,
-            SHSTRTAB => None,  // Do not conserve .shstrtab
+            SHSTRTAB => None, // Do not conserve .shstrtab
             _ => Some(section.clone()),
         })
         .collect();
-    Ok(create_new_elf(exec_sections, ElfType::Executable(entry_point), true))
+    Ok(create_new_elf(
+        exec_sections,
+        ElfType::Executable(entry_point),
+        true,
+    ))
 }
 
 /// This function gets the correct linked symbol for a relocation entry. It looks to the local scope first by design.
@@ -177,7 +201,7 @@ fn get_linked_symbol(
     }
 }
 
-// This function finds the entry point of the program. 
+// This function finds the entry point of the program.
 // It will either be the address of the global symbol main, or E_ENTRY_DEFAULT.
 fn find_entry_point(adjusted_checked_elf: &Elf) -> u32 {
     // Get needed section indices
@@ -188,19 +212,27 @@ fn find_entry_point(adjusted_checked_elf: &Elf) -> u32 {
 
     let symtab_idx: usize = match find_target_section_index(&sh_table, shstrtab, ".symtab") {
         Some(idx) => idx - 1,
-        None => panic!("[*] Error occurred while finding entry point, but should be impossible to reach?"),
+        None => panic!(
+            "[*] Error occurred while finding entry point, but should be impossible to reach?"
+        ),
     };
 
     let strtab_idx: usize = match find_target_section_index(&sh_table, shstrtab, ".strtab") {
         Some(idx) => idx - 1,
-        None => panic!("[*] Error occurred while finding entry point, but should be impossible to reach?"),
+        None => panic!(
+            "[*] Error occurred while finding entry point, but should be impossible to reach?"
+        ),
     };
 
     // Parse symbol table
     let symbol_table = parse_elf_symbols(&adjusted_checked_elf.sections[symtab_idx]);
 
     // Search for global symbol main - return its address, and if undefined, default to E_ENTRY_DEFAULT
-    return match find_global_symbol_address(&symbol_table, &adjusted_checked_elf.sections[strtab_idx], "main") {
+    return match find_global_symbol_address(
+        &symbol_table,
+        &adjusted_checked_elf.sections[strtab_idx],
+        "main",
+    ) {
         Some(addr) => addr,
         None => return MIPS_TEXT_START_ADDR,
     };

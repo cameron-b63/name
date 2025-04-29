@@ -159,10 +159,7 @@ fn validate_link_relocation() {
         vec![0u8; 32],
     ];
 
-    let offsets = vec![
-        vec![0, 0, 0, 0, 0, 0,],
-        vec![8, 8, 8, 32, 4, 16],
-    ];
+    let offsets = vec![vec![0, 0, 0, 0, 0, 0], vec![8, 8, 8, 32, 4, 16]];
 
     let mock_consolidated_elf: Elf = create_new_elf(mock_sections, ElfType::Relocatable, true);
 

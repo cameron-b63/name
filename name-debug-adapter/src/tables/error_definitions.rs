@@ -15,7 +15,7 @@ pub enum DapError {
 
 /// DAP Errors need to be formatted properly with JSON. This struct represents the required fields.
 pub struct ErrorInfo {
-    pub id: usize, 
+    pub id: usize,
     pub format: &'static str,
     pub send_telemetry: bool,
     pub error: DapError,

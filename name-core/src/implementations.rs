@@ -1,7 +1,5 @@
-use crate::constants::{REGISTERS, MIPS_TEXT_START_ADDR};
-use crate::structs::{
-    Coprocessor0, Processor, ProgramState, /*, OperatingSystem*/
-};
+use crate::constants::{MIPS_TEXT_START_ADDR, REGISTERS};
+use crate::structs::{Coprocessor0, Processor, ProgramState /*, OperatingSystem*/};
 // use crate::instruction::instruction_set;
 
 impl Default for Processor {

@@ -1,7 +1,4 @@
-use name_core::{
-    parse::parse::AstKind,
-    structs::Register,
-};
+use name_core::{parse::parse::AstKind, structs::Register};
 
 /*
 Each pseudo instruction must implement its own `expand` fn. This function expands the pseudoinstruction's content into its respective instructions.
