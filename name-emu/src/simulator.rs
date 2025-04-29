@@ -7,7 +7,7 @@ use name_core::elf_def::Elf;
 use name_core::elf_utils::extract_lineinfo;
 use name_core::structs::{LineInfo, Memory, OperatingSystem, Processor, ProgramState};
 
-pub fn simulate(elf: Elf, debug: bool) -> Result<(), String> {
+pub fn simulate(elf: Elf, debug: bool, separate_io_channels: bool) -> Result<(), String> {
     // Set up simulation environment from information in ELF
     let cpu: Processor = Processor::new(elf.file_header.e_entry);
 
@@ -19,11 +19,11 @@ pub fn simulate(elf: Elf, debug: bool) -> Result<(), String> {
 
     // Create program state
     let mut program_state: ProgramState = ProgramState::new(cpu, memory);
-    program_state.cp0.set_debug_mode(debug);
 
     // Setup a new operating system
     let mut operating_system: OperatingSystem = OperatingSystem::new();
 
+    program_state.cp0.set_debug_mode(debug);
     if program_state.cp0.is_debug_mode() {
         // Invoke the cli debugger if the user asked for it
         // When VSCode extension is implemented, add a flag here to determine whether to
@@ -32,7 +32,7 @@ pub fn simulate(elf: Elf, debug: bool) -> Result<(), String> {
         return operating_system.cli_debugger(
             &lineinfo,
             &mut program_state,
-            &mut DebuggerState::new(),
+            &mut DebuggerState::new(separate_io_channels),
         );
     } else {
         // Begin fetch/decode/execute cycle to run program normally
@@ -45,7 +45,7 @@ pub fn simulate(elf: Elf, debug: bool) -> Result<(), String> {
                     &mut program_state,
                     &mut operating_system,
                     &lineinfo,
-                    &mut DebuggerState::new(),
+                    &mut DebuggerState::new(separate_io_channels),
                 );
                 if program_state.cp0.is_debug_mode() {} // ooops you have to put the cd in the computer
             }

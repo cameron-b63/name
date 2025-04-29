@@ -7,8 +7,6 @@ fibs: 	.word   0 : 12        # "array" of 12 words to contain fib values
 size: 	.word  12             # size of "array"
 nl:     .asciiz "\n"          # newline character
 
-
-# Start of code.
       	.text
         .globl
 main:

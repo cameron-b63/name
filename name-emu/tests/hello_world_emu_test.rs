@@ -27,7 +27,7 @@ fn hello_world_emu_test() {
 
     // TODO: compliance check executable (format, existence, etc.)
 
-    let simulator_result = simulator::simulate(executable, false);
+    let simulator_result = simulator::simulate(executable, false, false);
 
     match simulator_result {
         Ok(_) => {}
