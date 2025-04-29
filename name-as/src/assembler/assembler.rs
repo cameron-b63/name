@@ -5,7 +5,7 @@ use name_core::{
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
     instruction::instruction_set::INSTRUCTION_TABLE,
     parse::{
-        parse::{Ast, AstKind, WordArgs},
+        parse::{Ast, AstKind, RepeatableArgs},
         span::Span,
     },
     structs::{Section, Symbol, Visibility},
@@ -228,17 +228,17 @@ impl Assembler {
         }
     }
 
-    pub fn assemble_word(&mut self, word_args: WordArgs) {
+    pub fn assemble_word<T: ToBeBytes>(&mut self, word_args: RepeatableArgs<T>) {
         let mut bytes = vec![];
         match word_args {
-            WordArgs::List(words) => {
-                for word in words {
-                    bytes.extend(word.to_be_bytes());
+            RepeatableArgs::List(args) => {
+                for arg in args {
+                    bytes.extend(arg.into());
                 }
             }
-            WordArgs::Range(word, repeat) => {
+            RepeatableArgs::Range(item, repeat) => {
                 for _ in 0..repeat {
-                    bytes.extend(word.to_be_bytes());
+                    bytes.extend(item.to_be_bytes());
                 }
             }
         }
@@ -254,6 +254,7 @@ impl Assembler {
                 self.add_label(&s, self.current_address, Visibility::Global)?
             }
             AstKind::Asciiz(s) => self.assemble_asciiz(s),
+            AstKind::Float(f) => self.add_data_bytes(&f.to_be_bytes()),
             AstKind::Section(section) => match section {
                 Section::Text => self.switch_to_text_section(),
                 Section::Data => self.switch_to_data_section(),

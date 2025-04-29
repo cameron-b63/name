@@ -6,13 +6,22 @@ use crate::{
     structs::{ParseRegisterError, Register, Section},
 };
 
-use std::fmt;
+use std::{fmt, num::ParseFloatError};
 use std::num::ParseIntError;
 
 #[derive(Debug, Clone)]
-pub enum WordArgs {
-    List(Vec<u32>),
-    Range(u32, u32),
+pub enum RepeatableArgs<T> {
+    List(Vec<T>),
+    Repeat(T, u32),
+}
+
+impl<'a, T: 'a> RepeatableArgs<T> {
+    pub fn to_be_bytes<F: Fn(&T) -> &'a [u8]>(&self, f: F) -> Vec<u8> {
+        match self {
+            Self::List(ls) => ls.iter().flat_map(|item| f(item)).collect(),
+            Self::Repeat(item, repeat) => (0..repeat.clone()).flat_map(|_| f(item)).collect(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -28,7 +37,8 @@ pub enum AstKind {
     Asciiz(String),
     Section(Section),
     Globl(String),
-    Word(WordArgs),
+    Word(RepeatableArgs<u32>),
+    Float(RepeatableArgs<f64>),
 
     // constructs
     Instruction(String, Vec<Ast>),
@@ -68,6 +78,7 @@ pub enum ErrorKind {
     InvalidRegister(ParseRegisterError),
     UnexpectedEof,
     InvalidNumber(ParseIntError),
+    InvalidFloat(ParseFloatError),
     InvalidChar,
     InvalidEscape,
     InvalidImmediate,
@@ -86,6 +97,7 @@ impl fmt::Display for ErrorKind {
             }
             Self::UnexpectedEof => write!(f, "unexpected eof"),
             Self::InvalidNumber(int_err) => write!(f, "invalid number {:#?}", int_err),
+            Self::InvalidFloat(float_err) => write!(f, "invalid float {:#?}", float_err),
             Self::InvalidChar => write!(f, "invalid char"),
             Self::InvalidEscape => write!(f, "invalid escape"),
             Self::InvalidImmediate => write!(f, "invalid immediate"),
@@ -215,6 +227,21 @@ impl<'a> Parser<'a> {
         Ok(char as u32)
     }
 
+    pub fn parse_float(&mut self) -> ParseResult<f64> {
+        let tok = self.try_next()?;
+        let num = match tok.token.kind {
+            TokenKind::Float => { 
+                &tok.src.parse::<f64>().map_err(|e| Span {
+                    kind: ErrorKind::InvalidFloat(e),
+                    src_span: tok.token.src_span.clone()
+                })?
+            }.clone(),
+            _ => return Err(tok.token.clone().map(|k| ErrorKind::UnexpectedToken(k))),
+        };
+
+        Ok(num)
+    }
+
     pub fn parse_number(&mut self) -> ParseResult<u32> {
         let is_minus = self.cursor.next_if(TokenKind::Minus).is_some();
         let tok = self.try_next()?;
@@ -264,6 +291,20 @@ impl<'a> Parser<'a> {
         Ok(ast)
     }
 
+    pub fn parse_repeatable_args<T, F: Fn(&mut Self) -> ParseResult<T>>(&mut self, f: F) -> ParseResult<RepeatableArgs<T>> {
+        let first = f(self)?;
+        if self.cursor.next_if(TokenKind::Colon).is_some() {
+            let last = self.parse_literal()?;
+            Ok(RepeatableArgs::Repeat(first, last))
+        } else {
+            let mut args = vec![first];
+            while self.cursor.next_if(TokenKind::Comma).is_some() {
+                args.push(f(self)?);
+            }
+            Ok(RepeatableArgs::List(args))
+        }
+    }
+
     pub fn parse_directive(&mut self) -> ParseResult<AstKind> {
         let tok = self.try_next_if(TokenKind::Directive)?;
 
@@ -272,6 +313,7 @@ impl<'a> Parser<'a> {
             // ".include" => AstKind::Include(self.parse_string()?),
             ".text" => AstKind::Section(Section::Text),
             ".data" => AstKind::Section(Section::Data),
+            ".float" => AstKind::Float(self.parse_repeatable_args(Self::parse_float)?),
             ".asciiz" => AstKind::Asciiz(self.parse_string()?),
             ".globl" => {
                 self.try_advance_if(TokenKind::Newline)?;
@@ -282,19 +324,7 @@ impl<'a> Parser<'a> {
             }
             ".align" => todo!(),
             ".macro" => todo!(),
-            ".word" => {
-                let first = self.parse_literal()?;
-                if self.cursor.next_if(TokenKind::Colon).is_some() {
-                    let last = self.parse_literal()?;
-                    AstKind::Word(WordArgs::Range(first, last))
-                } else {
-                    let mut words = vec![first];
-                    while self.cursor.next_if(TokenKind::Comma).is_some() {
-                        words.push(self.parse_literal()?);
-                    }
-                    AstKind::Word(WordArgs::List(words))
-                }
-            }
+            ".word" => AstKind::Word(self.parse_repeatable_args(Self::parse_literal)?),
             _ => {
                 return Err(Span {
                     kind: ErrorKind::InvalidDirective,
