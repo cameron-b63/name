@@ -1,6 +1,6 @@
 use crate::{
     parse::{
-        span::{Span, SrcPos, SrcSpan},
+        span::{Span, SrcSpan},
         token::{Token, TokenCursor, TokenKind},
     },
     structs::{ParseRegisterError, Register, Section},
@@ -102,17 +102,18 @@ type ParseResult<T> = Result<T, ParseError>;
 
 pub struct Parser<'a> {
     cursor: TokenCursor<'a>,
-    src: &'a str,
+    _src: &'a str,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(toks: Vec<Token<'a>>, src: &'a str) -> Self {
         Parser {
             cursor: TokenCursor::new(toks),
-            src,
+            _src: src,
         }
     }
 
+    /// Creates a new AST from the passed root node.
     pub fn ast<F: Fn(&mut Self) -> ParseResult<AstKind>>(&mut self, f: F) -> ParseResult<Ast> {
         let start = self.try_peek()?.token.start();
         let kind = f(self)?;
@@ -379,6 +380,8 @@ impl<'a> Parser<'a> {
         Ok(ast)
     }
 
+    /// parse is responsible for building the AST from the tokens.
+    /// This is where the recursive expansion of the AST happens.
     pub fn parse(&mut self) -> (Vec<ParseError>, Vec<Ast>) {
         // root units of our ast, directives, instructions and labels
         let mut entries = Vec::new();
@@ -389,6 +392,7 @@ impl<'a> Parser<'a> {
                 self.cursor.advance();
                 continue;
             } else {
+                // This is the point of recursion.
                 match self.ast(Self::parse_root) {
                     Ok(ast) => entries.push(ast),
                     Err(err) => errs.push(err),

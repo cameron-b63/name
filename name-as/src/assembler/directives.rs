@@ -1,4 +1,4 @@
-use crate::assembler::assembler::{AssembleResult, Assembler, ErrorKind};
+use crate::assembler::assembler::Assembler;
 
 use crate::definitions::structs::LineComponent;
 

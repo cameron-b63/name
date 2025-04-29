@@ -1,9 +1,4 @@
-use crate::assembler::assembler::Assembler;
-use crate::definitions::structs::LineComponent;
 use name_core::{
-    constants::MIPS_TEXT_START_ADDR,
-    elf_def::{RelocationEntry, RelocationEntryType},
-    instruction::{information::InstructionInformation, instruction_set::INSTRUCTION_TABLE},
     parse::parse::AstKind,
     structs::Register,
 };
@@ -85,34 +80,34 @@ pub(crate) type ExpansionFn = fn(Vec<AstKind>) -> Result<Vec<(&'static str, Vec<
 //     ])
 // }
 
-pub(crate) fn expand_bnez(
-    _environment: &mut Assembler,
-    args: &Vec<LineComponent>,
-) -> Result<Vec<(&'static InstructionInformation, Vec<LineComponent>)>, String> {
-    if args.len() < 2 {
-        return Err(format!(
-            " - `bnez` expected 2 arguments, got {}",
-            args.len()
-        ));
-    }
+// pub(crate) fn expand_bnez(
+//     _environment: &mut Assembler,
+//     args: &Vec<LineComponent>,
+// ) -> Result<Vec<(&'static InstructionInformation, Vec<LineComponent>)>, String> {
+//     if args.len() < 2 {
+//         return Err(format!(
+//             " - `bnez` expected 2 arguments, got {}",
+//             args.len()
+//         ));
+//     }
 
-    let rs = args[0].clone();
-    let label = args[1].clone();
+//     let rs = args[0].clone();
+//     let label = args[1].clone();
 
-    let zero: LineComponent = LineComponent::Register(String::from("$0"));
+//     let zero: LineComponent = LineComponent::Register(String::from("$0"));
 
-    // let add_info: &'static InstructionInformation;
+//     // let add_info: &'static InstructionInformation;
 
-    let bne_info = match INSTRUCTION_TABLE.get("bne") {
-        Some(info) => info,
-        None => return Err(format!(" - Failed to expand `bnez` pseudoinstruction. Its expansion was likely defined incorrectly (go use git blame on https://github.com/cameron-b63/name to find out who's at fault).")),
-    };
+//     let bne_info = match INSTRUCTION_TABLE.get("bne") {
+//         Some(info) => info,
+//         None => return Err(format!(" - Failed to expand `bnez` pseudoinstruction. Its expansion was likely defined incorrectly (go use git blame on https://github.com/cameron-b63/name to find out who's at fault).")),
+//     };
 
-    Ok(vec![
-        // bnez    $rs, $0, label
-        (bne_info, vec![rs, zero, label]),
-    ])
-}
+//     Ok(vec![
+//         // bnez    $rs, $0, label
+//         (bne_info, vec![rs, zero, label]),
+//     ])
+// }
 
 pub(crate) fn expand_li(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     if args.len() < 2 {

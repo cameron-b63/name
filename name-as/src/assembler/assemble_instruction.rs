@@ -1,9 +1,8 @@
 use crate::assembler::assembler::{AssembleResult, ErrorKind};
 use crate::assembler::assembly_helpers::arg_configuration_is_ok;
 use crate::assembler::assembly_utils::*;
-use name_core::instruction::information::{ArgumentType, InstructionInformation, InstructionType};
-use name_core::parse::parse::{Ast, AstKind};
-use name_core::parse::span::Span;
+use name_core::instruction::information::{InstructionInformation, InstructionType};
+use name_core::parse::parse::AstKind;
 
 // Big logic for instruction assembly - this is the main driver code for actual packing of instructions once parsed.
 pub fn assemble_instruction(

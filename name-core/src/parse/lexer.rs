@@ -171,6 +171,7 @@ impl<'a> Lexer<'a> {
         self.consume_while(|c| matches!(c, 'a'..='z' | '0'..='9'))
     }
 
+    /// lex_token performs the actual pattern matching for tokenization.
     fn lex_token(&mut self) -> LexerResult<Option<Token<'a>>> {
         self.lexeme_start = Some(self.pos.clone());
 
@@ -238,8 +239,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// next_tok will lex the next token from the input stream.
+    /// It is a helper for lex.
     pub fn next_tok(&mut self) -> LexerResult<Option<Token<'a>>> {
-        // eat any whitce space that may prepend next token
+        // eat any white space that may prepend next token
         self.consume_while(|c| c.is_whitespace() && c != '\n');
 
         // check for comments and eat the rest of them it
@@ -253,12 +256,14 @@ impl<'a> Lexer<'a> {
         self.lex_token()
     }
 
+    /// lex the entire input and return a vector of tokens
     pub fn lex(&mut self) -> (Vec<LexError>, Vec<Token<'a>>) {
         let mut toks = Vec::new();
         let mut errs = Vec::new();
 
         loop {
             match self.next_tok() {
+                // If the identified token can be structured in a valid way, push it.
                 Ok(Some(tok)) => toks.push(tok),
                 Ok(None) => break,
                 Err(err) => errs.push(err),
