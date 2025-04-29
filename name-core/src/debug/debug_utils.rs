@@ -21,6 +21,28 @@ static INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static InstructionInformation
             .collect()
     });
 
+#[macro_export]
+macro_rules! dbprint {
+    ($sioc:expr, $($arg:tt)*) => {
+        if ($sioc) {
+            eprint!("{}", format!($($arg)*));
+        } else {
+            print!("{}", format!($($arg)*));
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! dbprintln {
+    ($sioc:expr, $($arg:tt)*) => {
+        if ($sioc) {
+            eprintln!("{}", format!($($arg)*));
+        } else {
+            println!("{}", format!($($arg)*));
+        }
+    };
+}
+
 pub fn single_step(_lineinfo: &Vec<LineInfo>, program_state: &mut ProgramState) -> () {
     if !program_state
         .memory
@@ -49,7 +71,7 @@ pub fn single_step(_lineinfo: &Vec<LineInfo>, program_state: &mut ProgramState) 
     if false
     /* Allowing for some later verbose mode */
     {
-        println!("Executing {}", instr_info.mnemonic);
+        eprintln!("Executing {}", instr_info.mnemonic);
     }
     let _ = (instr_info.implementation)(program_state, raw_instruction);
 
@@ -114,7 +136,7 @@ pub fn db_step(
             if true
             /* Allowing for some later verbose mode */
             {
-                println!("Executing {}", instr_info.mnemonic);
+                eprintln!("Executing {}", instr_info.mnemonic);
             }
             let _ = (instr_info.implementation)(program_state, raw_instruction);
 
@@ -185,6 +207,7 @@ pub struct DebuggerState {
     pub breakpoints: Vec<Breakpoint>, // indexed by bp_num
     // pub replaced_instructions: Vec<u32>, // also indexed by bp num
     pub global_list_loc: usize, // for the l command; like the center of the output
+    pub sioc: bool,
 }
 
 // pub type DebugFn = fn(&Vec<LineInfo>, &mut Memory, &mut Processor, &Vec<Breakpoint>) -> Result<(), String>;

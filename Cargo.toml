@@ -4,6 +4,7 @@ members = [
   "name-core",
   "name-ld",
   "name-emu",
+  "name-debug-adapter",
 ]
 resolver = "2"
 

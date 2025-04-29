@@ -39,7 +39,7 @@ export function runWithoutDebugging(name_bin_dir: string, infile: string): Promi
         }
 
         const terminal = vscode.window.createTerminal('NAME Runner');
-        terminal.sendText(`${runnerPath} ${infile}`);
+        terminal.sendText(`${runnerPath} "${infile}"`);
         terminal.show();
 
         resolve('Runner launched in terminal.');

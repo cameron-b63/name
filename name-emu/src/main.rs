@@ -18,5 +18,5 @@ pub fn main() {
         Err(e) => panic!("{}", e),
     };
 
-    let _ = simulate(executable, args.debug);
+    let _ = simulate(executable, args.debug, args.separate_io_channels);
 }
