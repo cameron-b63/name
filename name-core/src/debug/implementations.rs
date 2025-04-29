@@ -1,8 +1,8 @@
 // use crate::constants::MIPS_ADDRESS_ALIGNMENT;
 // use std::collections::HashMap;
+use crate::dbprintln;
 use crate::debug::debug_utils::{Breakpoint, DebuggerState};
 use crate::structs::{LineInfo, ProgramState};
-use crate::dbprintln;
 
 impl Breakpoint {
     pub fn new(
@@ -68,7 +68,12 @@ impl DebuggerState {
         // for (_address, bp) in &self.breakpoints {
         // for bp in &self.breakpoints {
         for bp_num in 0..self.breakpoints.len() {
-            dbprintln!(self.sioc, "{:>6}: {}", bp_num, self.breakpoints[bp_num].line_num);
+            dbprintln!(
+                self.sioc,
+                "{:>6}: {}",
+                bp_num,
+                self.breakpoints[bp_num].line_num
+            );
         }
         return Ok(());
     }
@@ -89,7 +94,9 @@ impl DebuggerState {
             dbprintln!(
                 self.sioc,
                 "{:>3} #{:08x}  {}",
-                lineinfo[i].line_number, lineinfo[i].start_address, lineinfo[i].content
+                lineinfo[i].line_number,
+                lineinfo[i].start_address,
+                lineinfo[i].content
             );
         }
 
@@ -164,7 +171,8 @@ impl DebuggerState {
         dbprintln!(
             self.sioc,
             "Successfully added breakpoint {} at line {}.",
-            self.global_bp_num, line_num
+            self.global_bp_num,
+            line_num
         );
         Ok(())
     }

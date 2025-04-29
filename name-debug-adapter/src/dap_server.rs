@@ -1,11 +1,18 @@
-use std::{io::{self, BufRead, Read}, process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio}};
+use std::{
+    io::{self, BufRead, Read},
+    process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio},
+};
 
 use serde_json::Value;
 
-use crate::{dap_structs::{DapMessage, DapResponse, LaunchArguments}, request_handler::handle_request, tables::{capabilities::get_capabilities, error_definitions::DapError}};
+use crate::{
+    dap_structs::{DapMessage, DapResponse, LaunchArguments},
+    request_handler::handle_request,
+    tables::{capabilities::get_capabilities, error_definitions::DapError},
+};
 use std::io::Write;
 
-// This code is responsible for managing the DAP server struct. 
+// This code is responsible for managing the DAP server struct.
 
 /// The DapServer struct contains the necessary information to manage the DAP server.
 pub struct DapServer {
@@ -18,14 +25,18 @@ pub struct DapServer {
 struct Subprocess {
     process: Child,
     stdin: ChildStdin,
-    stdout: ChildStdout,
-    stderr: ChildStderr,
+    _stdout: ChildStdout,
+    _stderr: ChildStderr,
 }
 
 impl DapServer {
     /// Create a new DapServer struct to keep all server information in one place
     fn new() -> DapServer {
-        return DapServer {debugger_process: None, is_terminated: false, is_initialized: false};
+        return DapServer {
+            debugger_process: None,
+            is_terminated: false,
+            is_initialized: false,
+        };
     }
 }
 
@@ -36,7 +47,6 @@ pub fn start_dap_server() -> DapServer {
 }
 
 impl DapServer {
-
     /// Read a message from stdin
     pub fn read_message(&self) -> Option<String> {
         // Setup I/O
@@ -53,7 +63,7 @@ impl DapServer {
                 Err(e) => {
                     eprintln!("Error occurred when attempting to read from stdin: {e}");
                     return None;
-                },
+                }
             }
 
             let trimmed = line.trim();
@@ -84,7 +94,7 @@ impl DapServer {
             Err(e) => {
                 eprintln!("Error occurred while reading JSON payload: {e}");
                 return None;
-            },
+            }
         };
 
         // Return the JSON payload as a String
@@ -123,12 +133,12 @@ impl DapServer {
                         return Err(String::from("Error occurred while serializing response."));
                     }
                 };
-            },
+            }
             Ok(DapMessage::Response(res)) => {
                 // Responses should never be sent from client to server.
                 eprintln!("Error: Response received from client.");
                 return Err(format!("Response received from client.\n{res:?}"));
-            },
+            }
             Err(e) => {
                 eprintln!("Error occurred while parsing JSON: {e}");
                 return Err(String::from("Error occurred while parsing JSON."));
@@ -168,7 +178,7 @@ impl DapServer {
             Ok(v) => {
                 self.is_initialized = true;
                 Ok(v)
-            },
+            }
             Err(e) => {
                 eprintln!("Error occurred while serializing capabilities: {e}");
                 Err(DapError::CapabilitiesNotLoaded)
@@ -178,19 +188,19 @@ impl DapServer {
 
     /// Launch the debugging subprocess using the supplied arguments.
     pub fn launch(&mut self, arguments: LaunchArguments) -> Result<Value, DapError> {
-        
         let mut child = match Command::new(arguments.name_emu_path)
             .args(&[arguments.exe_name, String::from("--debug")])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn() {
-                Ok(p) => p,
-                Err(e) => {
-                    eprintln!("Error occurred while launching subprocess: {e}");
-                    return Err(DapError::LaunchFailed);
-                }
-            };
+            .spawn()
+        {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("Error occurred while launching subprocess: {e}");
+                return Err(DapError::LaunchFailed);
+            }
+        };
 
         // Get the stdin, stdout, and stderr of the child process
         let stdin = child.stdin.take().unwrap();
@@ -198,7 +208,12 @@ impl DapServer {
         let stderr = child.stderr.take().unwrap();
 
         // Store the child process and its I/O in a Subprocess struct
-        let subprocess = Subprocess {process: child, stdin, stdout, stderr};
+        let subprocess = Subprocess {
+            process: child,
+            stdin,
+            _stdout: stdout,
+            _stderr: stderr,
+        };
 
         // Store the Subprocess in the DapServer struct
         self.debugger_process = Some(subprocess);
@@ -222,8 +237,7 @@ impl DapServer {
                 Err(e) => {
                     eprintln!("Error occurred while killing subprocess: {e}");
                     return Err(DapError::ImmortalChild);
-                },
-
+                }
             };
         }
 

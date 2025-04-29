@@ -1,7 +1,14 @@
 use crate::definitions::expandables::*;
 use crate::definitions::structs::PseudoInstruction;
 
+/// Storing the pseudo-instruction information in another dope vector.
+/// This will be formatted as a Hashmap linking the mnemonic to its expansion function.
+/// The expansion functions operate on AST nodes.
 pub(crate) const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
+    PseudoInstruction {
+        mnemonic: "bnez",
+        expand: expand_bnez,
+    },
     PseudoInstruction {
         mnemonic: "li",
         expand: expand_li,
@@ -18,9 +25,4 @@ pub(crate) const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
         mnemonic: "mv",
         expand: expand_move,
     },
-    // // this pseudoinstruction doesn't seem to be officially defined but it's w/e for now
-    // PseudoInstruction {
-    //     mnemonic: "bnez",
-    //     expand: expand_bnez,
-    // },
 ];

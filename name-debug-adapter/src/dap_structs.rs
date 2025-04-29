@@ -25,7 +25,7 @@ pub struct DapRequest {
 /// DAP responses are sent from the server to the client. They are responses to requests.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DapResponse {
-    pub seq: usize, 
+    pub seq: usize,
     pub request_seq: usize,
     pub success: bool,
     pub body: Option<Value>,
@@ -45,4 +45,3 @@ pub struct LaunchArguments {
     pub name_emu_path: String,
     pub exe_name: String,
 }
-

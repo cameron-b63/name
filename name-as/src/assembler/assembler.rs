@@ -5,7 +5,7 @@ use name_core::{
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
     instruction::instruction_set::INSTRUCTION_TABLE,
     parse::{
-        parse::{Ast, AstKind, WordArgs},
+        parse::{Ast, AstKind},
         span::Span,
     },
     structs::{Section, Symbol, Visibility},
@@ -228,23 +228,6 @@ impl Assembler {
         }
     }
 
-    pub fn assemble_word(&mut self, word_args: WordArgs) {
-        let mut bytes = vec![];
-        match word_args {
-            WordArgs::List(words) => {
-                for word in words {
-                    bytes.extend(word.to_be_bytes());
-                }
-            }
-            WordArgs::Range(word, repeat) => {
-                for _ in 0..repeat {
-                    bytes.extend(word.to_be_bytes());
-                }
-            }
-        }
-        self.add_data_bytes(&bytes);
-    }
-
     /// entry point for folding ast into the environment
     pub fn assemble_ast(&mut self, ast: AstKind) -> Result<(), ErrorKind> {
         match ast {
@@ -254,6 +237,9 @@ impl Assembler {
                 self.add_label(&s, self.current_address, Visibility::Global)?
             }
             AstKind::Asciiz(s) => self.assemble_asciiz(s),
+            AstKind::Float(f) => {
+                self.add_data_bytes(&f.to_be_bytes(|x: &f64| x.to_be_bytes().to_vec()))
+            }
             AstKind::Section(section) => match section {
                 Section::Text => self.switch_to_text_section(),
                 Section::Data => self.switch_to_data_section(),
@@ -267,7 +253,9 @@ impl Assembler {
                     self.assemble_instruction(&instr, ast_kinds)?
                 }
             }
-            AstKind::Word(word_args) => self.assemble_word(word_args),
+            AstKind::Word(word_args) => {
+                self.add_data_bytes(&word_args.to_be_bytes(|x: &u32| x.to_be_bytes().to_vec()))
+            }
             AstKind::Immediate(_) => panic!(),
             AstKind::Symbol(_) => panic!(),
             AstKind::Register(_) => panic!(),

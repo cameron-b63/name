@@ -3,12 +3,15 @@
 
 use serde_json::Value;
 
-use crate::{dap_structs::{DapRequest, DapResponse}, tables::error_definitions::{DapError, ERROR_DEFINITIONS}};
+use crate::{
+    dap_structs::{DapRequest, DapResponse},
+    tables::error_definitions::{DapError, ERROR_DEFINITIONS},
+};
 
 /// Create a new Response message to be sent in response to some initial request with the supplied body.
 pub fn create_response(initial_request: &DapRequest, body: Value) -> DapResponse {
     DapResponse {
-        seq: initial_request.seq+1,
+        seq: initial_request.seq + 1,
         request_seq: initial_request.seq,
         success: true,
         body: Some(body),
@@ -18,7 +21,7 @@ pub fn create_response(initial_request: &DapRequest, body: Value) -> DapResponse
 /// Create a new ErrorResponse message to be sent in response to some initial request of the supplied error type.
 pub fn create_error_response(initial_request: &DapRequest, error: DapError) -> DapResponse {
     DapResponse {
-        seq: initial_request.seq+1,
+        seq: initial_request.seq + 1,
         request_seq: initial_request.seq,
         success: false,
         body: Some(create_error_body(error)),
@@ -33,10 +36,10 @@ fn create_error_body(error: DapError) -> Value {
         None => {
             // ERROR_DEFINITIONS is technically allowed to be empty. This should absolutely never happen. In the name of safe programming, I check.
             if ERROR_DEFINITIONS.len() < 1 {
-                return ERROR_DEFINITIONS[0].to_value(); 
+                return ERROR_DEFINITIONS[0].to_value();
             } else {
                 panic!("ERROR_DEFINITIONS table is supposedly empty. Cannot create any error responses.");
             }
-        },
+        }
     }
 }

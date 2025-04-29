@@ -39,13 +39,11 @@ pub fn get_capabilities() -> &'static Capabilities {
         supports_conditional_breakpoints: false,
         supports_hit_conditional_breakpoints: false,
         supports_evaluate_for_hovers: false,
-        exception_breakpoint_filters: vec![
-            ExceptionBreakpointFilter {
-                filter: "filterID".to_string(),
-                label: "label".to_string(),
-                default: false,
-            }
-        ],
+        exception_breakpoint_filters: vec![ExceptionBreakpointFilter {
+            filter: "filterID".to_string(),
+            label: "label".to_string(),
+            default: false,
+        }],
         supports_step_back: false,
         supports_set_variable: false,
         supports_restart_frame: false,
