@@ -9,8 +9,8 @@ pub fn assemble_instruction(
     info: &InstructionInformation,
     arguments: Vec<AstKind>,
 ) -> AssembleResult<u32> {
-    dbg!(info);
-    dbg!(&arguments);
+    // dbg!(info);
+    // dbg!(&arguments);
     // Find proper argument configuration early
     let config = if arg_configuration_is_ok(&arguments, info.args) {
         info.args

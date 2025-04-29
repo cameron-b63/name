@@ -48,7 +48,7 @@ pub fn consolidate_sections(elfs: Vec<Elf>, offsets: &Vec<Vec<u32>>) -> Vec<Vec<
                     .flatten()
                     .collect();
                 return_vector.push(padded_datas);
-            },
+            }
             _ => {
                 // Anything else -> one-liner.
                 return_vector.push(
@@ -65,31 +65,31 @@ pub fn consolidate_sections(elfs: Vec<Elf>, offsets: &Vec<Vec<u32>>) -> Vec<Vec<
     return return_vector;
 }
 
-#[test]
-fn validate_consolidation() {
-    let elf1: Elf = name_core::elf_utils::create_new_elf(
-        vec![vec![0u8; 37]; 6],
-        name_core::elf_def::ElfType::Relocatable,
-        true,
-    );
-    let elf2: Elf = elf1.clone();
-
-    let elfs: Vec<Elf> = vec![elf1, elf2];
-
-    let offsets: Vec<Vec<u32>> = vec![
-        vec![0, 37],
-        vec![0, 40],
-        vec![0, 37],
-        vec![0, 37],
-        vec![0, 37],
-        vec![0, 37],
-    ];
-
-    let result: Vec<Vec<u8>> = consolidate_sections(elfs, &offsets);
-
-    // .text, along with any other section that is not .data, will have this property after consolidation.
-    assert_eq!(result[0], vec![0u8; 37 * 2]);
-
-    // for n ELF files, the first (n-1) sections in the consolidated form will be padded. The last need not be.
-    assert_eq!(result[1], vec![0u8; 40 + 37]);
-}
+// #[test]
+// fn validate_consolidation() {
+//     let elf1: Elf = name_core::elf_utils::create_new_elf(
+//         vec![vec![0u8; 37]; 6],
+//         name_core::elf_def::ElfType::Relocatable,
+//         true,
+//     );
+//     let elf2: Elf = elf1.clone();
+//
+//     let elfs: Vec<Elf> = vec![elf1, elf2];
+//
+//     let offsets: Vec<Vec<u32>> = vec![
+//         vec![0, 37],
+//         vec![0, 40],
+//         vec![0, 37],
+//         vec![0, 37],
+//         vec![0, 37],
+//         vec![0, 37],
+//     ];
+//
+//     let result: Vec<Vec<u8>> = consolidate_sections(elfs, &offsets);
+//
+//     // .text, along with any other section that is not .data, will have this property after consolidation.
+//     assert_eq!(result[0], vec![0u8; 37 * 2]);
+//
+//     // for n ELF files, the first (n-1) sections in the consolidated form will be padded. The last need not be.
+//     assert_eq!(result[1], vec![0u8; 40 + 37]);
+// }

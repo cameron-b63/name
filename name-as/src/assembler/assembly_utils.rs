@@ -136,7 +136,6 @@ pub fn assemble_j_type(opcode: u32) -> u32 {
 // #[cfg(test)]
 // mod tests {
 //     use super::*;
-
 //     #[test]
 //     fn assemble_i_type_test() {
 //         let opcode: u32 = 13;
@@ -146,28 +145,18 @@ pub fn assemble_j_type(opcode: u32) -> u32 {
 
 //         let assembled_output = assemble_i_type(opcode, rs, rt, immediate);
 //         assert_eq!(assembled_output, Ok(0x3548BEEF));
-//     }
-
+//
 //     #[test]
 //     fn assemble_j_type_test() {
 //         let opcode: u32 = 2;
-
+//
 //         let assembled_output = assemble_j_type(opcode);
 //         assert_eq!(assembled_output, 0x08000000);
-//     }
-
-//     #[test]
-//     fn assemble_r_type_test() {
-//         let rd = Some("$t0".to_string());
-//         let rs = Some("$t1".to_string());
-//         let rt = Some("$t2".to_string());
-//         let shamt = Some(0);
-//         let assembled_output = assemble_r_type(rd, rs, rt, shamt, 32);
-//         assert_eq!(assembled_output, Ok(0x012A4020));
-
+//
+//
 //         let assembled_err = assemble_r_type(Some("bad register".to_string()), None, None, None, 32);
 //         assert!(assembled_err.is_err());
-
+//
 //         let rd = Some("$t0".to_string());
 //         let rs = Some("$t1".to_string());
 //         let shamt = Some(32);

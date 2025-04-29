@@ -250,7 +250,7 @@ impl Assembler {
         match ast {
             AstKind::Label(s) => self.add_label(&s, self.current_address, Visibility::Local)?,
             AstKind::Globl(s) => {
-                dbg!(println!("0x{:x}", self.current_address));
+                // dbg!(println!("0x{:x}", self.current_address));
                 self.add_label(&s, self.current_address, Visibility::Global)?
             }
             AstKind::Asciiz(s) => self.assemble_asciiz(s),
