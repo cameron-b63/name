@@ -23,14 +23,11 @@ name-ext/node_modules/*
 *.pdb
 
 *.out
-*.o
 
 name-fmt/node_modules/
 
 personal_to_do_list.txt
 test_files/bubblesort/*
-tests/samples/*
-!test/samples/*.asm
 
 */rusty-tags.vi
 */launch.json

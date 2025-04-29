@@ -11,7 +11,7 @@ use crate::{
 /// Details inside.
 pub fn linker(elfs: Vec<Elf>) -> Result<Elf, String> {
     // Ensure each ELF conforms to the correct standard
-    // conformity_check(&elfs)?;
+    conformity_check(&elfs)?;
 
     // Now that we know each ELF conforms to standard, we can try to do some work:
 
