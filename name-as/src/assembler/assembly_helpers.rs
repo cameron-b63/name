@@ -4,7 +4,7 @@ use name_core::{
         information::{ArgumentType, InstructionInformation},
         instruction_set::INSTRUCTION_TABLE,
     },
-    parse::parse::{Ast, AstKind},
+    parse::parse::AstKind,
     structs::Symbol,
 };
 
@@ -124,12 +124,12 @@ Pretty print an instruction in the format:
  - 0b11011110101011011011111011101111
 
 */
-pub fn pretty_print_instruction(addr: &u32, packed: &u32) {
-    println!(" - @0x{:08x}:", addr);
-    println!("   - 0x{:08x}", packed);
-    println!("   - 0b{:032b}", packed);
-    println!();
-}
+// pub fn pretty_print_instruction(addr: &u32, packed: &u32) {
+//     println!(" - @0x{:08x}:", addr);
+//     println!("   - 0x{:08x}", packed);
+//     println!("   - 0b{:032b}", packed);
+//     println!();
+// }
 
 pub fn _search_mnemonic(
     mnemonic: String,

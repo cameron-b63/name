@@ -8,14 +8,12 @@ use name_core::{
         parse::{Ast, AstKind, WordArgs},
         span::Span,
     },
-    structs::{LineInfo, Section, Symbol, Visibility},
+    structs::{Section, Symbol, Visibility},
 };
 
 use crate::assembler::assemble_instruction::assemble_instruction;
 
-use crate::assembler::assembly_helpers::{
-    generate_pseudo_instruction_hashmap, pretty_print_instruction,
-};
+use crate::assembler::assembly_helpers::generate_pseudo_instruction_hashmap;
 
 use crate::definitions::structs::PseudoInstruction;
 
@@ -62,13 +60,11 @@ pub struct Assembler {
     pub section_dot_rel: Vec<u8>,
     pub section_dot_line: Vec<u8>,
     pub symbol_table: Vec<Symbol>,
-    pub(crate) equivalences: HashMap<String, u32>,
     pub(crate) current_section: Section,
     pub(crate) current_address: u32,
     pub(crate) text_address: u32,
     pub(crate) data_address: u32,
     pub(crate) line_number: usize,
-    pub(crate) line_prefix: String,
     pub(crate) most_recent_label: String,
 }
 
@@ -82,14 +78,11 @@ impl Assembler {
             section_dot_rel: vec![],
             section_dot_line: vec![],
             symbol_table: vec![],
-            equivalences: HashMap::new(),
-            // errors: vec![],
             current_section: Section::Null,
             current_address: 0,
             text_address: MIPS_TEXT_START_ADDR,
             data_address: MIPS_DATA_START_ADDR,
             line_number: 1,
-            line_prefix: String::from(""),
             most_recent_label: String::from(""),
         }
     }
@@ -253,7 +246,7 @@ impl Assembler {
     }
 
     /// entry point for folding ast into the environment
-    pub fn assemble_ast(&mut self, mut ast: AstKind) -> Result<(), ErrorKind> {
+    pub fn assemble_ast(&mut self, ast: AstKind) -> Result<(), ErrorKind> {
         match ast {
             AstKind::Label(s) => self.add_label(&s, self.current_address, Visibility::Local)?,
             AstKind::Globl(s) => {

@@ -16,6 +16,8 @@ impl<'a> Preprocessor<'a> {
         }
     }
 
+    /// The preprocessor is responsible for expanding our expandables.
+    /// Anything that performs something akin to string replacement happens here.
     pub fn preprocess(&mut self, toks: Vec<Token<'a>>) -> Vec<Token<'a>> {
         let mut cursor = TokenCursor::new(toks);
         let mut tokens = Vec::new();
@@ -30,7 +32,7 @@ impl<'a> Preprocessor<'a> {
 
                         let mut lexer = Lexer::new(cont);
                         //Todo: handle errors
-                        let (errs, toks) = lexer.lex();
+                        let (_errs, toks) = lexer.lex();
 
                         let pre = self.preprocess(toks);
                         tokens.extend(pre);
