@@ -14,9 +14,13 @@ pub(crate) const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
         mnemonic: "move",
         expand: expand_move,
     },
-    // this pseudoinstruction doesn't seem to be officially defined but it's w/e for now
     PseudoInstruction {
-        mnemonic: "bnez",
-        expand: expand_bnez,
+        mnemonic: "mv",
+        expand: expand_move,
     },
+    // // this pseudoinstruction doesn't seem to be officially defined but it's w/e for now
+    // PseudoInstruction {
+    //     mnemonic: "bnez",
+    //     expand: expand_bnez,
+    // },
 ];

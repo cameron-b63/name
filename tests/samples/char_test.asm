@@ -5,6 +5,8 @@
 OurBelovedString: .asciiz     "hello\nworlde\ti am swagalicious\\\'\"
 
 .text
+.globl
+main:
     li  $a0, '\n'
     li  $v0, SysPrintChar
     syscall
@@ -32,9 +34,9 @@ OurBelovedString: .asciiz     "hello\nworlde\ti am swagalicious\\\'\"
     li  $v0, SysPrintString
     syscall
 
-    lw $a0, OurBelovedString
-    li $v0, SysPrintInt
-    syscall
+    #lw $a0, OurBelovedString
+    #li $v0, SysPrintInt
+    #syscall
 
     li  $v0, SysExit
     syscall

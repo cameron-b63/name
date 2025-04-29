@@ -29,6 +29,7 @@ impl<'a> Preprocessor<'a> {
                         let cont = self.sess.add_file(&self.sess.dir.join(file_name));
 
                         let mut lexer = Lexer::new(cont);
+                        //Todo: handle errors
                         let (errs, toks) = lexer.lex();
 
                         let pre = self.preprocess(toks);
@@ -44,7 +45,7 @@ impl<'a> Preprocessor<'a> {
                             .filter(|tok| !tok.token.is_kind(TokenKind::Newline))
                         {
                             if let Some(c_expansion) = self.eqvs.get(tok.src) {
-                                expansion.extend(expansion.clone());
+                                expansion.extend(c_expansion.clone());
                             } else {
                                 expansion.push(tok.clone())
                             }

@@ -146,7 +146,7 @@ pub fn _search_mnemonic(
     let mut pseudo_instruction_information: Option<&'static PseudoInstruction> = None;
 
     let retrieved_pseudo_instruction_option: Option<&'static PseudoInstruction> = environment
-        ._pseudo_instruction_table
+        .pseudo_instruction_table
         .get(mnemonic.as_str())
         .copied();
     match retrieved_pseudo_instruction_option {

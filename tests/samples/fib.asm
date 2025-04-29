@@ -7,10 +7,9 @@ fibs: 	.word   0 : 12        # "array" of 12 words to contain fib values
 size: 	.word  12             # size of "array"
 nl:     .asciiz "\n"          # newline character
 
-# .globl main
-
-# Start of code.
       	.text
+        .globl
+main:
 	    la   	$t0, fibs        # load address of array
 	    la   	$t5, size        # load address of size variable
       	lw   	$t5, 0($t5)      # load array size
@@ -54,7 +53,7 @@ print5: 	lw   	$a0, 0($t0)      # load fibonacci number for syscall
       	addi 	$t0, $t0, 4      # increment address
      	addi 	$t1, $t1, -1     # decrement loop counter
       	bgtz 	$t1, print5      # repeat if not finished
-		
+
 		# Print newline character
 		li      $v0, SysPrintString
 		la      $a0, nl
