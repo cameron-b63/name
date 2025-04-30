@@ -50,8 +50,8 @@ impl RawInstruction {
         self.raw >> 6 & 0x1F
     }
 
-    pub fn get_immediate(self) -> u32 {
-        self.raw & 0xFFFF
+    pub fn get_immediate(self) -> u16 {
+        (self.raw & 0xFFFF) as u16
     }
 
     pub fn get_jump(self) -> u32 {
@@ -75,7 +75,7 @@ pub struct IArgs {
     pub opcode: u32,
     pub rs: u32,
     pub rt: u32,
-    pub imm: u32,
+    pub imm: u16,
 }
 
 impl From<RawInstruction> for IArgs {

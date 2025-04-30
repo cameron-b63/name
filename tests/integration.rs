@@ -16,9 +16,9 @@ const TESTS: LazyCell<HashMap<&'static str, (&'static str, &'static str)>> = Laz
     tests.insert("hello_world", ("", "Hello, World!\n"));
     tests.insert(
         "char_test",
-        ("a", "\\\\\\aahello\nworlde\ti am swagalicious\\\\'\\"),
+        ("a", "\n\t\\aahello\nworlde\ti am swagalicious\\\\'\\"),
     );
-    tests.insert("mips_test", ("", "TODO: What should this be?"));
+    tests.insert("mips_test", ("", "Cello, World!"));
     tests
 });
 

@@ -267,30 +267,14 @@ impl<'a> Parser<'a> {
         Ok(num)
     }
 
-    pub fn parse_literal(&mut self) -> ParseResult<u32> {
+    pub fn parse_immediate(&mut self) -> ParseResult<u32> {
         let literal = &self.try_peek()?.token;
 
         match literal.kind {
             tok if tok.is_number() => self.parse_number(),
             TokenKind::Char => self.parse_char(),
-            _ => return Err(literal.clone().map(|k| ErrorKind::UnexpectedToken(k))),
+            _ => return Err(literal.clone().map(|_k| ErrorKind::InvalidImmediate)),
         }
-    }
-
-    pub fn parse_immediate(&mut self) -> ParseResult<AstKind> {
-        let immediate = &self.try_peek()?.token;
-        let ast = match immediate.kind {
-            tok if tok.is_literal() => AstKind::Immediate(self.parse_literal()?),
-            // these will be resolved on ast passover
-            TokenKind::Ident => AstKind::Symbol(self.parse_ident()?),
-            _ => {
-                return Err(Span {
-                    kind: ErrorKind::InvalidImmediate,
-                    src_span: immediate.src_span.clone(),
-                })
-            }
-        };
-        Ok(ast)
     }
 
     pub fn parse_repeatable_args<T, F: Fn(&mut Self) -> ParseResult<T>>(
@@ -299,7 +283,7 @@ impl<'a> Parser<'a> {
     ) -> ParseResult<RepeatableArgs<T>> {
         let first = f(self)?;
         if self.cursor.next_if(TokenKind::Colon).is_some() {
-            let last = self.parse_literal()?;
+            let last = self.parse_number()?;
             Ok(RepeatableArgs::Repeat(first, last))
         } else {
             let mut args = vec![first];
@@ -329,7 +313,7 @@ impl<'a> Parser<'a> {
             }
             ".align" => todo!(),
             ".macro" => todo!(),
-            ".word" => AstKind::Word(self.parse_repeatable_args(Self::parse_literal)?),
+            ".word" => AstKind::Word(self.parse_repeatable_args(Self::parse_number)?),
             _ => {
                 return Err(Span {
                     kind: ErrorKind::InvalidDirective,
@@ -343,11 +327,9 @@ impl<'a> Parser<'a> {
     pub fn parse_arg(&mut self) -> ParseResult<AstKind> {
         let tok = &self.try_peek()?.token;
         let ast = match tok.kind {
-            TokenKind::Register => {
-                let reg = self.parse_register()?;
-                AstKind::Register(reg)
-            }
-            tok if tok.is_immediate() => self.parse_immediate()?,
+            TokenKind::Register => AstKind::Register(self.parse_register()?),
+            tok if tok.is_immediate() => AstKind::Immediate(self.parse_immediate()?),
+            TokenKind::Ident => AstKind::Symbol(self.parse_ident()?),
             TokenKind::LParen => {
                 self.try_advance_if(TokenKind::LParen)?;
                 let reg = self.parse_register()?;

@@ -105,6 +105,9 @@ demo8:
     or          $t1, $t2, $t0
     ori         $t5, $zero, 'C'
     sb          $t5, $t0        # "Cello, World!"
+    la          $a0, testString
+    li          $v0, SysPrintString
+    syscall
     sll         $t5, $t5, 2
     slt         $t6, $zero, $t5
     slti        $t7, $zero, -18

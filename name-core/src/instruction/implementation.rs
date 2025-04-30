@@ -72,7 +72,7 @@ pub fn slti(program_state: &mut ProgramState, args: IArgs) -> () {
 
 // 0x0B - sltiu
 pub fn sltiu(program_state: &mut ProgramState, args: IArgs) -> () {
-    if program_state.cpu.general_purpose_registers[args.rs as usize] < args.imm {
+    if program_state.cpu.general_purpose_registers[args.rs as usize] < (args.imm as u32) {
         program_state.cpu.general_purpose_registers[args.rt as usize] = 1 as u32;
     } else {
         program_state.cpu.general_purpose_registers[args.rt as usize] = 0 as u32;
@@ -318,32 +318,34 @@ pub fn addi(program_state: &mut ProgramState, args: IArgs) -> () {
 pub fn addiu(program_state: &mut ProgramState, args: IArgs) -> () {
     program_state.cpu.general_purpose_registers[args.rt as usize] =
         program_state.cpu.general_purpose_registers[args.rs as usize]
-            .overflowing_add(args.imm)
+            .overflowing_add(args.imm as u32)
             .0;
 }
 
 // 0x0C - andi
 pub fn andi(program_state: &mut ProgramState, args: IArgs) -> () {
     program_state.cpu.general_purpose_registers[args.rt as usize] =
-        program_state.cpu.general_purpose_registers[args.rs as usize] & args.imm;
+        program_state.cpu.general_purpose_registers[args.rs as usize] & (args.imm as i16 as u32);
 }
 
 // 0x0D - ori
 pub fn ori(program_state: &mut ProgramState, args: IArgs) -> () {
     program_state.cpu.general_purpose_registers[args.rt as usize] =
-        program_state.cpu.general_purpose_registers[args.rs as usize] | args.imm;
+        program_state.cpu.general_purpose_registers[args.rs as usize]
+            | (args.imm as i16 as i32 as u32);
 }
 
 // 0x0E - xori
 pub fn xori(program_state: &mut ProgramState, args: IArgs) -> () {
     program_state.cpu.general_purpose_registers[args.rt as usize] =
-        program_state.cpu.general_purpose_registers[args.rs as usize] ^ args.imm;
+        program_state.cpu.general_purpose_registers[args.rs as usize]
+            ^ (args.imm as i16 as i32 as u32);
 }
 
 // 0x0F - lui
 pub fn lui(program_state: &mut ProgramState, args: IArgs) -> () {
     // SUPER DUPER PROBLEM SPOT
-    program_state.cpu.general_purpose_registers[args.rt as usize] = args.imm << 16;
+    program_state.cpu.general_purpose_registers[args.rt as usize] = (args.imm as u32) << 16;
 }
 
 // 0x20 - lb

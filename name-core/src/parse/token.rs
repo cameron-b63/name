@@ -97,12 +97,7 @@ impl TokenKind {
         )
     }
 
-    pub fn is_literal(&self) -> bool {
-        self.is_number() || *self == TokenKind::Char
-    }
-
-    // Token can appear in an immediates idxition
     pub fn is_immediate(&self) -> bool {
-        self.is_literal() || *self == TokenKind::Ident
+        self.is_number() || *self == TokenKind::Char
     }
 }
