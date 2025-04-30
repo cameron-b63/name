@@ -16,10 +16,10 @@ pub enum RepeatableArgs<T> {
 }
 
 // This impl makes it so we can generalize the repeatable process for .byte, .word, .float, etc.
-impl<'a, T: 'a> RepeatableArgs<T> {
-    pub fn to_be_bytes<F: Fn(&T) -> Vec<u8>>(&self, f: F) -> Vec<u8> {
+impl<T: Copy> RepeatableArgs<T> {
+    pub fn to_be_bytes<const N: usize, F: Fn(T) -> [u8; N]>(self, f: F) -> Vec<u8> {
         match self {
-            Self::List(ls) => ls.iter().flat_map(|item| f(item)).collect(),
+            Self::List(ls) => ls.into_iter().flat_map(|item| f(item)).collect(),
             Self::Repeat(item, repeat) => (0..repeat.clone()).flat_map(|_| f(item)).collect(),
         }
     }

@@ -237,9 +237,7 @@ impl Assembler {
                 self.add_label(&s, self.current_address, Visibility::Global)?
             }
             AstKind::Asciiz(s) => self.assemble_asciiz(s),
-            AstKind::Float(f) => {
-                self.add_data_bytes(&f.to_be_bytes(|x: &f64| x.to_be_bytes().to_vec()))
-            }
+            AstKind::Float(f) => self.add_data_bytes(&f.to_be_bytes(f64::to_be_bytes)),
             AstKind::Section(section) => match section {
                 Section::Text => self.switch_to_text_section(),
                 Section::Data => self.switch_to_data_section(),
@@ -254,7 +252,7 @@ impl Assembler {
                 }
             }
             AstKind::Word(word_args) => {
-                self.add_data_bytes(&word_args.to_be_bytes(|x: &u32| x.to_be_bytes().to_vec()))
+                self.add_data_bytes(&word_args.to_be_bytes(u32::to_be_bytes))
             }
             AstKind::Immediate(_) => panic!(),
             AstKind::Symbol(_) => panic!(),
