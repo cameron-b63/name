@@ -118,6 +118,12 @@ impl From<IArgs> for RawInstruction  {
     }
 }
 
+impl From<RArgs> for RawInstruction  {
+    fn from(r_args: RArgs) -> Self {
+        RawInstruction::new((r_args.opcode << 26) | ((r_args.rs) << 21) | ((r_args.rt) << 16) | ((r_args.rd) << 11) | ((r_args.shamt) << 6) | (r_args.funct))
+    }
+}
+
 #[derive(Debug)]
 pub struct IArgs {
     pub opcode: u32,
@@ -192,6 +198,44 @@ pub struct RArgs {
     pub rd: u32,
     pub shamt: u32,
     pub funct: u32,
+}
+
+impl RArgs {
+    pub fn assign_r_type_arguments(
+        arguments: Vec<AstKind>,
+        args_to_use: &[ArgumentType],
+    ) -> AssembleResult<Self> {
+        let mut rd = 0;
+        let mut rs = 0;
+        let mut rt = 0;
+        let mut shamt = 0;
+
+        for (i, passed) in arguments.into_iter().enumerate() {
+            match args_to_use[i] {
+                ArgumentType::Rd => rd = passed.get_register().ok_or(ErrorKind::InvalidArgument)? as u32,
+                ArgumentType::Rs => rs = passed.get_register().ok_or(ErrorKind::InvalidArgument)? as u32,
+                ArgumentType::Rt => rt = passed.get_register().ok_or(ErrorKind::InvalidArgument)? as u32,
+                ArgumentType::Immediate => {
+                    shamt = passed.get_immediate().ok_or(ErrorKind::InvalidArgument)?;
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        // Bounds check on shift amount
+        if shamt > 31 {
+            return Err(ErrorKind::InvalidShamt);
+        }
+
+        return Ok(Self {
+            opcode: 0,  // This is the case for all R-Type instructions
+            rd,
+            rs,
+            rt,
+            shamt,
+            funct: 0    // This will be filled in by the caller.
+        });
+    }
 }
 
 impl From<RawInstruction> for RArgs {
