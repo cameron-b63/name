@@ -401,7 +401,7 @@ impl<'a> Parser<'a> {
                 } else {
                     let args = self.parse_args()?;
                     let instr = AstKind::Instruction(sym, args);
-                    dbg!(instr)
+                    instr
                 }
             }
             _ => {

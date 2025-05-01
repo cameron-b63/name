@@ -43,6 +43,12 @@ pub struct Coprocessor0 {
     pub debug_mode: bool, // TODO: implement EJTAG
 }
 
+/// Coprocessor 1 is the FPU (floating-point unit).
+#[derive(Debug, Default)]
+pub struct Coprocessor1 {
+    pub registers: [u32; 32],
+}
+
 /// Memory is a conglomerate of program text, program data, the heap, the stack, and other segments.
 /// There exist predefined offsets for each of these segments in 32-bit MIPS:
 ///  - reserved space from 0x00000000 to 0x3fffffff;
@@ -254,6 +260,7 @@ pub struct ProgramState {
     pub should_continue_execution: bool,
     pub cpu: Processor,
     pub cp0: Coprocessor0,
+    pub cp1: Coprocessor1,
     pub memory: Memory,
 }
 
@@ -263,6 +270,7 @@ impl ProgramState {
             should_continue_execution: true,
             cpu: cpu,
             cp0: Coprocessor0::new(),
+            cp1: Coprocessor1::new(),
             memory: memory,
         }
     }

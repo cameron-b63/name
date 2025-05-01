@@ -14,7 +14,7 @@ pub enum ErrorKind {
     UnknownInstruction(String),
     InvalidShamt,
     InvalidArgument,
-    ImmediateOverflow,
+    ImmediateOverflow(u32),
 }
 
 impl fmt::Display for ErrorKind {
@@ -28,7 +28,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::UnknownInstruction(s) => write!(f, "unkown instruction {}", s),
             ErrorKind::InvalidShamt => write!(f, "invalid shift amount"),
             ErrorKind::InvalidArgument => write!(f, "invalid argument"),
-            ErrorKind::ImmediateOverflow => write!(f, "immediate overflow"),
+            ErrorKind::ImmediateOverflow(imm) => write!(f, "immediate overflow on {} (valid range {},{})", imm, i16::MIN as u32, i16::MAX as u32),
         }
     }
 }
@@ -169,8 +169,8 @@ impl IArgs {
         }
 
         // Check if the extracted immediate falls within valid range
-        if (imm as u16 as i16) as i32 != imm as i32 {
-            return Err(ErrorKind::ImmediateOverflow);
+        if ((imm as i32) as i16) as u16 != imm as u16 {
+            return Err(ErrorKind::ImmediateOverflow(imm));
         }
 
         return Ok(Self {
