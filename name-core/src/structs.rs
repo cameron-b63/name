@@ -356,6 +356,90 @@ impl FromStr for Register {
     }
 }
 
+/// Enumeration of FPU (floating-point) registers 
+#[derive(Debug, Clone, Copy)]
+#[repr(usize)]
+pub enum FpRegister {
+    F0,
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
+    F13,
+    F14,
+    F15,
+    F16,
+    F17,
+    F18,
+    F19,
+    F20,
+    F21,
+    F22,
+    F23,
+    F24,
+    F25,
+    F26,
+    F27,
+    F28,
+    F29,
+    F30,
+    F31,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseFpRegisterError(pub String);
+
+impl FromStr for FpRegister {
+    type Err = ParseFpRegisterError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let reg = match s {
+            "$f0" => FpRegister::F0,
+            "$f1" => FpRegister::F1,
+            "$f2" => FpRegister::F2,
+            "$f3" => FpRegister::F3,
+            "$f4" => FpRegister::F4,
+            "$f5" => FpRegister::F5,
+            "$f6" => FpRegister::F6,
+            "$f7" => FpRegister::F7,
+            "$f8" => FpRegister::F8,
+            "$f9" => FpRegister::F9,
+            "$f10" => FpRegister::F10,
+            "$f11" => FpRegister::F11,
+            "$f12" => FpRegister::F12,
+            "$f13" => FpRegister::F13,
+            "$f14" => FpRegister::F14,
+            "$f15" => FpRegister::F15,
+            "$f16" => FpRegister::F16,
+            "$f17" => FpRegister::F17,
+            "$f18" => FpRegister::F18,
+            "$f19" => FpRegister::F19,
+            "$f20" => FpRegister::F20,
+            "$f21" => FpRegister::F21,
+            "$f22" => FpRegister::F22,
+            "$f23" => FpRegister::F23,
+            "$f24" => FpRegister::F24,
+            "$f25" => FpRegister::F25,
+            "$f26" => FpRegister::F26,
+            "$f27" => FpRegister::F27,
+            "$f28" => FpRegister::F28,
+            "$f29" => FpRegister::F29,
+            "$f30" => FpRegister::F30,
+            "$f31" => FpRegister::F31,
+            _ => return Err(ParseFpRegisterError(s.to_string())),
+        };
+        Ok(reg)
+    }
+}
+
 /// Visibility - for use in Symbol. Enumerated version of needed variants.
 #[derive(Debug, Default, Clone)]
 pub enum Visibility {

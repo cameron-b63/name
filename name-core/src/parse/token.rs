@@ -4,6 +4,7 @@ use crate::parse::span::Span;
 pub enum TokenKind {
     Ident,
     Register,
+    FpRegister,
     Directive,
 
     // whole numbers

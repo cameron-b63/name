@@ -30,6 +30,9 @@ pub fn arg_configuration_is_ok(passed_args: &[AstKind], expected_args: &[Argumen
             (AstKind::Register(_), ArgumentType::Rd)
             | (AstKind::Register(_), ArgumentType::Rs)
             | (AstKind::Register(_), ArgumentType::Rt)
+            | (AstKind::FpRegister(_), ArgumentType::Fd)
+            | (AstKind::FpRegister(_), ArgumentType::Fs)
+            | (AstKind::FpRegister(_), ArgumentType::Ft)
             | (AstKind::Immediate(_), ArgumentType::Immediate)
             | (AstKind::Symbol(_), ArgumentType::Identifier)
             | (AstKind::Symbol(_), ArgumentType::BranchLabel) => {}

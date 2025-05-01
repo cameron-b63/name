@@ -455,3 +455,8 @@ pub fn sw(program_state: &mut ProgramState, args: IArgs) -> () {
         i += 1;
     }
 }
+
+// 0x31 - lwc1
+pub fn lwc1(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("Implement lwc1");
+}

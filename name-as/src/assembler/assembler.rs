@@ -1,9 +1,9 @@
-use std::{collections::HashMap, fmt, io};
+use std::collections::HashMap;
 
 use name_core::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
-    instruction::instruction_set::INSTRUCTION_TABLE,
+    instruction::{instruction_set::INSTRUCTION_TABLE, AssembleResult, ErrorKind, RawInstruction},
     parse::{
         parse::{Ast, AstKind},
         span::Span,
@@ -16,39 +16,6 @@ use crate::assembler::assemble_instruction::assemble_instruction;
 use crate::assembler::assembly_helpers::generate_pseudo_instruction_hashmap;
 
 use crate::definitions::structs::PseudoInstruction;
-
-/// Possible assemble error codes
-#[derive(Debug)]
-pub enum ErrorKind {
-    DuplicateSymbol(String),
-    Io(io::Error),
-    String(String),
-    BadArguments,
-    LabelOutsideOfSection,
-    UnknownInstruction(String),
-    InvalidShamt,
-    InvalidArgument,
-    ImmediateOverflow,
-}
-
-impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ErrorKind::DuplicateSymbol(str) => write!(f, "duplicate symbol: {}", str),
-            ErrorKind::Io(err) => write!(f, "{:#?}", err),
-            ErrorKind::String(s) => write!(f, "{}", s),
-            ErrorKind::BadArguments => write!(f, "bad arguments"),
-            ErrorKind::LabelOutsideOfSection => write!(f, "label outside of section"),
-            ErrorKind::UnknownInstruction(s) => write!(f, "unkown instruction {}", s),
-            ErrorKind::InvalidShamt => write!(f, "invalid shift amount"),
-            ErrorKind::InvalidArgument => write!(f, "invalid argument"),
-            ErrorKind::ImmediateOverflow => write!(f, "immediate overflow"),
-        }
-    }
-}
-
-pub type AssembleResult<T> = Result<T, ErrorKind>;
-pub type AssembleError = Span<ErrorKind>;
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
 
@@ -160,7 +127,7 @@ impl Assembler {
             }
         }
 
-        let packed = assemble_instruction(
+        let packed: RawInstruction = assemble_instruction(
             info,
             args.into_iter()
                 .map(|arg| {
@@ -257,6 +224,7 @@ impl Assembler {
             AstKind::Immediate(_) => panic!(),
             AstKind::Symbol(_) => panic!(),
             AstKind::Register(_) => panic!(),
+            AstKind::FpRegister(_) => panic!(),
         }
         Ok(())
     }

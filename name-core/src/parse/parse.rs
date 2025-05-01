@@ -3,7 +3,7 @@ use crate::{
         span::{Span, SrcSpan},
         token::{Token, TokenCursor, TokenKind},
     },
-    structs::{ParseRegisterError, Register, Section},
+    structs::{FpRegister, ParseFpRegisterError, ParseRegisterError, Register, Section},
 };
 
 use std::num::ParseIntError;
@@ -44,11 +44,20 @@ pub enum AstKind {
     // constructs
     Instruction(String, Vec<Ast>),
     Register(Register),
+    FpRegister(FpRegister),
 }
 
 impl AstKind {
     pub fn get_register(self) -> Option<Register> {
         if let AstKind::Register(reg) = self {
+            Some(reg)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_fp_register(self) -> Option<FpRegister> {
+        if let AstKind::FpRegister(reg) = self {
             Some(reg)
         } else {
             None
@@ -77,6 +86,7 @@ pub type Ast = Span<AstKind>;
 pub enum ErrorKind {
     UnexpectedToken(TokenKind),
     InvalidRegister(ParseRegisterError),
+    InvalidFpRegister(ParseFpRegisterError),
     UnexpectedEof,
     InvalidNumber(ParseIntError),
     InvalidFloat(ParseFloatError),
@@ -96,6 +106,9 @@ impl fmt::Display for ErrorKind {
             Self::InvalidRegister(reg_err) => {
                 write!(f, "invalid register {:#?}", reg_err)
             }
+            Self::InvalidFpRegister(reg_err) => {
+                write!(f, "invalid floating-point register {:#?}", reg_err)
+            },
             Self::UnexpectedEof => write!(f, "unexpected eof"),
             Self::InvalidNumber(int_err) => write!(f, "invalid number {:#?}", int_err),
             Self::InvalidFloat(float_err) => write!(f, "invalid float {:#?}", float_err),
@@ -198,6 +211,15 @@ impl<'a> Parser<'a> {
 
         tok.src.parse::<Register>().map_err(|e| Span {
             kind: ErrorKind::InvalidRegister(e),
+            src_span: tok.token.src_span.clone(),
+        })
+    }
+
+    pub fn parse_fp_register(&mut self) -> ParseResult<FpRegister> {
+        let tok = self.try_next_if(TokenKind::FpRegister)?;
+
+        tok.src.parse::<FpRegister>().map_err(|e| Span {
+            kind: ErrorKind::InvalidFpRegister(e),
             src_span: tok.token.src_span.clone(),
         })
     }
@@ -328,6 +350,7 @@ impl<'a> Parser<'a> {
         let tok = &self.try_peek()?.token;
         let ast = match tok.kind {
             TokenKind::Register => AstKind::Register(self.parse_register()?),
+            TokenKind::FpRegister => AstKind::FpRegister(self.parse_fp_register()?),
             tok if tok.is_immediate() => AstKind::Immediate(self.parse_immediate()?),
             TokenKind::Ident => AstKind::Symbol(self.parse_ident()?),
             TokenKind::LParen => {
@@ -384,7 +407,7 @@ impl<'a> Parser<'a> {
                 } else {
                     let args = self.parse_args()?;
                     let instr = AstKind::Instruction(sym, args);
-                    instr
+                    dbg!(instr)
                 }
             }
             _ => {

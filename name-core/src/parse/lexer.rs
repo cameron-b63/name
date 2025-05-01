@@ -171,6 +171,10 @@ impl<'a> Lexer<'a> {
         self.consume_while(|c| matches!(c, 'a'..='z' | '0'..='9'))
     }
 
+    fn consume_fp_register(&mut self) {
+        self.consume_while(|c| matches!(c, '0'..='9'))
+    }
+
     /// lex_token performs the actual pattern matching for tokenization.
     fn lex_token(&mut self) -> LexerResult<Option<Token<'a>>> {
         self.lexeme_start = Some(self.pos.clone());
@@ -221,8 +225,13 @@ impl<'a> Lexer<'a> {
                     TokenKind::Char
                 }
                 '$' => {
-                    self.consume_register();
-                    TokenKind::Register
+                    if self.next_char_if(|c| c == 'f').is_some() {
+                        self.consume_fp_register();
+                        TokenKind::FpRegister
+                    } else {
+                        self.consume_register();
+                        TokenKind::Register
+                    }
                 }
                 '+' => TokenKind::Plus,
                 '-' => TokenKind::Minus,

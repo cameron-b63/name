@@ -1,3 +1,41 @@
+use std::{fmt, io};
+
+use crate::{parse::{parse::AstKind, span::Span}, structs::Register};
+use super::information::ArgumentType;
+
+/// Possible assemble error codes
+#[derive(Debug)]
+pub enum ErrorKind {
+    DuplicateSymbol(String),
+    Io(io::Error),
+    String(String),
+    BadArguments,
+    LabelOutsideOfSection,
+    UnknownInstruction(String),
+    InvalidShamt,
+    InvalidArgument,
+    ImmediateOverflow,
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ErrorKind::DuplicateSymbol(str) => write!(f, "duplicate symbol: {}", str),
+            ErrorKind::Io(err) => write!(f, "{:#?}", err),
+            ErrorKind::String(s) => write!(f, "{}", s),
+            ErrorKind::BadArguments => write!(f, "bad arguments"),
+            ErrorKind::LabelOutsideOfSection => write!(f, "label outside of section"),
+            ErrorKind::UnknownInstruction(s) => write!(f, "unkown instruction {}", s),
+            ErrorKind::InvalidShamt => write!(f, "invalid shift amount"),
+            ErrorKind::InvalidArgument => write!(f, "invalid argument"),
+            ErrorKind::ImmediateOverflow => write!(f, "immediate overflow"),
+        }
+    }
+}
+
+pub type AssembleResult<T> = Result<T, ErrorKind>;
+pub type AssembleError = Span<ErrorKind>;
+
 #[derive(Debug, Copy, Clone)]
 pub struct RawInstruction {
     pub raw: u32,
@@ -68,6 +106,16 @@ impl RawInstruction {
             base
         }
     }
+
+    pub fn to_be_bytes(self) -> [u8; 4] {
+        self.raw.to_be_bytes()
+    }
+}
+
+impl From<IArgs> for RawInstruction  {
+    fn from(i_args: IArgs) -> Self {
+        RawInstruction::new((i_args.opcode << 26) | ((i_args.rs) << 21) | ((i_args.rt) << 16) | (i_args.imm as u32))
+    }
 }
 
 #[derive(Debug)]
@@ -77,6 +125,40 @@ pub struct IArgs {
     pub rt: u32,
     pub imm: u16,
 }
+
+impl IArgs {
+    pub fn assign_i_type_arguments(
+        arguments: Vec<AstKind>,
+        args_to_use: &[ArgumentType],
+    ) -> AssembleResult<Self> {
+        let mut rs: u32 = 0;
+        let mut rt: u32 = 0;
+        let mut imm: u32 = 0;
+    
+        for (i, passed) in arguments.into_iter().enumerate() {
+            match args_to_use[i] {
+                ArgumentType::Rs => rs = passed.get_register().unwrap_or(Register::Zero) as u32,
+                ArgumentType::Rt => rt = passed.get_register().unwrap_or(Register::Zero) as u32,
+                ArgumentType::Immediate => imm = passed.get_immediate().unwrap_or(0),
+                ArgumentType::Identifier | ArgumentType::BranchLabel => (),
+                _ => unreachable!(),
+            }
+        }
+
+        // Check if the extracted immediate falls within valid range
+        if (imm as u16 as i16) as i32 != imm as i32 {
+            return Err(ErrorKind::ImmediateOverflow);
+        }
+
+        return Ok(Self {
+            opcode: 0,
+            rs,
+            rt,
+            imm: imm as u16,
+        });
+    }
+}
+
 
 impl From<RawInstruction> for IArgs {
     fn from(raw: RawInstruction) -> IArgs {

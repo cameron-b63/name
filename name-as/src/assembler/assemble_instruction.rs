@@ -1,14 +1,14 @@
-use crate::assembler::assembler::{AssembleResult, ErrorKind};
 use crate::assembler::assembly_helpers::arg_configuration_is_ok;
 use crate::assembler::assembly_utils::*;
 use name_core::instruction::information::{InstructionInformation, InstructionType};
+use name_core::instruction::{AssembleResult, ErrorKind, IArgs, RawInstruction};
 use name_core::parse::parse::AstKind;
 
 // Big logic for instruction assembly - this is the main driver code for actual packing of instructions once parsed.
 pub fn assemble_instruction(
     info: &InstructionInformation,
     arguments: Vec<AstKind>,
-) -> AssembleResult<u32> {
+) -> AssembleResult<RawInstruction> {
     // dbg!(info);
     // dbg!(&arguments);
     // Find proper argument configuration early
@@ -28,19 +28,20 @@ pub fn assemble_instruction(
             let funct: u32 = info.funct_code.expect("Improper implmentation of instructions (funct field undefined for R-type instr)\nIf you are a student reading this, understand this error comes entirely from a fundamental failure in the codebase of this vscode extension.") as u32;
 
             let (rd, rs, rt, shamt) = assign_r_type_arguments(arguments, config)?;
-            assemble_r_type(rd, rs, rt, shamt, funct)
+            Ok(RawInstruction::new(assemble_r_type(rd, rs, rt, shamt, funct)?))
         }
         InstructionType::IType => {
-            let opcode: u32 = info.op_code as u32;
+            let mut i_args = IArgs::assign_i_type_arguments(arguments, config)?;
+            i_args.opcode = info.op_code as u32;
 
-            let (rs, rt, imm) = assign_i_type_arguments(arguments, config)?;
-
-            assemble_i_type(opcode, rs, rt, imm)
+            Ok(RawInstruction::from(i_args))
         }
         InstructionType::JType => {
             let opcode: u32 = info.op_code as u32;
 
-            Ok(assemble_j_type(opcode))
+            // "Assemble" a j-type instruction. Since the immediate won't be known until relocation, only have to shift opcode.
+
+            Ok(RawInstruction::new(opcode << 26))
         }
     }
 }
