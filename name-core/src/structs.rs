@@ -46,7 +46,7 @@ pub struct Coprocessor0 {
 /// Coprocessor 1 is the FPU (floating-point unit).
 #[derive(Debug, Default)]
 pub struct Coprocessor1 {
-    pub registers: [u32; 32],
+    pub registers: [f32; 32],
 }
 
 /// Memory is a conglomerate of program text, program data, the heap, the stack, and other segments.

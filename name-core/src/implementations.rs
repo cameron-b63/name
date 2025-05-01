@@ -32,7 +32,7 @@ impl Coprocessor0 {
 
 impl Coprocessor1 {
     pub fn new() -> Self {
-        Coprocessor1 { registers: [0; 32] }
+        Coprocessor1 { registers: [0.0; 32] }
     }
 }
 

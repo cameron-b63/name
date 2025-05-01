@@ -484,5 +484,5 @@ pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
         i += 1;
     }
 
-    program_state.cp1.registers[args.rt as usize] = result_word;
+    program_state.cp1.registers[args.rt as usize] = result_word as f32;
 }
