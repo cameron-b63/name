@@ -356,7 +356,7 @@ impl FromStr for Register {
     }
 }
 
-/// Enumeration of FPU (floating-point) registers 
+/// Enumeration of FPU (floating-point) registers
 #[derive(Debug, Clone, Copy)]
 #[repr(usize)]
 pub enum FpRegister {

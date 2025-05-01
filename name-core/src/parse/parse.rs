@@ -48,17 +48,11 @@ pub enum AstKind {
 }
 
 impl AstKind {
-    pub fn get_register(self) -> Option<Register> {
+    pub fn get_register_as_u32(self) -> Option<u32> {
         if let AstKind::Register(reg) = self {
-            Some(reg)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_fp_register(self) -> Option<FpRegister> {
-        if let AstKind::FpRegister(reg) = self {
-            Some(reg)
+            Some(reg as u32)
+        } else if let AstKind::FpRegister(reg) = self {
+            Some(reg as u32)
         } else {
             None
         }
@@ -108,7 +102,7 @@ impl fmt::Display for ErrorKind {
             }
             Self::InvalidFpRegister(reg_err) => {
                 write!(f, "invalid floating-point register {:#?}", reg_err)
-            },
+            }
             Self::UnexpectedEof => write!(f, "unexpected eof"),
             Self::InvalidNumber(int_err) => write!(f, "invalid number {:#?}", int_err),
             Self::InvalidFloat(float_err) => write!(f, "invalid float {:#?}", float_err),

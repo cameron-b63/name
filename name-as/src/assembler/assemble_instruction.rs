@@ -30,9 +30,9 @@ pub fn assemble_instruction(
             r_args.funct = info.funct_code.expect(
                 "Improper implmentation of instructions (funct field undefined for R-type instr)
                     If you are a student reading this, understand this error comes entirely from a \
-                    fundamental failure in the codebase of this vscode extension."
+                    fundamental failure in the codebase of this vscode extension.",
             ) as u32;
-            
+
             Ok(RawInstruction::from(r_args))
         }
         InstructionType::IType => {
@@ -44,7 +44,7 @@ pub fn assemble_instruction(
         InstructionType::JType => {
             let opcode: u32 = info.op_code as u32;
 
-            // "Assemble" a j-type instruction. 
+            // "Assemble" a j-type instruction.
             // Since the immediate won't be known until relocation, only have to shift opcode.
             Ok(RawInstruction::new(opcode << 26))
         }

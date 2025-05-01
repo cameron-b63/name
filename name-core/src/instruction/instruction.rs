@@ -1,7 +1,7 @@
 use std::{fmt, io};
 
-use crate::{parse::{parse::AstKind, span::Span}, structs::Register};
 use super::information::ArgumentType;
+use crate::parse::{parse::AstKind, span::Span};
 
 /// Possible assemble error codes
 #[derive(Debug)]
@@ -112,15 +112,24 @@ impl RawInstruction {
     }
 }
 
-impl From<IArgs> for RawInstruction  {
+impl From<IArgs> for RawInstruction {
     fn from(i_args: IArgs) -> Self {
-        RawInstruction::new((i_args.opcode << 26) | ((i_args.rs) << 21) | ((i_args.rt) << 16) | (i_args.imm as u32))
+        RawInstruction::new(
+            (i_args.opcode << 26) | ((i_args.rs) << 21) | ((i_args.rt) << 16) | (i_args.imm as u32),
+        )
     }
 }
 
-impl From<RArgs> for RawInstruction  {
+impl From<RArgs> for RawInstruction {
     fn from(r_args: RArgs) -> Self {
-        RawInstruction::new((r_args.opcode << 26) | ((r_args.rs) << 21) | ((r_args.rt) << 16) | ((r_args.rd) << 11) | ((r_args.shamt) << 6) | (r_args.funct))
+        RawInstruction::new(
+            (r_args.opcode << 26)
+                | ((r_args.rs) << 21)
+                | ((r_args.rt) << 16)
+                | ((r_args.rd) << 11)
+                | ((r_args.shamt) << 6)
+                | (r_args.funct),
+        )
     }
 }
 
@@ -140,11 +149,19 @@ impl IArgs {
         let mut rs: u32 = 0;
         let mut rt: u32 = 0;
         let mut imm: u32 = 0;
-    
+
         for (i, passed) in arguments.into_iter().enumerate() {
             match args_to_use[i] {
-                ArgumentType::Rs => rs = passed.get_register().unwrap_or(Register::Zero) as u32,
-                ArgumentType::Rt => rt = passed.get_register().unwrap_or(Register::Zero) as u32,
+                ArgumentType::Rs | ArgumentType::Fs => {
+                    rs = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)?
+                }
+                ArgumentType::Rt | ArgumentType::Ft => {
+                    rt = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)?
+                }
                 ArgumentType::Immediate => imm = passed.get_immediate().unwrap_or(0),
                 ArgumentType::Identifier | ArgumentType::BranchLabel => (),
                 _ => unreachable!(),
@@ -164,7 +181,6 @@ impl IArgs {
         });
     }
 }
-
 
 impl From<RawInstruction> for IArgs {
     fn from(raw: RawInstruction) -> IArgs {
@@ -212,9 +228,21 @@ impl RArgs {
 
         for (i, passed) in arguments.into_iter().enumerate() {
             match args_to_use[i] {
-                ArgumentType::Rd => rd = passed.get_register().ok_or(ErrorKind::InvalidArgument)? as u32,
-                ArgumentType::Rs => rs = passed.get_register().ok_or(ErrorKind::InvalidArgument)? as u32,
-                ArgumentType::Rt => rt = passed.get_register().ok_or(ErrorKind::InvalidArgument)? as u32,
+                ArgumentType::Rd | ArgumentType::Fd => {
+                    rd = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)?
+                }
+                ArgumentType::Rs | ArgumentType::Fs => {
+                    rs = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)?
+                }
+                ArgumentType::Rt | ArgumentType::Ft => {
+                    rt = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)?
+                }
                 ArgumentType::Immediate => {
                     shamt = passed.get_immediate().ok_or(ErrorKind::InvalidArgument)?;
                 }
@@ -228,12 +256,12 @@ impl RArgs {
         }
 
         return Ok(Self {
-            opcode: 0,  // This is the case for all R-Type instructions
+            opcode: 0, // This is the case for all R-Type instructions
             rd,
             rs,
             rt,
             shamt,
-            funct: 0    // This will be filled in by the caller.
+            funct: 0, // This will be filled in by the caller.
         });
     }
 }
