@@ -1,5 +1,6 @@
 use crate::{
     parse::{
+        session::Session,
         span::{Span, SrcSpan},
         token::{Token, TokenCursor, TokenKind},
     },
@@ -113,55 +114,50 @@ impl fmt::Display for ErrorKind {
 pub type ParseError = Span<ErrorKind>;
 type ParseResult<T> = Result<T, ParseError>;
 
-pub struct Parser<'a> {
-    cursor: TokenCursor<'a>,
-    _src: &'a str,
+pub struct Parser<'sess, 'sess_ref> {
+    session: &'sess_ref mut Session<'sess>,
+    cursor: TokenCursor,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(toks: Vec<Token<'a>>, src: &'a str) -> Self {
-        Parser {
-            cursor: TokenCursor::new(toks),
-            _src: src,
-        }
+impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
+    pub fn new(cursor: TokenCursor, session: &'sess_ref mut Session<'sess>) -> Self {
+        Parser { cursor, session }
     }
 
     /// Creates a new AST from the passed root node.
     pub fn ast<F: Fn(&mut Self) -> ParseResult<AstKind>>(&mut self, f: F) -> ParseResult<Ast> {
-        let start = self.try_peek()?.token.start();
+        let next_span = self.try_peek()?.src_span.clone();
+
         let kind = f(self)?;
-        let end = self
-            .cursor
-            .prev()
-            .map(|tok| tok.token.end())
-            .unwrap_or_default();
+
+        let end_pos = self.cursor.pos;
 
         // make the src span
-        let src_span = SrcSpan { start, end };
+        let src_span = SrcSpan {
+            pos: next_span.pos,
+            length: end_pos.checked_sub(next_span.pos).unwrap_or(0),
+        };
 
         // return the ast
         Ok(Span { src_span, kind })
     }
 
     pub fn unexpected_eof(&self) -> Span<ErrorKind> {
-        let prev = self.cursor.prev();
-        let pos = prev
-            .map(|tok| tok.token.src_span.end.clone())
-            .unwrap_or_default();
+        let src_span = SrcSpan {
+            pos: self.cursor.pos,
+            length: 0,
+        };
         Span {
             kind: ErrorKind::UnexpectedEof,
-            src_span: SrcSpan {
-                start: pos.clone(),
-                end: pos,
-            },
+            src_span,
         }
     }
 
-    pub fn try_peek(&self) -> ParseResult<&Token<'a>> {
+    pub fn try_peek(&self) -> ParseResult<&Token> {
         self.cursor.peek().ok_or(self.unexpected_eof())
     }
 
-    pub fn try_next(&mut self) -> ParseResult<&Token<'a>> {
+    pub fn try_next(&mut self) -> ParseResult<Token> {
         if self.cursor.peek().is_some() {
             Ok(self.cursor.next().unwrap())
         } else {
@@ -169,12 +165,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn try_next_if(&mut self, kind: TokenKind) -> ParseResult<&Token<'a>> {
-        let tok = self.try_next()?;
-        if tok.token.is_kind(kind) {
+    pub fn try_next_if(&mut self, kind: TokenKind) -> ParseResult<Token> {
+        let tok = self.try_next()?.clone();
+        if tok.is_kind(kind) {
             Ok(tok)
         } else {
-            Err(tok.token.clone().map(|k| ErrorKind::UnexpectedToken(k)))
+            Err(tok.clone().map(|k| ErrorKind::UnexpectedToken(k)))
         }
     }
 
@@ -185,33 +181,38 @@ impl<'a> Parser<'a> {
 
     pub fn parse_ident(&mut self) -> ParseResult<String> {
         let tok = self.try_next_if(TokenKind::Ident)?;
-        Ok(tok.src.to_string())
+        let src = self.session.get_src_str(&tok.src_span);
+        Ok(src.to_string())
     }
 
     pub fn parse_string(&mut self) -> ParseResult<String> {
-        let src = self.try_next_if(TokenKind::String)?.src;
+        let tok = self.try_next_if(TokenKind::String)?;
+        let src = self.session.get_src_str(&tok.src_span);
         Ok(src[1..src.len() - 1].to_string())
     }
 
     pub fn parse_register(&mut self) -> ParseResult<Register> {
         let tok = self.try_next_if(TokenKind::Register)?;
+        let src = self.session.get_src_str(&tok.src_span);
 
-        tok.src.parse::<Register>().map_err(|e| Span {
+        src.parse::<Register>().map_err(|e| Span {
             kind: ErrorKind::InvalidRegister(e),
-            src_span: tok.token.src_span.clone(),
+            src_span: tok.src_span.clone(),
         })
     }
 
     pub fn parse_label(&mut self) -> ParseResult<AstKind> {
-        let label = self.try_next_if(TokenKind::Ident)?.src.to_string();
+        let tok = self.try_next_if(TokenKind::Ident)?;
+        let src = self.session.get_src_str(&tok.src_span).to_string();
         self.try_advance_if(TokenKind::Colon)?;
-        Ok(AstKind::Label(label))
+        Ok(AstKind::Label(src))
     }
 
     pub fn parse_char(&mut self) -> ParseResult<u32> {
         let tok = self.try_next_if(TokenKind::Char)?;
+        let src = self.session.get_src_str(&tok.src_span);
         // skip the first quote
-        let mut chars = tok.src.chars().skip(1);
+        let mut chars = src.chars().skip(1);
         let char = match (chars.next(), chars.next()) {
             (Some('\\'), Some(c)) => match c {
                 't' => '\t',
@@ -220,25 +221,27 @@ impl<'a> Parser<'a> {
                 '\'' => '\'',
                 '"' => '"',
                 '\\' => '\\',
-                _ => return Err(tok.token.clone().map(|_| ErrorKind::InvalidEscape)),
+                _ => return Err(tok.clone().map(|_| ErrorKind::InvalidEscape)),
             },
             (Some(c), _) => c,
-            _ => return Err(tok.token.clone().map(|_| ErrorKind::InvalidChar)),
+            _ => return Err(tok.clone().map(|_| ErrorKind::InvalidChar)),
         };
         Ok(char as u32)
     }
 
     pub fn parse_float(&mut self) -> ParseResult<f64> {
         let tok = self.try_next()?;
-        let num = match tok.token.kind {
+        let src = self.session.get_src_str(&tok.src_span);
+
+        let num = match tok.kind {
             TokenKind::Float => {
-                &tok.src.parse::<f64>().map_err(|e| Span {
+                &src.parse::<f64>().map_err(|e| Span {
                     kind: ErrorKind::InvalidFloat(e),
-                    src_span: tok.token.src_span.clone(),
+                    src_span: tok.src_span.clone(),
                 })?
             }
             .clone(),
-            _ => return Err(tok.token.clone().map(|k| ErrorKind::UnexpectedToken(k))),
+            _ => return Err(tok.clone().map(|k| ErrorKind::UnexpectedToken(k))),
         };
 
         Ok(num)
@@ -247,17 +250,18 @@ impl<'a> Parser<'a> {
     pub fn parse_number(&mut self) -> ParseResult<u32> {
         let is_minus = self.cursor.next_if(TokenKind::Minus).is_some();
         let tok = self.try_next()?;
+        let src = self.session.get_src_str(&tok.src_span);
 
-        let mut num = match tok.token.kind {
-            TokenKind::HexNumber => u32::from_str_radix(&tok.src[2..], 16),
-            TokenKind::DecimalNumber => u32::from_str_radix(tok.src, 10),
-            TokenKind::OctalNumber => u32::from_str_radix(&tok.src[2..], 8),
-            TokenKind::BinaryNumber => u32::from_str_radix(&tok.src[2..], 2),
-            _ => return Err(tok.token.clone().map(|k| ErrorKind::UnexpectedToken(k))),
+        let mut num = match tok.kind {
+            TokenKind::HexNumber => u32::from_str_radix(&src[2..], 16),
+            TokenKind::DecimalNumber => u32::from_str_radix(src, 10),
+            TokenKind::OctalNumber => u32::from_str_radix(&src[2..], 8),
+            TokenKind::BinaryNumber => u32::from_str_radix(&src[2..], 2),
+            _ => return Err(tok.clone().map(|k| ErrorKind::UnexpectedToken(k))),
         }
         .map_err(|e| Span {
             kind: ErrorKind::InvalidNumber(e),
-            src_span: tok.token.src_span.clone(),
+            src_span: tok.src_span.clone(),
         })?;
 
         if is_minus {
@@ -268,12 +272,12 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_immediate(&mut self) -> ParseResult<u32> {
-        let literal = &self.try_peek()?.token;
+        let tok = self.try_peek()?;
 
-        match literal.kind {
+        match tok.kind {
             tok if tok.is_number() => self.parse_number(),
             TokenKind::Char => self.parse_char(),
-            _ => return Err(literal.clone().map(|_k| ErrorKind::InvalidImmediate)),
+            _ => Err(tok.clone().map(|_k| ErrorKind::InvalidImmediate)),
         }
     }
 
@@ -296,8 +300,9 @@ impl<'a> Parser<'a> {
 
     pub fn parse_directive(&mut self) -> ParseResult<AstKind> {
         let tok = self.try_next_if(TokenKind::Directive)?;
+        let src = self.session.get_src_str(&tok.src_span);
 
-        let ast = match tok.src {
+        let ast = match src {
             // ".eqv" => AstKind::Eqv(self.ast(self.parse_ident())?, self.parse_literal()?),
             // ".include" => AstKind::Include(self.parse_string()?),
             ".text" => AstKind::Section(Section::Text),
@@ -317,7 +322,7 @@ impl<'a> Parser<'a> {
             _ => {
                 return Err(Span {
                     kind: ErrorKind::InvalidDirective,
-                    src_span: tok.token.src_span.clone(),
+                    src_span: tok.src_span.clone(),
                 })
             }
         };
@@ -325,7 +330,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_arg(&mut self) -> ParseResult<AstKind> {
-        let tok = &self.try_peek()?.token;
+        let tok = &self.try_peek()?;
         let ast = match tok.kind {
             TokenKind::Register => AstKind::Register(self.parse_register()?),
             tok if tok.is_immediate() => AstKind::Immediate(self.parse_immediate()?),
@@ -371,7 +376,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_root(&mut self) -> ParseResult<AstKind> {
         let tok = self.try_peek()?;
-        let ast: AstKind = match tok.token.kind {
+        let ast: AstKind = match tok.kind {
             TokenKind::Directive => self.parse_directive()?,
             TokenKind::Ident => {
                 let sym = self.parse_ident()?;
@@ -389,8 +394,8 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 // TODO add more info to error
-                let err = tok.token.clone().map(|k| ErrorKind::UnexpectedToken(k));
-                self.cursor.advance();
+                let err = tok.clone().map(|k| ErrorKind::UnexpectedToken(k));
+                let _ = self.cursor.next();
                 return Err(err);
             }
         };
@@ -405,8 +410,8 @@ impl<'a> Parser<'a> {
         let mut errs = Vec::new();
 
         while let Some(tok) = self.cursor.peek() {
-            if tok.token.is_kind(TokenKind::Newline) {
-                self.cursor.advance();
+            if tok.is_kind(TokenKind::Newline) {
+                let _ = self.cursor.next();
                 continue;
             } else {
                 // This is the point of recursion.
