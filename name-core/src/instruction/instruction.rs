@@ -11,12 +11,14 @@ pub enum ErrorKind {
     String(String),
     BadArguments,
     LabelOutsideOfSection,
+    MissingFunct,
     UnknownInstruction(String),
     InvalidShamt,
     InvalidArgument,
     ImmediateOverflow(u32),
 }
 
+// ErrorKind enumeration
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -25,14 +27,27 @@ impl fmt::Display for ErrorKind {
             ErrorKind::String(s) => write!(f, "{}", s),
             ErrorKind::BadArguments => write!(f, "bad arguments"),
             ErrorKind::LabelOutsideOfSection => write!(f, "label outside of section"),
+            ErrorKind::MissingFunct => write!(
+                f,
+                "Improper implmentation of instructions (funct field undefined for R-type instr)
+                    If you are a student reading this, understand this error comes entirely from a \
+                    fundamental failure in the codebase of this assembler.",
+            ),
             ErrorKind::UnknownInstruction(s) => write!(f, "unkown instruction {}", s),
             ErrorKind::InvalidShamt => write!(f, "invalid shift amount"),
             ErrorKind::InvalidArgument => write!(f, "invalid argument"),
-            ErrorKind::ImmediateOverflow(imm) => write!(f, "immediate overflow on {} (valid range {},{})", imm, i16::MIN as u32, i16::MAX as u32),
+            ErrorKind::ImmediateOverflow(imm) => write!(
+                f,
+                "immediate overflow on {} (valid range {},{})",
+                imm,
+                i16::MIN as u32,
+                i16::MAX as u32
+            ),
         }
     }
 }
 
+// Types
 pub type AssembleResult<T> = Result<T, ErrorKind>;
 pub type AssembleError = Span<ErrorKind>;
 
@@ -41,6 +56,7 @@ pub struct RawInstruction {
     pub raw: u32,
 }
 
+// RawInstruction impls
 impl RawInstruction {
     pub fn new(raw: u32) -> RawInstruction {
         RawInstruction { raw }
@@ -88,6 +104,22 @@ impl RawInstruction {
         self.raw >> 6 & 0x1F
     }
 
+    pub fn get_fmt(self) -> u32 {
+        self.raw >> 21 & 0x1F
+    }
+
+    pub fn get_ft(self) -> u32 {
+        self.raw >> 16 & 0x1F
+    }
+
+    pub fn get_fs(self) -> u32 {
+        self.raw >> 11 & 0x1F
+    }
+
+    pub fn get_fd(self) -> u32 {
+        self.raw >> 6 & 0x1F
+    }
+
     pub fn get_immediate(self) -> u16 {
         (self.raw & 0xFFFF) as u16
     }
@@ -112,11 +144,18 @@ impl RawInstruction {
     }
 }
 
+// RawInstruction to XArgs conversion
 impl From<IArgs> for RawInstruction {
     fn from(i_args: IArgs) -> Self {
         RawInstruction::new(
             (i_args.opcode << 26) | ((i_args.rs) << 21) | ((i_args.rt) << 16) | (i_args.imm as u32),
         )
+    }
+}
+
+impl From<JArgs> for RawInstruction {
+    fn from(j_args: JArgs) -> Self {
+        RawInstruction::new((j_args.opcode << 26) | (j_args.address))
     }
 }
 
@@ -133,6 +172,20 @@ impl From<RArgs> for RawInstruction {
     }
 }
 
+impl From<FpRArgs> for RawInstruction {
+    fn from(fp_r_args: FpRArgs) -> Self {
+        RawInstruction::new(
+            (fp_r_args.opcode << 26)
+                | ((fp_r_args.fmt) << 21)
+                | ((fp_r_args.ft) << 16)
+                | ((fp_r_args.fs) << 11)
+                | ((fp_r_args.fd) << 6)
+                | (fp_r_args.funct),
+        )
+    }
+}
+
+// IArgs
 #[derive(Debug)]
 pub struct IArgs {
     pub opcode: u32,
@@ -193,9 +246,23 @@ impl From<RawInstruction> for IArgs {
     }
 }
 
+// JArgs
 pub struct JArgs {
     pub opcode: u32,
     pub address: u32,
+}
+
+impl JArgs {
+    pub fn assign_j_type_arguments(
+        _arguments: Vec<AstKind>,
+        _args_to_use: &[ArgumentType],
+    ) -> AssembleResult<Self> {
+        // Nothing ever happens...
+        Ok(Self {
+            opcode: 0,  // Will be filled in by caller
+            address: 0, // Will be handled by linker
+        })
+    }
 }
 
 impl From<RawInstruction> for JArgs {
@@ -207,6 +274,7 @@ impl From<RawInstruction> for JArgs {
     }
 }
 
+// RArgs
 pub struct RArgs {
     pub opcode: u32,
     pub rs: u32,
@@ -256,7 +324,7 @@ impl RArgs {
         }
 
         return Ok(Self {
-            opcode: 0, // This is the case for all R-Type instructions
+            opcode: 0, // Will be filled in by the caller.
             rd,
             rs,
             rt,
@@ -274,6 +342,74 @@ impl From<RawInstruction> for RArgs {
             rt: raw.get_rt(),
             rd: raw.get_rd(),
             shamt: raw.get_shamt(),
+            funct: raw.get_funct(),
+        }
+    }
+}
+
+// FpRArgs
+pub struct FpRArgs {
+    pub opcode: u32,
+    pub fmt: u32,
+    pub ft: u32,
+    pub fs: u32,
+    pub fd: u32,
+    pub funct: u32,
+}
+
+impl FpRArgs {
+    pub fn assign_fp_r_arguments(
+        arguments: Vec<AstKind>,
+        args_to_use: &[ArgumentType],
+    ) -> AssembleResult<Self> {
+        let mut fmt = 0;
+        let mut ft = 0;
+        let mut fs = 0;
+        let mut fd = 0;
+
+        for (i, passed) in arguments.into_iter().enumerate() {
+            match args_to_use[i] {
+                ArgumentType::Fd => {
+                    fd = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)? as u32
+                }
+                ArgumentType::Fs => {
+                    fs = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)? as u32
+                }
+                ArgumentType::Ft => {
+                    ft = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)? as u32
+                }
+                ArgumentType::FpFmt => {
+                    fmt = passed.get_fp_fmt().ok_or(ErrorKind::InvalidArgument)? as u32
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        return Ok(Self {
+            opcode: 0, // Will be filled in by caller
+            fmt,
+            ft,
+            fs,
+            fd,
+            funct: 0, // Will be filled in by caller
+        });
+    }
+}
+
+impl From<RawInstruction> for FpRArgs {
+    fn from(raw: RawInstruction) -> Self {
+        Self {
+            opcode: raw.get_opcode(),
+            fmt: raw.get_fmt(),
+            fs: raw.get_fs(),
+            ft: raw.get_ft(),
+            fd: raw.get_fd(),
             funct: raw.get_funct(),
         }
     }

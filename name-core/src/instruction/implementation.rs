@@ -1,5 +1,5 @@
 use crate::exception::definitions::ExceptionType;
-use crate::instruction::{IArgs, JArgs, RArgs};
+use crate::instruction::{FpRArgs, IArgs, JArgs, RArgs};
 use crate::structs::{
     ProgramState,
     Register::{At, Ra},
@@ -485,4 +485,23 @@ pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
     }
 
     program_state.cp1.registers[args.rt as usize] = result_word as f32;
+}
+
+/*
+
+   _____ ____  _____  __
+  / ____/ __ \|  __ \/_ |
+ | |   | |  | | |__) || |
+ | |   | |  | |  ___/ | |
+ | |___| |__| | |     | |
+  \_____\____/|_|     |_|
+
+
+
+*/
+
+// 0x00 - add.fmt
+pub fn fp_add(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+    // Match on format to perform appropriate operation
+    todo!("Fp add instruction");
 }

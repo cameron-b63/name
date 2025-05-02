@@ -61,6 +61,7 @@ pub enum InstructionType {
     RType,
     IType,
     JType,
+    FpRType,
 }
 
 #[derive(Debug, PartialEq)]
@@ -71,6 +72,7 @@ pub enum ArgumentType {
     Fd,
     Fs,
     Ft,
+    FpFmt,
     Immediate,
     Identifier,
     BranchLabel,

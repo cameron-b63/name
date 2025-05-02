@@ -1,5 +1,5 @@
 use crate::constants::{MIPS_TEXT_START_ADDR, REGISTERS};
-use crate::structs::{Coprocessor0, Coprocessor1, Processor, ProgramState /*, OperatingSystem*/};
+use crate::structs::{Coprocessor0, Coprocessor1, Processor, ProgramState, /*, OperatingSystem*/};
 // use crate::instruction::instruction_set;
 
 impl Default for Processor {
@@ -32,7 +32,9 @@ impl Coprocessor0 {
 
 impl Coprocessor1 {
     pub fn new() -> Self {
-        Coprocessor1 { registers: [0.0; 32] }
+        Coprocessor1 {
+            registers: [0.0; 32],
+        }
     }
 }
 

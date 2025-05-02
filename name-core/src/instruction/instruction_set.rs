@@ -27,6 +27,21 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             relocation_type: None,
         },
         InstructionInformation {
+            mnemonic: "add.",
+            op_code: 0x11,
+            funct_code: Some(0),
+            implementation: wrap_imp(implementation::fp_add),
+            instruction_type: InstructionType::FpRType,
+            args: &[
+                ArgumentType::FpFmt,
+                ArgumentType::Fd,
+                ArgumentType::Fs,
+                ArgumentType::Ft,
+            ],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
             mnemonic: "addi",
             op_code: 0x08,
             funct_code: None,

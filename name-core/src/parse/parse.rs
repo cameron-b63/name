@@ -39,7 +39,7 @@ pub enum AstKind {
     Section(Section),
     Globl(String),
     Word(RepeatableArgs<u32>),
-    Float(RepeatableArgs<f64>),
+    Float(RepeatableArgs<f32>),
 
     // constructs
     Instruction(String, Vec<Ast>),
@@ -64,6 +64,10 @@ impl AstKind {
         } else {
             None
         }
+    }
+
+    pub fn get_fp_fmt(self) -> Option<u32> {
+        todo!("Implement get_fp_fmt");
     }
 }
 
@@ -244,11 +248,11 @@ impl<'a> Parser<'a> {
         Ok(char as u32)
     }
 
-    pub fn parse_float(&mut self) -> ParseResult<f64> {
+    pub fn parse_float(&mut self) -> ParseResult<f32> {
         let tok = self.try_next()?;
         let num = match tok.token.kind {
             TokenKind::Float => {
-                &tok.src.parse::<f64>().map_err(|e| Span {
+                &tok.src.parse::<f32>().map_err(|e| Span {
                     kind: ErrorKind::InvalidFloat(e),
                     src_span: tok.token.src_span.clone(),
                 })?
