@@ -1,6 +1,6 @@
 use std::{fmt, io};
 
-use super::information::ArgumentType;
+use super::information::{ArgumentType, FpInstructionInformation, InstructionInformation};
 use crate::parse::{parse::AstKind, span::Span};
 
 /// Possible assemble error codes
@@ -11,11 +11,14 @@ pub enum ErrorKind {
     String(String),
     BadArguments,
     LabelOutsideOfSection,
+    MissingFmt,
     MissingFunct,
     UnknownInstruction(String),
+    UndefinedSymbol(String),
     InvalidShamt,
     InvalidArgument,
     ImmediateOverflow(u32),
+    WrongInstructionType,
 }
 
 // ErrorKind enumeration
@@ -33,6 +36,11 @@ impl fmt::Display for ErrorKind {
                     If you are a student reading this, understand this error comes entirely from a \
                     fundamental failure in the codebase of this assembler.",
             ),
+            ErrorKind::MissingFmt => write!(
+                f,
+                "Improper implementation of instructions, \
+                    missing fmt field for instruction."
+            ),
             ErrorKind::UnknownInstruction(s) => write!(f, "unkown instruction {}", s),
             ErrorKind::InvalidShamt => write!(f, "invalid shift amount"),
             ErrorKind::InvalidArgument => write!(f, "invalid argument"),
@@ -43,6 +51,12 @@ impl fmt::Display for ErrorKind {
                 i16::MIN as u32,
                 i16::MAX as u32
             ),
+            ErrorKind::UndefinedSymbol(s) => write!(f, "undefined symbol {} found.", s),
+            ErrorKind::WrongInstructionType => write!(
+                f,
+                "wrong instruction type \
+                defined for instruction."
+            ),
         }
     }
 }
@@ -50,6 +64,12 @@ impl fmt::Display for ErrorKind {
 // Types
 pub type AssembleResult<T> = Result<T, ErrorKind>;
 pub type AssembleError = Span<ErrorKind>;
+
+// Wrapper type to keep InstructionInformation and FpInstructionInformation together.
+pub enum InstructionMeta {
+    Int(&'static InstructionInformation),
+    Fp(&'static FpInstructionInformation),
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct RawInstruction {
@@ -362,7 +382,6 @@ impl FpRArgs {
         arguments: Vec<AstKind>,
         args_to_use: &[ArgumentType],
     ) -> AssembleResult<Self> {
-        let mut fmt = 0;
         let mut ft = 0;
         let mut fs = 0;
         let mut fd = 0;
@@ -384,16 +403,13 @@ impl FpRArgs {
                         .get_register_as_u32()
                         .ok_or(ErrorKind::InvalidArgument)? as u32
                 }
-                ArgumentType::FpFmt => {
-                    fmt = passed.get_fp_fmt().ok_or(ErrorKind::InvalidArgument)? as u32
-                }
                 _ => unreachable!(),
             }
         }
 
         return Ok(Self {
             opcode: 0, // Will be filled in by caller
-            fmt,
+            fmt: 0,    // Will be filled in by caller
             ft,
             fs,
             fd,
