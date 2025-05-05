@@ -100,7 +100,7 @@ impl Debug for FpInstructionInformation {
 
 impl FpInstructionInformation {
     pub fn lookup_code(&self) -> u32 {
-        self.op_code << 6 | self.funct_code.unwrap_or(0)
+        (self.op_code << 11) | (self.funct_code.unwrap_or(0) << 5) | (self.fmt.unwrap_or(FpFmt::Reserved) as u32)
     }
 }
 
@@ -131,8 +131,9 @@ pub enum ArgumentType {
     BranchLabel,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FpFmt {
+    Reserved,
     Single,
     Double,
 }
@@ -142,6 +143,7 @@ pub enum FpFmt {
 impl From<&FpFmt> for u32 {
     fn from(fmt: &FpFmt) -> Self {
         match fmt {
+            FpFmt::Reserved => 0,
             FpFmt::Single => 16,
             FpFmt::Double => 17,
         }
