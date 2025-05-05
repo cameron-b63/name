@@ -1,11 +1,8 @@
 use crate::{
-    exception::definitions::ExceptionType,
-    structs::{LineInfo, OperatingSystem, ProgramState},
+    debug::debug_utils::DebuggerState, exception::definitions::ExceptionType, structs::{LineInfo, OperatingSystem, ProgramState}
 };
 
 use crate::debug::simulator_helpers::generate_err;
-
-use super::debug_utils::DebuggerState;
 //use name_core::debug::
 
 /// The exception handler is invoked whenever an exception has occurred.

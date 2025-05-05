@@ -5,8 +5,8 @@ use std::{collections::HashMap, sync::LazyLock};
 
 use crate::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_TEXT_START_ADDR},
-    debug::{exception_handler::handle_exception, fetch::fetch},
-    exception::definitions::ExceptionType,
+    debug::fetch::fetch,
+    exception::{definitions::ExceptionType, exception_handler::handle_exception},
     instruction::{
         information::InstructionInformation, instruction_set::INSTRUCTION_SET, RawInstruction,
     },
