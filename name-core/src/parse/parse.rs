@@ -249,8 +249,9 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_float(&mut self) -> ParseResult<f32> {
+        let is_minus = self.cursor.next_if(TokenKind::Minus).is_some();
         let tok = self.try_next()?;
-        let num = match tok.token.kind {
+        let mut num = match tok.token.kind {
             TokenKind::Float => {
                 &tok.src.parse::<f32>().map_err(|e| Span {
                     kind: ErrorKind::InvalidFloat(e),
@@ -260,6 +261,10 @@ impl<'a> Parser<'a> {
             .clone(),
             _ => return Err(tok.token.clone().map(|k| ErrorKind::UnexpectedToken(k))),
         };
+
+        if is_minus {
+            num *= -1f32;
+        }
 
         Ok(num)
     }

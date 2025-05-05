@@ -479,10 +479,12 @@ pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
     while i < 4 {
         match program_state.memory.read_byte(temp + i) {
             Ok(b) => result_word |= (b as u32) << (24 - (i * 8)),
-            Err(_) => program_state.set_exception(ExceptionType::AddressExceptionLoad),
+            Err(_) => {
+                program_state.set_exception(ExceptionType::AddressExceptionLoad);
+            },
         }
         i += 1;
     }
 
-    program_state.cp1.registers[args.rt as usize] = result_word as f32;
+    program_state.cp1.registers[args.rt as usize] = f32::from_bits(result_word);
 }

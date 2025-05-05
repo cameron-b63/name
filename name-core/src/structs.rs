@@ -511,6 +511,7 @@ impl OperatingSystem {
 
         match syscall_num {
             0x01 => sys_print_int(program_state, &mut self.stdout.lock()),
+            0x02 => sys_print_float(program_state, &mut self.stdout.lock()),
             0x04 => sys_print_string(program_state, &mut self.stdout.lock()),
             0x05 => sys_read_int(program_state, &mut self.stdin.lock()),
             0x0A => sys_exit(program_state),

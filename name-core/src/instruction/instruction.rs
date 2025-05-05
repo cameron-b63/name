@@ -1,7 +1,7 @@
 use std::{fmt, io};
 
 use super::information::{ArgumentType, FpInstructionInformation, InstructionInformation};
-use crate::parse::{parse::AstKind, span::Span};
+use crate::{parse::{parse::AstKind, span::Span}, structs::ProgramState};
 
 /// Possible assemble error codes
 #[derive(Debug)]
@@ -69,6 +69,24 @@ pub type AssembleError = Span<ErrorKind>;
 pub enum InstructionMeta {
     Int(&'static InstructionInformation),
     Fp(&'static FpInstructionInformation),
+}
+
+impl InstructionMeta {
+    /// Get the mnemonic of the instruction inside the InstructionMeta wrapper.
+    pub fn get_mnemonic(&self) -> String {
+        match self {
+            Self::Fp(info) => String::from(info.mnemonic),
+            Self::Int(info) => String::from(info.mnemonic),
+        }
+    }
+
+    /// Get a reference to the implementation function inside the InstructionMeta wrapper.
+    pub fn get_implementation(&self) -> &Box<dyn Fn(&mut ProgramState, RawInstruction) -> () + Sync + Send> {
+        match self {
+            Self::Fp(info) => &info.implementation,
+            Self::Int(info) => &info.implementation,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -160,9 +178,7 @@ impl RawInstruction {
             base | self.get_rt()
         } else if self.is_floating() {
             (self.get_opcode() << 11) | (self.get_funct() << 5) | self.get_fmt()
-        }
-        
-         else {
+        } else {
             base
         }
     }

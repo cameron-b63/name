@@ -100,7 +100,9 @@ impl Debug for FpInstructionInformation {
 
 impl FpInstructionInformation {
     pub fn lookup_code(&self) -> u32 {
-        (self.op_code << 11) | (self.funct_code.unwrap_or(0) << 5) | (self.fmt.unwrap_or(FpFmt::Reserved) as u32)
+        (self.op_code << 11)
+            | (self.funct_code.unwrap_or(0) << 5)
+            | (self.fmt.unwrap_or(FpFmt::Reserved) as u32)
     }
 }
 

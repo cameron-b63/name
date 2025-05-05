@@ -159,7 +159,7 @@ impl Assembler {
         Ok(())
     }
 
-    pub fn assemble_pseduo_instruction(
+    pub fn assemble_pseudo_instruction(
         &mut self,
         pinstr: &str,
         args: Vec<AstKind>,
@@ -224,7 +224,7 @@ impl Assembler {
             AstKind::Instruction(instr, args) => {
                 let ast_kinds = args.into_iter().map(|ast| ast.kind).collect();
                 if self.pseudo_instruction_table.contains_key(instr.as_str()) {
-                    self.assemble_pseduo_instruction(&instr, ast_kinds)?;
+                    self.assemble_pseudo_instruction(&instr, ast_kinds)?;
                 } else {
                     self.assemble_instruction(&instr, ast_kinds)?
                 }
