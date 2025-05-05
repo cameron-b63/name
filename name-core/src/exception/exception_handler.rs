@@ -1,5 +1,7 @@
 use crate::{
-    debug::debug_utils::DebuggerState, exception::definitions::ExceptionType, structs::{LineInfo, OperatingSystem, ProgramState}
+    debug::debug_utils::DebuggerState,
+    exception::definitions::ExceptionType,
+    structs::{LineInfo, OperatingSystem, ProgramState},
 };
 
 use crate::debug::simulator_helpers::generate_err;
