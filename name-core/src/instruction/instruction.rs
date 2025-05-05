@@ -108,6 +108,10 @@ impl RawInstruction {
         self.get_opcode() == 0x01
     }
 
+    pub fn is_floating(self) -> bool {
+        self.get_opcode() == 0x11
+    }
+
     pub fn get_rs(self) -> u32 {
         self.raw >> 21 & 0x1F
     }
@@ -154,7 +158,11 @@ impl RawInstruction {
             base | self.get_funct()
         } else if self.is_regimm() {
             base | self.get_rt()
-        } else {
+        } else if self.is_floating() {
+            (self.get_opcode() << 11) | (self.get_funct() << 5) | self.get_fmt()
+        }
+        
+         else {
             base
         }
     }
