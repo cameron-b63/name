@@ -11,6 +11,17 @@ Any errors will clearly have code ID10T on the part of the user attempting to us
 
 pub(crate) type ExpansionFn = fn(Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String>;
 
+pub(crate) fn expand_b(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
+    let target = args[0].clone();
+
+    let zero = AstKind::Register(Register::Zero);
+
+    Ok(vec![
+        // beq $zero, $zero, target
+        ("beq", vec![zero.clone(), zero, target])
+    ])
+}
+
 pub(crate) fn expand_bnez(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     if args.len() < 2 {
         return Err(format!(" - `bnez` expected 1 argument, got {}", args.len()));
@@ -71,5 +82,13 @@ pub(crate) fn expand_move(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<A
     Ok(vec![
         // add  $rd, $rs, $0
         ("add", vec![rd, rs, zero]),
+    ])
+}
+
+/// Expanded instruction, which is kind of like a pseudoinstruction but easier.
+pub(crate) fn expand_s_d(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
+    Ok(vec![
+        // sdc1 <args>
+        ("sdc1", args)
     ])
 }

@@ -493,3 +493,8 @@ pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
 pub fn ldc1(_program_state: &mut ProgramState, _args: IArgs) -> () {
     todo!();
 }
+
+// 0x3d - sdc1
+pub fn sdc1(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!();
+}

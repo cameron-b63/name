@@ -44,6 +44,13 @@ fn pack_up_u64(program_state: &mut ProgramState, target: u32, value: u64) {
 
 */
 
+// 0x03 - div.fmt
+
+// 0x03.d - div.d
+pub fn div_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+    todo!();
+}
+
 // 0x05 - abs.fmt
 
 // 0x05.d - abs.d
@@ -65,6 +72,15 @@ pub fn abs_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
 pub fn abs_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
     program_state.cp1.registers[args.fd as usize] =
         f32::abs(program_state.cp1.registers[args.fs as usize]);
+}
+
+// 0x06.d - mov.d
+pub fn mov_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let _ = is_register_aligned(program_state, args.fs);
+
+    let temp: u64 = extract_u64(program_state, args.fs);
+    let _ = pack_up_u64(program_state, args.fd, temp);
 }
 
 // 0x08 (secondary funct code) - bc1<cond>

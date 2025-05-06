@@ -55,7 +55,9 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
             additional_code: Some(0b01), // Not "likely", branch on condition code true
             implementation: wrap_imp(fp_implementations::bc1),
             args: &[ArgumentType::Identifier],
-            alt_args: Some(&[&[ArgumentType::Immediate, ArgumentType::Identifier]]),
+            alt_args: Some(&[&[ArgumentType::Immediate, ArgumentType::Identifier],
+                &[ArgumentType::Immediate, ArgumentType::Immediate],
+                &[ArgumentType::Immediate]]),
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         FpInstructionInformation {
@@ -70,5 +72,29 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
             alt_args: Some(&[&[ArgumentType::Immediate, ArgumentType::Fs, ArgumentType::Ft]]),
             relocation_type: None,
         },
+        FpInstructionInformation {
+            mnemonic: "div.d",
+            instruction_type: InstructionType::FpRType,
+            op_code: 0x11,
+            funct_code: Some(0x03),
+            fmt: Some(FpFmt::Double),
+            additional_code: None,
+            implementation: wrap_imp(fp_implementations::div_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
+            alt_args: None,
+            relocation_type: None,
+        },
+        FpInstructionInformation {
+            mnemonic: "mov.d",
+            instruction_type: InstructionType::FpRType,
+            op_code: 0x11,
+            funct_code: Some(0x06),
+            fmt: Some(FpFmt::Double),
+            additional_code: None,
+            implementation: wrap_imp(fp_implementations::mov_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        }
     ]
 });
