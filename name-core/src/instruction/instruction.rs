@@ -1,7 +1,10 @@
 use std::{fmt, io};
 
 use super::information::{ArgumentType, FpInstructionInformation, InstructionInformation};
-use crate::{parse::{parse::AstKind, span::Span}, structs::ProgramState};
+use crate::{
+    parse::{parse::AstKind, span::Span},
+    structs::ProgramState,
+};
 
 /// Possible assemble error codes
 #[derive(Debug)]
@@ -81,7 +84,9 @@ impl InstructionMeta {
     }
 
     /// Get a reference to the implementation function inside the InstructionMeta wrapper.
-    pub fn get_implementation(&self) -> &Box<dyn Fn(&mut ProgramState, RawInstruction) -> () + Sync + Send> {
+    pub fn get_implementation(
+        &self,
+    ) -> &Box<dyn Fn(&mut ProgramState, RawInstruction) -> () + Sync + Send> {
         match self {
             Self::Fp(info) => &info.implementation,
             Self::Int(info) => &info.implementation,

@@ -8,7 +8,10 @@ use crate::{
     debug::fetch::fetch,
     exception::{definitions::ExceptionType, exception_handler::handle_exception},
     instruction::{
-        fp_instruction_set::FP_INSTRUCTION_SET, information::{FpInstructionInformation, InstructionInformation}, instruction_set::INSTRUCTION_SET, InstructionMeta, RawInstruction
+        fp_instruction_set::FP_INSTRUCTION_SET,
+        information::{FpInstructionInformation, InstructionInformation},
+        instruction_set::INSTRUCTION_SET,
+        InstructionMeta, RawInstruction,
     },
     structs::{LineInfo, OperatingSystem, ProgramState},
 };
@@ -25,8 +28,7 @@ static FP_INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static FpInstructionInform
     LazyLock::new(|| {
         FP_INSTRUCTION_SET
             .iter()
-            // NARF
-            .map(|instr| (dbg!(instr.lookup_code()), dbg!(instr)))
+            .map(|instr| (instr.lookup_code(), instr))
             .collect()
     });
 
@@ -69,9 +71,7 @@ pub fn single_step(_lineinfo: &Vec<LineInfo>, program_state: &mut ProgramState) 
     let instr_info: InstructionMeta;
 
     if raw_instruction.is_floating() {
-        println!("Floating point instruction! opcode {}, funct {}, fmt {}", raw_instruction.get_opcode(), raw_instruction.get_funct(), raw_instruction.get_fmt());
-        // NARF
-        instr_info = match FP_INSTRUCTION_LOOKUP.get(dbg!(&raw_instruction.get_lookup())) {
+        instr_info = match FP_INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
             Some(info) => InstructionMeta::Fp(info),
             None => {
                 program_state.set_exception(ExceptionType::ReservedInstruction);
@@ -85,14 +85,13 @@ pub fn single_step(_lineinfo: &Vec<LineInfo>, program_state: &mut ProgramState) 
                 program_state.set_exception(ExceptionType::ReservedInstruction);
                 return;
             }
-        };  
+        };
     }
-    
 
     program_state.cpu.pc += MIPS_ADDRESS_ALIGNMENT;
 
     // Execute the instruction; program_state is modified.
-    if true
+    if false
     /* Allowing for some later verbose mode */
     {
         eprintln!(
@@ -153,13 +152,15 @@ pub fn db_step(
 
             // Fetch the instruction replaced by the breakpoint
             raw_instruction = RawInstruction::new(bp.replaced_instruction); // lol
-            
+
             if raw_instruction.is_floating() {
                 instr_info = match FP_INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
                     Some(info) => InstructionMeta::Fp(info),
                     None => {
                         program_state.set_exception(ExceptionType::ReservedInstruction);
-                        return Err(format!("Reserved instruction hit in floating point search."));
+                        return Err(format!(
+                            "Reserved instruction hit in floating point search."
+                        ));
                     }
                 }
             } else {

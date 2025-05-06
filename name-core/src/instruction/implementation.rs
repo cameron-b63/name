@@ -481,7 +481,7 @@ pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
             Ok(b) => result_word |= (b as u32) << (24 - (i * 8)),
             Err(_) => {
                 program_state.set_exception(ExceptionType::AddressExceptionLoad);
-            },
+            }
         }
         i += 1;
     }

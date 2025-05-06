@@ -63,7 +63,7 @@ pub fn assemble_instruction(
                 InstructionType::FpRType => {
                     let mut fp_r = FpRArgs::assign_fp_r_arguments(arguments, config)?;
                     fp_r.opcode = info.op_code;
-                    fp_r.fmt = u32::from(info.fmt.as_ref().ok_or(ErrorKind::MissingFmt)?);
+                    fp_r.fmt = u32::from(info.fmt.ok_or(ErrorKind::MissingFmt)?);
                     fp_r.funct = info.funct_code.ok_or(ErrorKind::MissingFunct)?;
                     Ok(RawInstruction::from(fp_r))
                 }

@@ -102,7 +102,7 @@ impl FpInstructionInformation {
     pub fn lookup_code(&self) -> u32 {
         (self.op_code << 11)
             | (self.funct_code.unwrap_or(0) << 5)
-            | (self.fmt.unwrap_or(FpFmt::Reserved) as u32)
+            | u32::from(self.fmt.unwrap_or(FpFmt::Reserved))
     }
 }
 
@@ -142,8 +142,8 @@ pub enum FpFmt {
 
 // Cast FpFmt to its proper u32 rep, page 115
 // https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00082-2B-MIPS32INT-AFP-06.01.pdf
-impl From<&FpFmt> for u32 {
-    fn from(fmt: &FpFmt) -> Self {
+impl From<FpFmt> for u32 {
+    fn from(fmt: FpFmt) -> Self {
         match fmt {
             FpFmt::Reserved => 0,
             FpFmt::Single => 16,
