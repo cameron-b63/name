@@ -214,10 +214,11 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
 
     pub fn parse_fp_register(&mut self) -> ParseResult<FpRegister> {
         let tok = self.try_next_if(TokenKind::FpRegister)?;
+        let src = self.session.get_src_str(&tok.src_span);
 
-        tok.src.parse::<FpRegister>().map_err(|e| Span {
+        src.parse::<FpRegister>().map_err(|e| Span {
             kind: ErrorKind::InvalidFpRegister(e),
-            src_span: tok.token.src_span.clone(),
+            src_span: tok.src_span.clone(),
         })
     }
 
@@ -254,7 +255,7 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
         let tok = self.try_next()?;
         let src = self.session.get_src_str(&tok.src_span);
 
-        let num = match tok.kind {
+        let mut num = match tok.kind {
             TokenKind::Float => {
                 &src.parse::<f32>().map_err(|e| Span {
                     kind: ErrorKind::InvalidFloat(e),
