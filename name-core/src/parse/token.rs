@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 pub enum TokenKind {
     Ident,
     Register,
+    FpRegister,
     Directive,
 
     // whole numbers

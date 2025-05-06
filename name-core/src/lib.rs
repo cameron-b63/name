@@ -8,4 +8,3 @@ pub mod instruction;
 pub mod parse;
 pub mod structs;
 pub mod syscalls;
-pub mod traits;

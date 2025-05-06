@@ -455,3 +455,36 @@ pub fn sw(program_state: &mut ProgramState, args: IArgs) -> () {
         i += 1;
     }
 }
+
+// 0x31 - lwc1
+pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
+    let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+        + args.imm as i32) as u32;
+
+    if temp % 4 != 0 {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+
+    if !program_state.memory.allows_read_from(temp)
+        || !program_state.memory.allows_read_from(temp + 3)
+    {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+
+    // Checks passed. Load word.
+    let mut i = 0;
+    let mut result_word: u32 = 0;
+    while i < 4 {
+        match program_state.memory.read_byte(temp + i) {
+            Ok(b) => result_word |= (b as u32) << (24 - (i * 8)),
+            Err(_) => {
+                program_state.set_exception(ExceptionType::AddressExceptionLoad);
+            }
+        }
+        i += 1;
+    }
+
+    program_state.cp1.registers[args.rt as usize] = f32::from_bits(result_word);
+}

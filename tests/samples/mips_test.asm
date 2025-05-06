@@ -3,6 +3,9 @@
 
     .include    "SysCalls.asm"
     .data
+coolfloat:
+    .float      -3.14
+
 skipNotSkippedString:
     .asciiz     "Something was meant to be skipped, but wasn't skipped.\n"
 
@@ -114,15 +117,24 @@ demo8:
     sltiu       $t8, $zero, -18
     sltu        $t6, $t5, $zero
     srl         $t5, $t5, 2
-    sub         $t0, $t0, $t0
+    # sub         $t0, $t0, $t0
     subu        $t7, $t7, $t0
     la          $t0, testString
     sw          $t7, $t0
     la          $a0, testString
     li          $v0, SysPrintString
-    syscall
+    # syscall
     xor         $t7, $t7, $zero
     xori        $t1, $t1, 0b10101010
+
+demo9:
+    la          $t0, coolfloat
+    lwc1        $f12, $t0
+    li          $v0, SysPrintFloat
+    syscall
+
+    abs.s       $f12, $f12
+    syscall
 
 exit:
     li          $v0, SysExit

@@ -2,7 +2,8 @@ use name_core::{
     constants::REGISTERS,
     instruction::{
         information::{ArgumentType, InstructionInformation},
-        instruction_set::INSTRUCTION_TABLE,
+        instruction_table::INSTRUCTION_TABLE,
+        InstructionMeta,
     },
     parse::parse::AstKind,
     structs::Symbol,
@@ -30,6 +31,9 @@ pub fn arg_configuration_is_ok(passed_args: &[AstKind], expected_args: &[Argumen
             (AstKind::Register(_), ArgumentType::Rd)
             | (AstKind::Register(_), ArgumentType::Rs)
             | (AstKind::Register(_), ArgumentType::Rt)
+            | (AstKind::FpRegister(_), ArgumentType::Fd)
+            | (AstKind::FpRegister(_), ArgumentType::Fs)
+            | (AstKind::FpRegister(_), ArgumentType::Ft)
             | (AstKind::Immediate(_), ArgumentType::Immediate)
             | (AstKind::Symbol(_), ArgumentType::Identifier)
             | (AstKind::Symbol(_), ArgumentType::BranchLabel) => {}
@@ -135,14 +139,14 @@ pub fn _search_mnemonic(
     mnemonic: String,
     environment: &mut Assembler,
 ) -> (
-    Option<&'static InstructionInformation>,
+    Option<&'static InstructionMeta>,
     Option<&'static PseudoInstruction>,
 ) {
     // There are fewer pseudoinstruction mnemonics, and instructions like `li` and `la` are used incredibly often.
     // Therefore, search should happen for them first.
     // This is kind of an over-optimization but low-hanging fruit is low-hanging fruit.
 
-    let mut instruction_information: Option<&'static InstructionInformation> = None;
+    let mut instruction_information: Option<&'static InstructionMeta> = None;
     let mut pseudo_instruction_information: Option<&'static PseudoInstruction> = None;
 
     let retrieved_pseudo_instruction_option: Option<&'static PseudoInstruction> = environment
@@ -164,19 +168,14 @@ pub fn _search_mnemonic(
         return (instruction_information, pseudo_instruction_information);
     }
 
-    let retrieved_instruction_option: Option<&InstructionInformation> =
-        INSTRUCTION_TABLE.get(mnemonic.as_str()).map(|x| &**x);
+    let retrieved_instruction_option: Option<&InstructionMeta> =
+        INSTRUCTION_TABLE.get(mnemonic.as_str()).map(|x| x);
 
     match retrieved_instruction_option {
         Some(retrieved_instruction_information) => {
             instruction_information = Some(retrieved_instruction_information);
         }
         None => {
-            // environment.string_error(format!(
-            //     "[*] On line {}{}:",
-            //     environment.line_prefix, environment.line_number
-            // ));
-            // environment.string_error(format!(" - Instruction \"{}\" not recognized. If this is a valid MIPS instruction, consider opening a pull request at https://github.com/cameron-b63/name.", mnemonic));
             instruction_information = None;
         }
     }

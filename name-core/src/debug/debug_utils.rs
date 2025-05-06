@@ -5,10 +5,13 @@ use std::{collections::HashMap, sync::LazyLock};
 
 use crate::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_TEXT_START_ADDR},
-    debug::{exception_handler::handle_exception, fetch::fetch},
-    exception::definitions::ExceptionType,
+    debug::fetch::fetch,
+    exception::{definitions::ExceptionType, exception_handler::handle_exception},
     instruction::{
-        information::InstructionInformation, instruction_set::INSTRUCTION_SET, RawInstruction,
+        fp_instruction_set::FP_INSTRUCTION_SET,
+        information::{FpInstructionInformation, InstructionInformation},
+        instruction_set::INSTRUCTION_SET,
+        InstructionMeta, RawInstruction,
     },
     structs::{LineInfo, OperatingSystem, ProgramState},
 };
@@ -16,6 +19,14 @@ use crate::{
 static INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static InstructionInformation>> =
     LazyLock::new(|| {
         INSTRUCTION_SET
+            .iter()
+            .map(|instr| (instr.lookup_code(), instr))
+            .collect()
+    });
+
+static FP_INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static FpInstructionInformation>> =
+    LazyLock::new(|| {
+        FP_INSTRUCTION_SET
             .iter()
             .map(|instr| (instr.lookup_code(), instr))
             .collect()
@@ -57,13 +68,25 @@ pub fn single_step(_lineinfo: &Vec<LineInfo>, program_state: &mut ProgramState) 
 
     // Fetch
     let raw_instruction = fetch(program_state);
-    let instr_info = match INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
-        Some(info) => info,
-        None => {
-            program_state.set_exception(ExceptionType::ReservedInstruction);
-            return;
-        }
-    };
+    let instr_info: InstructionMeta;
+
+    if raw_instruction.is_floating() {
+        instr_info = match FP_INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
+            Some(info) => InstructionMeta::Fp(info),
+            None => {
+                program_state.set_exception(ExceptionType::ReservedInstruction);
+                return;
+            }
+        };
+    } else {
+        instr_info = match INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
+            Some(info) => InstructionMeta::Int(info),
+            None => {
+                program_state.set_exception(ExceptionType::ReservedInstruction);
+                return;
+            }
+        };
+    }
 
     program_state.cpu.pc += MIPS_ADDRESS_ALIGNMENT;
 
@@ -71,9 +94,13 @@ pub fn single_step(_lineinfo: &Vec<LineInfo>, program_state: &mut ProgramState) 
     if false
     /* Allowing for some later verbose mode */
     {
-        eprintln!("Executing {}", instr_info.mnemonic);
+        eprintln!(
+            "Executing {}@0x{:x}",
+            instr_info.get_mnemonic(),
+            program_state.cpu.pc - MIPS_ADDRESS_ALIGNMENT
+        );
     }
-    let _ = (instr_info.implementation)(program_state, raw_instruction);
+    let _ = (instr_info.get_implementation())(program_state, raw_instruction);
 
     // The $0 register should never have been permanently changed. Don't let it remain changed.
 
@@ -121,24 +148,37 @@ pub fn db_step(
             bp.flip_execution_status();
         } else {
             let raw_instruction: RawInstruction;
-            let instr_info: &&InstructionInformation;
+            let instr_info: InstructionMeta;
 
             // Fetch the instruction replaced by the breakpoint
             raw_instruction = RawInstruction::new(bp.replaced_instruction); // lol
-            instr_info = match INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
-                Some(info) => info,
-                None => {
-                    program_state.set_exception(ExceptionType::ReservedInstruction);
-                    return Err(format!("Reserved instruction reached. (My code is bad so the program state has been changed as a result. Lord help us)"));
+
+            if raw_instruction.is_floating() {
+                instr_info = match FP_INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
+                    Some(info) => InstructionMeta::Fp(info),
+                    None => {
+                        program_state.set_exception(ExceptionType::ReservedInstruction);
+                        return Err(format!(
+                            "Reserved instruction hit in floating point search."
+                        ));
+                    }
                 }
-            };
+            } else {
+                instr_info = match INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
+                    Some(info) => InstructionMeta::Int(info),
+                    None => {
+                        program_state.set_exception(ExceptionType::ReservedInstruction);
+                        return Err(format!("Reserved instruction reached. (My code is bad so the program state has been changed as a result. Lord help us)"));
+                    }
+                };
+            }
             // Execute the instruction; program_state is modified.
             if true
             /* Allowing for some later verbose mode */
             {
-                eprintln!("Executing {}", instr_info.mnemonic);
+                eprintln!("Executing {}", instr_info.get_mnemonic());
             }
-            let _ = (instr_info.implementation)(program_state, raw_instruction);
+            let _ = (instr_info.get_implementation())(program_state, raw_instruction);
 
             // resolve the breakpoint exception
             program_state.recover_from_exception();

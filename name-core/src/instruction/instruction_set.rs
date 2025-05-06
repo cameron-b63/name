@@ -6,9 +6,9 @@ use crate::{
     },
 };
 
-use std::{collections::HashMap, sync::LazyLock};
+use std::sync::LazyLock;
 
-/// This is the entire implemented instruction set for NAME.
+/// This is the entire implemented instruction set (regular CPU instructions) for NAME.
 /// The assembler searches through this table using the mnemonic field.
 /// The emulator performs a lookup based on op_code and funct_code, and then uses the associated implementation.
 /// The implementation below is based on the following TIS: https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00086-2B-MIPS32BIS-AFP-6.06.pdf
@@ -201,6 +201,19 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
             ]),
             relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "lwc1",
+            op_code: 0x31,
+            funct_code: None,
+            implementation: wrap_imp(implementation::lwc1),
+            instruction_type: InstructionType::IType,
+            args: &[ArgumentType::Ft, ArgumentType::Immediate, ArgumentType::Rs],
+            alt_args: Some(&[
+                &[ArgumentType::Ft, ArgumentType::Rs],
+                &[ArgumentType::Ft, ArgumentType::Identifier, ArgumentType::Rs],
+            ]),
+            relocation_type: Some(RelocationEntryType::Lo16),
         },
         /*
           Instruction::InstructionInformation {
@@ -402,11 +415,3 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
         },
     ]
 });
-
-pub static INSTRUCTION_TABLE: LazyLock<HashMap<&'static str, &'static InstructionInformation>> =
-    LazyLock::new(|| {
-        INSTRUCTION_SET
-            .iter()
-            .map(|info| (info.mnemonic, info))
-            .collect()
-    });

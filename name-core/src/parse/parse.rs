@@ -4,7 +4,7 @@ use crate::{
         span::{Span, SrcSpan},
         token::{Token, TokenCursor, TokenKind},
     },
-    structs::{ParseRegisterError, Register, Section},
+    structs::{FpRegister, ParseFpRegisterError, ParseRegisterError, Register, Section},
 };
 
 use std::num::ParseIntError;
@@ -40,17 +40,20 @@ pub enum AstKind {
     Section(Section),
     Globl(String),
     Word(RepeatableArgs<u32>),
-    Float(RepeatableArgs<f64>),
+    Float(RepeatableArgs<f32>),
 
     // constructs
     Instruction(String, Vec<Ast>),
     Register(Register),
+    FpRegister(FpRegister),
 }
 
 impl AstKind {
-    pub fn get_register(self) -> Option<Register> {
+    pub fn get_register_as_u32(self) -> Option<u32> {
         if let AstKind::Register(reg) = self {
-            Some(reg)
+            Some(reg as u32)
+        } else if let AstKind::FpRegister(reg) = self {
+            Some(reg as u32)
         } else {
             None
         }
@@ -62,6 +65,10 @@ impl AstKind {
         } else {
             None
         }
+    }
+
+    pub fn get_fp_fmt(self) -> Option<u32> {
+        todo!("Implement get_fp_fmt");
     }
 }
 
@@ -78,6 +85,7 @@ pub type Ast = Span<AstKind>;
 pub enum ErrorKind {
     UnexpectedToken(TokenKind),
     InvalidRegister(ParseRegisterError),
+    InvalidFpRegister(ParseFpRegisterError),
     UnexpectedEof,
     InvalidNumber(ParseIntError),
     InvalidFloat(ParseFloatError),
@@ -96,6 +104,9 @@ impl fmt::Display for ErrorKind {
             Self::UnexpectedToken(tok) => write!(f, "unexpected token {:?}", tok),
             Self::InvalidRegister(reg_err) => {
                 write!(f, "invalid register {:#?}", reg_err)
+            }
+            Self::InvalidFpRegister(reg_err) => {
+                write!(f, "invalid floating-point register {:#?}", reg_err)
             }
             Self::UnexpectedEof => write!(f, "unexpected eof"),
             Self::InvalidNumber(int_err) => write!(f, "invalid number {:#?}", int_err),
@@ -201,6 +212,16 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
         })
     }
 
+    pub fn parse_fp_register(&mut self) -> ParseResult<FpRegister> {
+        let tok = self.try_next_if(TokenKind::FpRegister)?;
+        let src = self.session.get_src_str(&tok.src_span);
+
+        src.parse::<FpRegister>().map_err(|e| Span {
+            kind: ErrorKind::InvalidFpRegister(e),
+            src_span: tok.src_span.clone(),
+        })
+    }
+
     pub fn parse_label(&mut self) -> ParseResult<AstKind> {
         let tok = self.try_next_if(TokenKind::Ident)?;
         let src = self.session.get_src_str(&tok.src_span).to_string();
@@ -229,13 +250,14 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
         Ok(char as u32)
     }
 
-    pub fn parse_float(&mut self) -> ParseResult<f64> {
+    pub fn parse_float(&mut self) -> ParseResult<f32> {
+        let is_minus = self.cursor.next_if(TokenKind::Minus).is_some();
         let tok = self.try_next()?;
         let src = self.session.get_src_str(&tok.src_span);
 
-        let num = match tok.kind {
+        let mut num = match tok.kind {
             TokenKind::Float => {
-                &src.parse::<f64>().map_err(|e| Span {
+                &src.parse::<f32>().map_err(|e| Span {
                     kind: ErrorKind::InvalidFloat(e),
                     src_span: tok.src_span.clone(),
                 })?
@@ -243,6 +265,10 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
             .clone(),
             _ => return Err(tok.clone().map(|k| ErrorKind::UnexpectedToken(k))),
         };
+
+        if is_minus {
+            num *= -1f32;
+        }
 
         Ok(num)
     }
@@ -333,6 +359,7 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
         let tok = &self.try_peek()?;
         let ast = match tok.kind {
             TokenKind::Register => AstKind::Register(self.parse_register()?),
+            TokenKind::FpRegister => AstKind::FpRegister(self.parse_fp_register()?),
             tok if tok.is_immediate() => AstKind::Immediate(self.parse_immediate()?),
             TokenKind::Ident => AstKind::Symbol(self.parse_ident()?),
             TokenKind::LParen => {

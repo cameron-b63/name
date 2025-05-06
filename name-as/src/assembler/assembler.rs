@@ -1,9 +1,12 @@
-use std::{collections::HashMap, fmt, io};
+use std::collections::HashMap;
 
 use name_core::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
-    instruction::instruction_set::INSTRUCTION_TABLE,
+    instruction::{
+        instruction_table::INSTRUCTION_TABLE, AssembleResult, ErrorKind, InstructionMeta,
+        RawInstruction,
+    },
     parse::{
         parse::{Ast, AstKind},
         span::Span,
@@ -16,39 +19,6 @@ use crate::assembler::assemble_instruction::assemble_instruction;
 use crate::assembler::assembly_helpers::generate_pseudo_instruction_hashmap;
 
 use crate::definitions::structs::PseudoInstruction;
-
-/// Possible assemble error codes
-#[derive(Debug)]
-pub enum ErrorKind {
-    DuplicateSymbol(String),
-    Io(io::Error),
-    String(String),
-    BadArguments,
-    LabelOutsideOfSection,
-    UnknownInstruction(String),
-    InvalidShamt,
-    InvalidArgument,
-    ImmediateOverflow,
-}
-
-impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ErrorKind::DuplicateSymbol(str) => write!(f, "duplicate symbol: {}", str),
-            ErrorKind::Io(err) => write!(f, "{:#?}", err),
-            ErrorKind::String(s) => write!(f, "{}", s),
-            ErrorKind::BadArguments => write!(f, "bad arguments"),
-            ErrorKind::LabelOutsideOfSection => write!(f, "label outside of section"),
-            ErrorKind::UnknownInstruction(s) => write!(f, "unkown instruction {}", s),
-            ErrorKind::InvalidShamt => write!(f, "invalid shift amount"),
-            ErrorKind::InvalidArgument => write!(f, "invalid argument"),
-            ErrorKind::ImmediateOverflow => write!(f, "immediate overflow"),
-        }
-    }
-}
-
-pub type AssembleResult<T> = Result<T, ErrorKind>;
-pub type AssembleError = Span<ErrorKind>;
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
 
@@ -136,23 +106,33 @@ impl Assembler {
         Ok(())
     }
 
-    /// Attempt to assemble a parsed line. If successful, add bytes to section .text - else, extend errors and keep it pushing.
+    /// Attempt to assemble a parsed line. If successful, add bytes to section .text
+    /// else, extend errors and keep it pushing.
     pub fn assemble_instruction(&mut self, instr: &str, args: Vec<AstKind>) -> AssembleResult<()> {
-        let info = INSTRUCTION_TABLE
+        // look up in our unified map
+        let meta = INSTRUCTION_TABLE
             .get(instr)
             .ok_or(ErrorKind::UnknownInstruction(instr.to_string()))?;
 
-        if let Some(_rel) = info.relocation_type {
-            if let Some(AstKind::Symbol(symbol_ident)) = args
-                .iter()
-                .find(|ast_kind| matches!(ast_kind, AstKind::Symbol(_)))
+        // pull out relocation info from whichever variant we have
+        let relocation = match meta {
+            InstructionMeta::Int(info) => info.relocation_type,
+            InstructionMeta::Fp(info) => info.relocation_type,
+        };
+
+        // if this instruction needs a relocation entry, build it
+        if let Some(r_type) = relocation {
+            if let Some(AstKind::Symbol(symbol_ident)) =
+                args.iter().find(|ast| matches!(ast, AstKind::Symbol(_)))
             {
-                let symbol_offset: u32 = self.get_symbol_offset(symbol_ident.to_string()).unwrap();
+                let symbol_offset: u32 = self
+                    .get_symbol_offset(symbol_ident.to_string())
+                    .map_err(|_| ErrorKind::UndefinedSymbol(symbol_ident.clone()))?;
 
                 let new_bytes: Vec<u8> = RelocationEntry {
                     r_offset: self.current_address - MIPS_TEXT_START_ADDR,
                     r_sym: symbol_offset,
-                    r_type: info.relocation_type.unwrap().clone(),
+                    r_type: r_type.clone(),
                 }
                 .to_bytes();
 
@@ -160,28 +140,26 @@ impl Assembler {
             }
         }
 
-        let packed = assemble_instruction(
-            info,
-            args.into_iter()
-                .map(|arg| {
-                    if let AstKind::Symbol(_) = arg {
-                        AstKind::Immediate(0)
-                    } else {
-                        arg
-                    }
-                })
-                .collect(),
-        )?;
+        // convert any Symbol args into a dummy zero immediate for packing
+        let processed_args: Vec<AstKind> = args
+            .into_iter()
+            .map(|arg| match arg {
+                AstKind::Symbol(_) => AstKind::Immediate(0),
+                other => other,
+            })
+            .collect();
+
+        // do the actual packing based on Int vs. Fp
+        let packed: RawInstruction = assemble_instruction(meta, processed_args)?;
+
+        // append the bytes to .text
         self.section_dot_text
             .extend_from_slice(&packed.to_be_bytes());
-
-        // pretty_print_instruction(&self.current_address, &packed);
-
         self.current_address += MIPS_ADDRESS_ALIGNMENT;
         Ok(())
     }
 
-    pub fn assemble_pseduo_instruction(
+    pub fn assemble_pseudo_instruction(
         &mut self,
         pinstr: &str,
         args: Vec<AstKind>,
@@ -237,7 +215,7 @@ impl Assembler {
                 self.add_label(&s, self.current_address, Visibility::Global)?
             }
             AstKind::Asciiz(s) => self.assemble_asciiz(s),
-            AstKind::Float(f) => self.add_data_bytes(&f.to_be_bytes(f64::to_be_bytes)),
+            AstKind::Float(f) => self.add_data_bytes(&f.to_be_bytes(f32::to_be_bytes)),
             AstKind::Section(section) => match section {
                 Section::Text => self.switch_to_text_section(),
                 Section::Data => self.switch_to_data_section(),
@@ -246,7 +224,7 @@ impl Assembler {
             AstKind::Instruction(instr, args) => {
                 let ast_kinds = args.into_iter().map(|ast| ast.kind).collect();
                 if self.pseudo_instruction_table.contains_key(instr.as_str()) {
-                    self.assemble_pseduo_instruction(&instr, ast_kinds)?;
+                    self.assemble_pseudo_instruction(&instr, ast_kinds)?;
                 } else {
                     self.assemble_instruction(&instr, ast_kinds)?
                 }
@@ -257,6 +235,7 @@ impl Assembler {
             AstKind::Immediate(_) => panic!(),
             AstKind::Symbol(_) => panic!(),
             AstKind::Register(_) => panic!(),
+            AstKind::FpRegister(_) => panic!(),
         }
         Ok(())
     }
