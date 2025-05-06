@@ -1,4 +1,5 @@
 use crate::parse::span::Span;
+use std::collections::VecDeque;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenKind {
@@ -33,50 +34,39 @@ pub enum TokenKind {
     Newline,
 }
 
-#[derive(Debug, Clone)]
-pub struct Token<'a> {
-    pub token: Span<TokenKind>,
-    pub src: &'a str,
-}
+pub type Token = Span<TokenKind>;
 
 #[derive(Debug, Clone)]
-pub struct TokenCursor<'a> {
-    idx: usize,
-    toks: Vec<Token<'a>>,
+pub struct TokenCursor {
+    pub toks: VecDeque<Token>,
+    pub pos: usize,
 }
 
-impl<'a> TokenCursor<'a> {
-    pub fn new(toks: Vec<Token<'a>>) -> Self {
-        TokenCursor { idx: 0, toks }
+impl TokenCursor {
+    pub fn new(toks: VecDeque<Token>) -> Self {
+        let pos = toks.front().map(|tok| tok.src_span.pos).unwrap_or_default();
+
+        TokenCursor { toks, pos }
     }
 
-    pub fn advance(&mut self) {
-        self.idx += 1;
+    pub fn next(&mut self) -> Option<Token> {
+        if let Some(tok) = self.toks.pop_front() {
+            self.pos += tok.src_span.length;
+            Some(tok)
+        } else {
+            None
+        }
     }
 
-    pub fn next(&mut self) -> Option<&Token<'a>> {
-        let tok = self.toks.get(self.idx);
-        self.idx += 1;
-        tok
-    }
-
-    pub fn get(&self, i: usize) -> Option<&Token<'a>> {
-        self.toks.get(i)
-    }
-
-    pub fn peek(&self) -> Option<&Token<'a>> {
-        self.toks.get(self.idx)
-    }
-
-    pub fn prev(&self) -> Option<&Token<'a>> {
-        self.toks.get(self.idx.checked_sub(1).unwrap_or(0))
+    pub fn peek(&self) -> Option<&Token> {
+        self.toks.front()
     }
 
     pub fn peek_is_kind(&self, kind: TokenKind) -> bool {
-        self.peek().is_some_and(|tok| tok.token.is_kind(kind))
+        self.peek().is_some_and(|tok| tok.is_kind(kind))
     }
 
-    pub fn next_if(&mut self, kind: TokenKind) -> Option<&Token<'a>> {
+    pub fn next_if(&mut self, kind: TokenKind) -> Option<Token> {
         if self.peek_is_kind(kind) {
             self.next()
         } else {

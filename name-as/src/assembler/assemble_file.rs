@@ -12,15 +12,15 @@ use std::path::PathBuf;
 /// Assembles a given file using a parser session.
 /// Takes a parser session containing the bump allocator and the parent directory.
 /// Outputs an Assembler state from which the ELF object file will be derived.
-pub fn assemble_file<'a>(
-    session: &'a mut Session<'a>,
+pub fn assemble_file<'sess, 'sess_ref>(
+    session: &'sess_ref mut Session<'sess>,
     file_path: PathBuf,
 ) -> Result<Assembler, ()> {
     // Add the given infile to the parser session.
-    let cont = session.add_file(&file_path);
+    let file = session.add_file(file_path);
 
     // Create a lexer on the file content to tokenize it.
-    let mut lexer = Lexer::new(&cont);
+    let mut lexer = Lexer::new(&file.str, 0);
     let (errs, toks) = lexer.lex();
 
     // If lexer errors occur, exit early with all of them.
@@ -28,18 +28,18 @@ pub fn assemble_file<'a>(
     // less useful output than simply exiting early.
     if !errs.is_empty() {
         for err in errs {
-            println!("{}", err);
+            session.report_error(&format!("{}", err.kind), &err.src_span);
         }
         return Err(());
     }
 
     // Run the preprocessor over the parser session.
-    let mut preprocessor = Preprocessor::new(session);
+    let ppd = Preprocessor::new(session).preprocess(toks);
+
     // Preprocess the lexed tokens to handle .include, .eqv, .macro, etc.
-    let ppd = preprocessor.preprocess(toks);
 
     // Create a new parser using the preprocessed (expanded) tokens and the file content.
-    let mut parser = Parser::new(ppd, cont);
+    let mut parser = Parser::new(ppd, session);
 
     // Run the parsing operation, generating the AST.
     let (perrs, asts) = parser.parse();
@@ -49,7 +49,7 @@ pub fn assemble_file<'a>(
     // would likely be redundant or otherwise malformed. "We have bigger fish to fry."
     if !perrs.is_empty() {
         for perr in perrs {
-            println!("{}", perr);
+            session.report_error(&format!("{}", perr.kind), &perr.src_span);
         }
         return Err(());
     }
@@ -63,13 +63,13 @@ pub fn assemble_file<'a>(
     // This is the last point of user error.
     if !aerrs.is_empty() {
         for aerr in aerrs {
-            println!("{}", aerr);
+            session.report_error(&format!("{}", aerr.kind), &aerr.src_span);
         }
         return Err(());
     }
 
     // process line info
-    for line in cont.split('\n') {
+    for line in file.str.lines() {
         let start_address = match assembler.current_section {
             Section::Text => assembler.current_address,
             Section::Data => assembler.text_address,

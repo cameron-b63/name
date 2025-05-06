@@ -1,41 +1,21 @@
-use std::fmt;
 use std::ops::Range;
 
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct SrcPos {
-    pub pos: usize,
-    pub line_pos: usize,
-    pub line: usize,
-}
-
-impl fmt::Display for SrcPos {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.line, self.line_pos)
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
 pub struct SrcSpan {
-    pub start: SrcPos,
-    pub end: SrcPos,
+    pub pos: usize,
+    pub length: usize,
 }
 
 impl SrcSpan {
     pub fn range(&self) -> Range<usize> {
-        self.start.pos..self.end.pos
+        self.pos..(self.pos + self.length)
     }
 
     pub fn combine(&self, other: &Self) -> Self {
         SrcSpan {
-            start: self.start.clone(),
-            end: other.end.clone(),
+            pos: self.pos,
+            length: other.pos - self.pos + other.length,
         }
-    }
-}
-
-impl fmt::Display for SrcSpan {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.start)
     }
 }
 
@@ -43,12 +23,6 @@ impl fmt::Display for SrcSpan {
 pub struct Span<T> {
     pub src_span: SrcSpan,
     pub kind: T,
-}
-
-impl<T: fmt::Display> fmt::Display for Span<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.src_span, self.kind)
-    }
 }
 
 impl<T> Span<T> {
@@ -61,14 +35,6 @@ impl<T> Span<T> {
             src_span: self.src_span,
             kind: f(self.kind),
         }
-    }
-
-    pub fn start(&self) -> SrcPos {
-        self.src_span.start.clone()
-    }
-
-    pub fn end(&self) -> SrcPos {
-        self.src_span.end.clone()
     }
 }
 

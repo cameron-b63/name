@@ -1,5 +1,6 @@
-use crate::parse::span::{Span, SrcPos, SrcSpan};
-use crate::parse::token::{Token, TokenKind};
+use crate::parse::span::{Span, SrcSpan};
+use crate::parse::token::{Token, TokenCursor, TokenKind};
+use std::collections::VecDeque;
 use std::{fmt, iter::Peekable, str::Chars};
 
 #[derive(Debug, PartialEq)]
@@ -32,31 +33,25 @@ type CharScanner<'a> = Peekable<Chars<'a>>;
 
 pub struct Lexer<'a> {
     chars: CharScanner<'a>,
-    src: &'a str,
-    pos: SrcPos,
-    lexeme_start: Option<SrcPos>,
+    pos: usize,
+    lexeme_start: Option<usize>,
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(src: &'a str) -> Self {
+    pub fn new(src: &'a str, pos: usize) -> Self {
         Lexer {
             chars: src.chars().peekable(),
-            src,
-            pos: SrcPos {
-                pos: 0,
-                line_pos: 0,
-                line: 0,
-            },
+            pos,
             lexeme_start: None,
         }
     }
 
     fn src_span(&self) -> SrcSpan {
-        let start = self.lexeme_start.as_ref().unwrap_or(&self.pos).clone();
+        let pos = self.lexeme_start.as_ref().unwrap_or(&self.pos).clone();
 
         SrcSpan {
-            start,
-            end: self.pos.clone(),
+            pos,
+            length: self.pos - pos,
         }
     }
 
@@ -67,24 +62,15 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn token(&self, kind: TokenKind) -> Token<'a> {
+    fn token(&self, kind: TokenKind) -> Token {
         let token = self.span(kind);
-        Token {
-            src: self.src.get(token.src_span.range()).unwrap_or(""),
-            token,
-        }
+        token
     }
 
     /// get next char for lexer and advance the position
     fn next_char(&mut self) -> Option<char> {
         self.chars.next().map(|c| {
-            self.pos.pos += 1;
-            self.pos.line_pos += 1;
-            if c == '\n' {
-                self.pos.line_pos = 0;
-                self.pos.line += 1;
-            }
-
+            self.pos += 1;
             c
         })
     }
@@ -176,7 +162,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// lex_token performs the actual pattern matching for tokenization.
-    fn lex_token(&mut self) -> LexerResult<Option<Token<'a>>> {
+    fn lex_token(&mut self) -> LexerResult<Option<Token>> {
         self.lexeme_start = Some(self.pos.clone());
 
         if let Some(c) = self.next_char() {
@@ -250,7 +236,7 @@ impl<'a> Lexer<'a> {
 
     /// next_tok will lex the next token from the input stream.
     /// It is a helper for lex.
-    pub fn next_tok(&mut self) -> LexerResult<Option<Token<'a>>> {
+    pub fn next_tok(&mut self) -> LexerResult<Option<Token>> {
         // eat any white space that may prepend next token
         self.consume_while(|c| c.is_whitespace() && c != '\n');
 
@@ -266,19 +252,19 @@ impl<'a> Lexer<'a> {
     }
 
     /// lex the entire input and return a vector of tokens
-    pub fn lex(&mut self) -> (Vec<LexError>, Vec<Token<'a>>) {
-        let mut toks = Vec::new();
+    pub fn lex(&mut self) -> (Vec<LexError>, TokenCursor) {
+        let mut toks = VecDeque::new();
         let mut errs = Vec::new();
 
         loop {
             match self.next_tok() {
                 // If the identified token can be structured in a valid way, push it.
-                Ok(Some(tok)) => toks.push(tok),
+                Ok(Some(tok)) => toks.push_back(tok),
                 Ok(None) => break,
                 Err(err) => errs.push(err),
             }
         }
 
-        (errs, toks)
+        (errs, TokenCursor::new(toks))
     }
 }
