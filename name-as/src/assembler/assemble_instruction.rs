@@ -1,7 +1,8 @@
 use crate::assembler::assembly_helpers::arg_configuration_is_ok;
 use name_core::instruction::information::InstructionType;
 use name_core::instruction::{
-    AssembleResult, ErrorKind, FpRArgs, IArgs, InstructionMeta, JArgs, RArgs, RawInstruction,
+    AssembleResult, ErrorKind, FpCCArgs, FpCCBranchArgs, FpRArgs, IArgs, InstructionMeta, JArgs,
+    RArgs, RawInstruction,
 };
 use name_core::parse::parse::AstKind;
 
@@ -60,6 +61,24 @@ pub fn assemble_instruction(
 
             // Dispatch on FP instruction types
             match info.instruction_type {
+                InstructionType::FpBranchType => {
+                    let mut fp_branch =
+                        FpCCBranchArgs::assign_fp_cc_branch_arguments(arguments, config)?;
+                    fp_branch.opcode = info.op_code;
+                    fp_branch.funky_funct = u32::from(info.fmt.ok_or(ErrorKind::MissingFmt)?);
+                    let additional_info =
+                        info.additional_code.ok_or(ErrorKind::MissingAdditional)?;
+                    fp_branch.nd = additional_info >> 1;
+                    fp_branch.tf = additional_info & 1;
+                    Ok(RawInstruction::from(fp_branch))
+                }
+                InstructionType::FpCCType => {
+                    let mut fp_cc = FpCCArgs::assign_fp_cc_arguments(arguments, config)?;
+                    fp_cc.opcode = info.op_code;
+                    fp_cc.fmt = u32::from(info.fmt.ok_or(ErrorKind::MissingFmt)?);
+                    fp_cc.funct = info.funct_code.ok_or(ErrorKind::MissingFunct)?;
+                    Ok(RawInstruction::from(fp_cc))
+                }
                 InstructionType::FpRType => {
                     let mut fp_r = FpRArgs::assign_fp_r_arguments(arguments, config)?;
                     fp_r.opcode = info.op_code;
@@ -67,7 +86,9 @@ pub fn assemble_instruction(
                     fp_r.funct = info.funct_code.ok_or(ErrorKind::MissingFunct)?;
                     Ok(RawInstruction::from(fp_r))
                 }
-                _ => Err(ErrorKind::WrongInstructionType)?,
+                InstructionType::RType | InstructionType::IType | InstructionType::JType => {
+                    Err(ErrorKind::WrongInstructionType)?
+                }
             }
         }
     }

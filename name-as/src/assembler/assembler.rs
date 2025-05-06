@@ -216,6 +216,7 @@ impl Assembler {
             }
             AstKind::Asciiz(s) => self.assemble_asciiz(s),
             AstKind::Float(f) => self.add_data_bytes(&f.to_be_bytes(f32::to_be_bytes)),
+            AstKind::Double(d) => self.add_data_bytes(&d.to_be_bytes(f64::to_be_bytes)),
             AstKind::Section(section) => match section {
                 Section::Text => self.switch_to_text_section(),
                 Section::Data => self.switch_to_data_section(),

@@ -128,12 +128,30 @@ demo8:
     xori        $t1, $t1, 0b10101010
 
 demo9:
-    la          $t0, coolfloat
-    lwc1        $f12, $t0
+    # newline for separation
+    li          $a0, '\n'
+    li          $v0, SysPrintChar
+    syscall
+
+    # Test some floating-point instructions
+    la          $t0, coolfloat  # Load -3.14 into $f12
+    lwc1        $f12, $t0       # Here is lwc1 functional
     li          $v0, SysPrintFloat
     syscall
 
-    abs.s       $f12, $f12
+    # Newline
+    li          $a0, '\n'
+    li          $v0, SysPrintChar
+    syscall
+
+    # Absolute value
+    abs.s       $f12, $f12      # Absolute value of single register
+    li          $v0, SysPrintFloat
+    syscall
+
+    # Newline
+    li          $a0, '\n'
+    li          $v0, SysPrintChar
     syscall
 
 exit:

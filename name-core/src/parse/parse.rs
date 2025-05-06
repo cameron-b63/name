@@ -41,6 +41,7 @@ pub enum AstKind {
     Globl(String),
     Word(RepeatableArgs<u32>),
     Float(RepeatableArgs<f32>),
+    Double(RepeatableArgs<f64>),
 
     // constructs
     Instruction(String, Vec<Ast>),
@@ -273,6 +274,29 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
         Ok(num)
     }
 
+    pub fn parse_double(&mut self) -> ParseResult<f64> {
+        let is_minus = self.cursor.next_if(TokenKind::Minus).is_some();
+        let tok = self.try_next()?;
+        let src = self.session.get_src_str(&tok.src_span);
+
+        let mut num = match tok.kind {
+            TokenKind::Float => {
+                &src.parse::<f64>().map_err(|e| Span {
+                    kind: ErrorKind::InvalidFloat(e),
+                    src_span: tok.src_span.clone(),
+                })?
+            }
+            .clone(),
+            _ => return Err(tok.clone().map(|k| ErrorKind::UnexpectedToken(k))),
+        };
+
+        if is_minus {
+            num *= -1f64;
+        }
+
+        Ok(num)
+    }
+
     pub fn parse_number(&mut self) -> ParseResult<u32> {
         let is_minus = self.cursor.next_if(TokenKind::Minus).is_some();
         let tok = self.try_next()?;
@@ -324,6 +348,7 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
         }
     }
 
+    /// Parse directives like `.text`, `.data`, and `.word`.
     pub fn parse_directive(&mut self) -> ParseResult<AstKind> {
         let tok = self.try_next_if(TokenKind::Directive)?;
         let src = self.session.get_src_str(&tok.src_span);
@@ -333,6 +358,7 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
             // ".include" => AstKind::Include(self.parse_string()?),
             ".text" => AstKind::Section(Section::Text),
             ".data" => AstKind::Section(Section::Data),
+            ".double" => AstKind::Double(self.parse_repeatable_args(Self::parse_double)?),
             ".float" => AstKind::Float(self.parse_repeatable_args(Self::parse_float)?),
             ".asciiz" => AstKind::Asciiz(self.parse_string()?),
             ".globl" => {

@@ -180,6 +180,21 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             relocation_type: None,
         },
         InstructionInformation {
+            mnemonic: "ldc1",
+            op_code: 0x35,
+            funct_code: None,
+            implementation: wrap_imp(implementation::ldc1),
+            instruction_type: InstructionType::IType,
+            args: &[ArgumentType::Ft, ArgumentType::Immediate, ArgumentType::Rs],
+            alt_args: Some(&[
+                &[ArgumentType::Ft, ArgumentType::Rs],
+                &[ArgumentType::Ft, ArgumentType::Identifier, ArgumentType::Rs],
+                &[ArgumentType::Ft, ArgumentType::Identifier],
+                &[ArgumentType::Ft, ArgumentType::Immediate],
+            ]),
+            relocation_type: None,
+        },
+        InstructionInformation {
             mnemonic: "lui",
             op_code: 0x0F,
             funct_code: None,
@@ -212,6 +227,8 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             alt_args: Some(&[
                 &[ArgumentType::Ft, ArgumentType::Rs],
                 &[ArgumentType::Ft, ArgumentType::Identifier, ArgumentType::Rs],
+                &[ArgumentType::Ft, ArgumentType::Identifier],
+                &[ArgumentType::Ft, ArgumentType::Immediate],
             ]),
             relocation_type: Some(RelocationEntryType::Lo16),
         },

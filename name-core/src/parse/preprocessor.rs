@@ -30,7 +30,10 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
                         let src = self.sess.get_src_str(src_span);
                         let file_name = &src[1..src.len() - 1];
 
-                        let file = self.sess.add_file(self.sess.dir.join(file_name));
+                        let file = match self.sess.add_file(self.sess.dir.join(file_name)) {
+                            Ok(f) => f,
+                            Err(e) => panic!("{e}"), // TODO: More graceful handling the way it's supposed to be. Pushed back for now because I know preprocessor is still in works.
+                        };
 
                         let mut lexer = Lexer::new(&file.str, file.src_span.pos);
                         //Todo: handle errors

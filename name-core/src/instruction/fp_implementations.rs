@@ -1,6 +1,6 @@
 use crate::{exception::definitions::ExceptionType, structs::ProgramState};
 
-use super::FpRArgs;
+use super::{FpCCBranchArgs, FpRArgs};
 
 /// Helper function for instructions that operate on register pairs to remove invalid cases.
 /// If the register is improperly aligned given current program state, it will trigger
@@ -65,4 +65,16 @@ pub fn abs_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
 pub fn abs_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
     program_state.cp1.registers[args.fd as usize] =
         f32::abs(program_state.cp1.registers[args.fs as usize]);
+}
+
+// 0x08 (secondary funct code) - bc1<cond>
+/// All implementations (t/f, likely/unlikely) are contained in this function.
+/// This simplifies the table.
+pub fn bc1(_program_state: &mut ProgramState, _args: FpCCBranchArgs) -> () {
+    todo!("bc1<cond>");
+}
+
+// 0x32.d - c.eq.d
+pub fn c_eq_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+    todo!();
 }

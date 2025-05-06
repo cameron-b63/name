@@ -17,7 +17,10 @@ pub fn assemble_file<'sess, 'sess_ref>(
     file_path: PathBuf,
 ) -> Result<Assembler, ()> {
     // Add the given infile to the parser session.
-    let file = session.add_file(file_path);
+    let file = match session.add_file(file_path) {
+        Ok(f) => f,
+        Err(e) => panic!("{e}"),
+    };
 
     // Create a lexer on the file content to tokenize it.
     let mut lexer = Lexer::new(&file.str, 0);

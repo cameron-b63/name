@@ -488,3 +488,8 @@ pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
 
     program_state.cp1.registers[args.rt as usize] = f32::from_bits(result_word);
 }
+
+// 0x35 - ldc1
+pub fn ldc1(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!();
+}
