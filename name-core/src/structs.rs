@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// Symbol is used for assembly -> ELF, ET_REL -> ET_EXEC, and ELF -> ProgramState construction.
-/// Its definition is provided in the ELF TIS: https://refspecs.linuxfoundation.org/elf/elf.pdf
+/// Its definition is provided in the [ELF TIS](https://refspecs.linuxfoundation.org/elf/elf.pdf).
 #[derive(Debug, Clone)]
 pub struct Symbol {
     pub symbol_type: u8,
@@ -47,6 +47,7 @@ pub struct Coprocessor0 {
 #[derive(Debug, Default)]
 pub struct Coprocessor1 {
     pub registers: [f32; 32],
+    pub control_registers: [u32; 2],
 }
 
 /// Memory is a conglomerate of program text, program data, the heap, the stack, and other segments.
@@ -58,7 +59,7 @@ pub struct Coprocessor1 {
 ///  - stack begins at 0x7ffffe00 in memory (and grows downward);
 ///  - kernel data begins at 0x90000000 in memory;
 ///  - mem-mapped I/O begins at 0xffff0000 in memory.
-/// The Memory struct relies on address translation for proper use. Each segment is represented as a Vec<u8>.
+/// The Memory struct relies on address translation for proper use. Each segment is represented as a `Vec<u8>`.
 #[derive(Debug)]
 pub struct Memory {
     pub text: Vec<u8>,
@@ -117,7 +118,7 @@ impl Memory {
         }
     }
 
-    /// The burden of alignment checking rests on each read_<type> function.
+    /// The burden of alignment checking rests on each `read_<type>` function.
     /// read_byte reads a byte, performing address translation.
     pub fn read_byte(&self, address: u32) -> Result<u8, MemoryError> {
         // Obtain values for segment boundaries:
@@ -166,7 +167,7 @@ impl Memory {
         }
     }
 
-    /// The burden of alignment checking rests on each set_<type> function.
+    /// The burden of alignment checking rests on each `set_<type>` function.
     /// set_byte performs address translation on the provided address and sets the value at that address to value.
     pub fn set_byte(&mut self, address: u32, value: u8) -> Result<(), MemoryError> {
         // Obtain values for segment boundaries:

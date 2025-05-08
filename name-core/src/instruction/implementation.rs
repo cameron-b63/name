@@ -5,6 +5,8 @@ use crate::structs::{
     Register::{At, Ra},
 };
 
+use super::implementation_helpers::{extract_u64, is_register_aligned, pack_up_u64};
+
 /*
 
   ______ _    _ _   _  _____ _______
@@ -36,7 +38,6 @@ pub fn jr(program_state: &mut ProgramState, args: RArgs) -> () {
         .memory
         .allows_execution_of(program_state.cpu.general_purpose_registers[args.rs as usize])
     {
-        // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
     }
 
@@ -54,7 +55,6 @@ pub fn jalr(program_state: &mut ProgramState, args: RArgs) -> () {
         .memory
         .allows_execution_of(program_state.cpu.general_purpose_registers[args.rs as usize])
     {
-        // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
     }
     program_state.cpu.general_purpose_registers[rd as usize] = program_state.cpu.pc;
@@ -115,7 +115,6 @@ pub fn sub(program_state: &mut ProgramState, args: RArgs) -> () {
     program_state.cpu.general_purpose_registers[At as usize] = temp.0;
 
     if temp.1 {
-        // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::ArithmeticOverflow);
     } else {
         program_state.cpu.general_purpose_registers[args.rd as usize] =
@@ -199,7 +198,6 @@ pub fn j(program_state: &mut ProgramState, args: JArgs) -> () {
     let address: u32 = (args.address << 2) | (program_state.cpu.pc & 0xF0000000);
 
     if !program_state.memory.allows_execution_of(address) {
-        // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
         return;
     }
@@ -212,7 +210,6 @@ pub fn jal(program_state: &mut ProgramState, args: JArgs) -> () {
     let address: u32 = (args.address << 2) | (program_state.cpu.pc & 0xF0000000);
 
     if !program_state.memory.allows_execution_of(address) {
-        // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
         return;
     }
@@ -235,12 +232,10 @@ pub fn beq(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
     if !program_state.memory.allows_execution_of(temp) {
-        // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
         return;
     }
 
-    // Bro forgot the actual jump logic
     program_state.cpu.pc = temp;
 }
 
@@ -258,7 +253,6 @@ pub fn bne(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
     if !program_state.memory.allows_execution_of(temp) {
-        // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
         return;
     }
@@ -278,12 +272,10 @@ pub fn blez(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
     if !program_state.memory.allows_execution_of(temp) {
-        // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
         return;
     }
 
-    // BRO HAS ONCE AGAIN FORGOTTEN THE ACTUAL JUMP
     program_state.cpu.pc = temp;
 }
 
@@ -299,7 +291,6 @@ pub fn bgtz(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
     if !program_state.memory.allows_execution_of(temp) {
-        // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
         return;
     }
@@ -354,7 +345,6 @@ pub fn lb(program_state: &mut ProgramState, args: IArgs) -> () {
         + args.imm as i32) as u32;
 
     if !program_state.memory.allows_read_from(temp) {
-        // TODO: Use a function which sets the proper values in cp0 for us
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
         return;
     }
@@ -490,11 +480,114 @@ pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
 }
 
 // 0x35 - ldc1
-pub fn ldc1(_program_state: &mut ProgramState, _args: IArgs) -> () {
-    todo!();
+pub fn ldc1(program_state: &mut ProgramState, args: IArgs) -> () {
+    let _ = is_register_aligned(program_state, args.rt);
+
+    let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+        + args.imm as i32) as u32;
+
+    if temp % 4 != 0 {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+
+    if !program_state.memory.allows_read_from(temp)
+        || !program_state.memory.allows_read_from(temp + 7)
+    {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+
+    // Checks passed. Load double word.
+    let mut i = 0;
+    let mut result_double: u64 = 0;
+    while i < 8 {
+        match program_state.memory.read_byte(temp + i) {
+            Ok(b) => result_double |= (b as u64) << (56 - (i * 8)),
+            Err(_) => {
+                program_state.set_exception(ExceptionType::AddressExceptionLoad);
+            }
+        }
+        i += 1;
+    }
+
+    pack_up_u64(program_state, args.rt, result_double);
+}
+
+// 0x39 - swc1
+pub fn swc1(program_state: &mut ProgramState, args: IArgs) -> () {
+    let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+        + args.imm as i32) as u32;
+
+    if temp % 4 != 0 {
+        program_state.set_exception(ExceptionType::AddressExceptionStore);
+        return;
+    }
+
+    if !program_state.memory.allows_write_to(temp)
+        || !program_state.memory.allows_write_to(temp + 3)
+    {
+        program_state.set_exception(ExceptionType::AddressExceptionStore);
+        return;
+    }
+
+    // Retrieve value of ft from coprocessor 1
+    let value: u32 = f32::to_bits(program_state.cp1.registers[args.rt as usize]);
+
+    // Checks passed. Store word.
+    let mut i = 0;
+    while i < 4 {
+        // Shift/mask value to get correct byte
+        let new_byte: u8 = ((value >> (i * 8)) & 0xFF) as u8;
+        // Write it to correct location
+        match program_state.memory.set_byte(temp + (3 - i), new_byte) {
+            Ok(_) => (),
+            Err(_) => {
+                // If write failed, trigger an exception
+                program_state.set_exception(ExceptionType::AddressExceptionStore);
+                return;
+            }
+        }
+        i += 1;
+    }
 }
 
 // 0x3d - sdc1
-pub fn sdc1(_program_state: &mut ProgramState, _args: IArgs) -> () {
-    todo!();
+pub fn sdc1(program_state: &mut ProgramState, args: IArgs) -> () {
+    let _ = is_register_aligned(program_state, args.rt);
+
+    let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+        + args.imm as i32) as u32;
+
+    if temp % 4 != 0 {
+        program_state.set_exception(ExceptionType::AddressExceptionStore);
+        return;
+    }
+
+    if !program_state.memory.allows_write_to(temp)
+        || !program_state.memory.allows_write_to(temp + 3)
+    {
+        program_state.set_exception(ExceptionType::AddressExceptionStore);
+        return;
+    }
+
+    // Retrieve value of ft from coprocessor 1
+    let value: u64 = extract_u64(program_state, args.rt);
+
+    // Checks passed. Store word.
+    let mut i = 0;
+    while i < 8 {
+        // Shift/mask value to get correct byte
+        let new_byte: u8 = ((value >> (i * 8)) & 0xFF) as u8;
+        // Write it to correct location
+        match program_state.memory.set_byte(temp + (7 - i), new_byte) {
+            Ok(_) => (),
+            Err(_) => {
+                // If write failed, trigger an exception
+                program_state.set_exception(ExceptionType::AddressExceptionStore);
+                return;
+            }
+        }
+        i += 1;
+    }
 }

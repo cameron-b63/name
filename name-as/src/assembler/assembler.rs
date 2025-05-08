@@ -140,17 +140,17 @@ impl Assembler {
             }
         }
 
-        // convert any Symbol args into a dummy zero immediate for packing
-        let processed_args: Vec<AstKind> = args
-            .into_iter()
-            .map(|arg| match arg {
-                AstKind::Symbol(_) => AstKind::Immediate(0),
-                other => other,
-            })
-            .collect();
+        // // convert any Symbol args into a dummy zero immediate for packing
+        // let processed_args: Vec<AstKind> = args
+        //     .into_iter()
+        //     .map(|arg| match arg {
+        //         AstKind::Symbol(_) => AstKind::Immediate(0),
+        //         other => other,
+        //     })
+        //     .collect();
 
         // do the actual packing based on Int vs. Fp
-        let packed: RawInstruction = assemble_instruction(meta, processed_args)?;
+        let packed: RawInstruction = assemble_instruction(meta, /*processed_args*/ args)?;
 
         // append the bytes to .text
         self.section_dot_text

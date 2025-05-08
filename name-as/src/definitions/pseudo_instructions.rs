@@ -32,5 +32,5 @@ pub(crate) const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
     PseudoInstruction {
         mnemonic: "s.d",
         expand: expand_s_d,
-    }
+    },
 ];

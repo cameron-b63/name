@@ -18,7 +18,7 @@ pub(crate) fn expand_b(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstK
 
     Ok(vec![
         // beq $zero, $zero, target
-        ("beq", vec![zero.clone(), zero, target])
+        ("beq", vec![zero.clone(), zero, target]),
     ])
 }
 
@@ -89,6 +89,6 @@ pub(crate) fn expand_move(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<A
 pub(crate) fn expand_s_d(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     Ok(vec![
         // sdc1 <args>
-        ("sdc1", args)
+        ("sdc1", args),
     ])
 }

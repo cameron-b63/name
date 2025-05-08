@@ -12,7 +12,7 @@ use super::information::FpInstructionInformation;
 
 /// The floating point instructions are stored separately from normal CPU instructions
 /// since they have a different needed field for assembly - fmt.
-/// This table is still based on https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00086-2B-MIPS32BIS-AFP-6.06.pdf
+/// This table is still based on the [MIPS specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00086-2B-MIPS32BIS-AFP-6.06.pdf).
 /// A note about condition codes for comparisons:
 /// there exist three bits of specificity for condition codes, for 8 possible condition codes.
 /// When making a comparison, the implied condition code to store the result in is 0.
@@ -55,9 +55,11 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
             additional_code: Some(0b01), // Not "likely", branch on condition code true
             implementation: wrap_imp(fp_implementations::bc1),
             args: &[ArgumentType::Identifier],
-            alt_args: Some(&[&[ArgumentType::Immediate, ArgumentType::Identifier],
+            alt_args: Some(&[
+                &[ArgumentType::Immediate, ArgumentType::Identifier],
                 &[ArgumentType::Immediate, ArgumentType::Immediate],
-                &[ArgumentType::Immediate]]),
+                &[ArgumentType::Immediate],
+            ]),
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         FpInstructionInformation {
@@ -95,6 +97,6 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
-        }
+        },
     ]
 });

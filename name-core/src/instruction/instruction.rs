@@ -515,7 +515,7 @@ impl FpCCBranchArgs {
         args_to_use: &[ArgumentType],
     ) -> AssembleResult<Self> {
         let mut cc = 0;
-        let mut is_first_imm: bool = true;  // This just keeps track of whether this is the first immediate we've encountered.
+        let mut is_first_imm: bool = true; // This just keeps track of whether this is the first immediate we've encountered.
         for (i, passed) in arguments.into_iter().enumerate() {
             match args_to_use[i] {
                 ArgumentType::Immediate => {
@@ -533,7 +533,7 @@ impl FpCCBranchArgs {
                         // Must be the second immediate, should go to zero.
                         // Do nothing.
                     }
-                },
+                }
                 ArgumentType::Identifier => (),
                 _ => todo!("Figure out what to do about bc1t cc, (imm) issue? maybe?"),
             }
