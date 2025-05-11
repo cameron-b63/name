@@ -34,7 +34,7 @@ pub mod fpu_control {
      * - FCCR: Floating Point Condition Code Reigster. Alias to FCSR. Condition Codes for comparisons.
      */
 
-    /*
+    /**
     FIR (Floating Point Implementation Register);
     (FIR, CP1 Control Register 0)
 
@@ -59,5 +59,38 @@ pub mod fpu_control {
      pp. 88;
     */
     pub const FIR_DEFAULT_VALUES: u32 = 0b00_0_0_0000_1_0_0_0_0_0_1_1_00000000_00000000;
-    pub const FCSR_DEFAULT_VALUES: u32 = 0;
+
+    /**
+    FCSR, Floating Point Control and Status Register;
+    (FCSR, CP1 Control Register 31)
+
+     - (31-25; 23) = 0; floating-point condition codes. Default to all 0's. Non-contiguous fields. Default => 0.
+     - (24) = 1; floating-point operations WILL be flushed if subnormal. 
+     This is because it's unpredictable accross different hardware otherwise.\
+     - (22-21) = 0; Implementation-dependent and unneeded => 0.
+     - (20) = 0; Reserved => 0.
+     - (19) = 1; Indicates if ABS.fmt and NEG.fmt instructions are compliant with IEEE 754-2008. They are => 1.
+     - (18) = 1; Indicates if NAN handling follows legacy MIPS or IEEE 754-2008 recommendations. Sticking with IEEE => 1.
+     - (17-12) = 0; Indicates the cause of an exception. Bit breakdown below:
+     (17) = E (Unimplemented operation);
+     (16) = V (Invalid operation);
+     (15) = Z (Divide by zero);
+     (14) = O (Overflow);
+     (13) = U (Underflow);
+     (12) = I (Inexact);
+     - (11-7) = 0b11111; Enables bits: control whether or not a cause leads to an exception.
+     (11) = V (Invalid operation) => 1;
+     (10) = Z (Divide by zero) => 1;
+     (9) = O (Overflow) => 1;
+     (8) = U (Underflow) => 1;
+     (7) = I (Inexact) => 1;
+     - (6-2) = 0; Unused since all "enables" trigger exceptions => 0.
+     - (1-0) = 0; Rounding mode is round to nearest (not round toward zero) => 0.
+     */
+    pub const FCSR_DEFAULT_VALUES: u32 = 0b0000000_1_0_00_0_1_1_000000_11111_00000_00;
+
+    /// Constant index of FIR
+    pub const FIR_INDEX: usize = 0;
+    /// Constant index of FCSR
+    pub const FCSR_INDEX: usize = 0;
 }

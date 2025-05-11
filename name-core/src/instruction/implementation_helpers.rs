@@ -28,3 +28,44 @@ pub fn pack_up_u64(program_state: &mut ProgramState, target: u32, value: u64) {
     program_state.cp1.registers[target as usize] = f32::from_bits((value >> 32) as u32);
     program_state.cp1.registers[target as usize + 1] = f32::from_bits(value as u32);
 }
+
+/// Some operations will have subnormal results. This essentially means they're super tiny.
+/// For details, see the definition of FCSR (FS bit).
+/// This function facilitates the subnormal stuff.
+pub fn perform_op_with_flush<T>(program_state: &mut ProgramState, result: T) -> T
+    where
+        T: FloatFlush + Copy,
+{
+    if program_state.cp1.fenr_fs_bit_set() && result.is_subnormal() {
+        T::flush_zero_with_sign(result)
+    } else {
+        result
+    }
+}
+
+/// This trait facilitates generalizing the subnormal arithmetic issue (see docs).
+/// It should be implemented for both f32 and f64.
+pub trait FloatFlush {
+    fn is_subnormal(self) -> bool;
+    fn flush_zero_with_sign(self) -> Self;
+}
+
+impl FloatFlush for f32 {
+    fn is_subnormal(self) -> bool {
+        self.classify() == std::num::FpCategory::Subnormal
+    }
+
+    fn flush_zero_with_sign(self) -> Self {
+        0.0_f32.copysign(self)
+    }
+}
+
+impl FloatFlush for f64 {
+    fn is_subnormal(self) -> bool {
+        self.classify() == std::num::FpCategory::Subnormal
+    }
+
+    fn flush_zero_with_sign(self) -> Self {
+        0.0_f64.copysign(self)
+    }
+}

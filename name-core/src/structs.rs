@@ -8,8 +8,7 @@ use std::{
 
 use crate::{
     constants::{
-        MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_HEAP_START_ADDR, MIPS_STACK_END_ADDR,
-        MIPS_TEXT_START_ADDR,
+        fpu_control::FCSR_INDEX, MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_HEAP_START_ADDR, MIPS_STACK_END_ADDR, MIPS_TEXT_START_ADDR
     },
     dbprint, dbprintln,
     debug::{debug_utils::*, debugger_methods::* /* implementations::* */},
@@ -48,6 +47,23 @@ pub struct Coprocessor0 {
 pub struct Coprocessor1 {
     pub registers: [f32; 32],
     pub control_registers: [u32; 2],
+}
+
+impl Coprocessor1 {
+    pub fn fenr_fs_bit_set(&self) -> bool {
+        (self.get_fenr() >> 2) & 0b01 == 1
+    }
+
+    /// Obtain the pseudo-register FCSR. 
+    /// See [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00082-2B-MIPS32INT-AFP-06.01.pdf#page=101)
+    pub fn get_fenr(&self) -> u32 {
+        // get enables from FCSR
+        (self.control_registers[FCSR_INDEX] & 0b1111_1000_0000)
+        // get FS from FCSR
+        | ((self.control_registers[FCSR_INDEX] & 0b0000_0001_0000_0000_0000_0000_0000_0000) >> 22)
+        // get FRM from FCSR
+        | (self.control_registers[FCSR_INDEX] & 0b11)
+    }
 }
 
 /// Memory is a conglomerate of program text, program data, the heap, the stack, and other segments.

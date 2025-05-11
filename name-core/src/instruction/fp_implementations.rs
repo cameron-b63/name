@@ -1,7 +1,7 @@
 use crate::structs::ProgramState;
 
 use super::{
-    implementation_helpers::{extract_u64, is_register_aligned, pack_up_u64},
+    implementation_helpers::{extract_u64, is_register_aligned, pack_up_u64, perform_op_with_flush},
     FpCCBranchArgs, FpRArgs,
 };
 
@@ -21,8 +21,21 @@ use super::{
 // 0x03 - div.fmt
 
 // 0x03.d - div.d
-pub fn div_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!();
+pub fn div_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let _ = is_register_aligned(program_state, args.fs);
+    let _ = is_register_aligned(program_state, args.ft);
+
+    let numerator: f64 = f64::from_bits(extract_u64(program_state, args.fs));
+    let denominator: f64 = f64::from_bits(extract_u64(program_state, args.ft));
+
+    let result: f64 = 
+        perform_op_with_flush(program_state, {
+            numerator
+            / denominator 
+    });
+
+    pack_up_u64(program_state, args.fd, f64::to_bits(result));
 }
 
 // 0x05 - abs.fmt
