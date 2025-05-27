@@ -28,6 +28,7 @@ pub fn extract_loadable_sections(elf: &Elf) -> (Vec<u8>, Vec<u8>) {
 }
 
 pub fn generate_err(lineinfo: &Vec<LineInfo>, address: u32, message: &str) -> String {
+    dbg!(&lineinfo);
     // Perform an address-based search for the correct line info
     let found_lineinfo: &LineInfo = match lineinfo
         .iter()

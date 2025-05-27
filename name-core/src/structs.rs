@@ -8,11 +8,12 @@ use std::{
 
 use crate::{
     constants::{
-        fpu_control::FCSR_INDEX, MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_HEAP_START_ADDR, MIPS_STACK_END_ADDR, MIPS_TEXT_START_ADDR
+        fpu_control::FCSR_INDEX, MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR,
+        MIPS_HEAP_START_ADDR, MIPS_STACK_END_ADDR, MIPS_TEXT_START_ADDR,
     },
     dbprint, dbprintln,
     debug::{debug_utils::*, debugger_methods::* /* implementations::* */},
-    exception::constants::EXCEPTION_BEING_HANDLED,
+    exception::{constants::EXCEPTION_BEING_HANDLED, definitions::ExceptionType},
     syscalls::*,
 };
 
@@ -54,7 +55,7 @@ impl Coprocessor1 {
         (self.get_fenr() >> 2) & 0b01 == 1
     }
 
-    /// Obtain the pseudo-register FCSR. 
+    /// Obtain the pseudo-register FCSR.
     /// See [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00082-2B-MIPS32INT-AFP-06.01.pdf#page=101)
     pub fn get_fenr(&self) -> u32 {
         // get enables from FCSR
@@ -63,6 +64,30 @@ impl Coprocessor1 {
         | ((self.control_registers[FCSR_INDEX] & 0b0000_0001_0000_0000_0000_0000_0000_0000) >> 22)
         // get FRM from FCSR
         | (self.control_registers[FCSR_INDEX] & 0b11)
+    }
+
+    /// Obtain the pseudo-register FCCR.
+    /// See [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00082-2B-MIPS32INT-AFP-06.01.pdf#page=101)
+    pub fn get_fccr(&self) -> u32 {
+        // get contiguous cc's
+        (self.control_registers[FCSR_INDEX] >> 24 & 0b1111110)
+        // get the non-contiguous cc 0
+        | (self.control_registers[FCSR_INDEX] >> 22 & 0b1)
+    }
+
+    /// Get the given condition code.
+    pub fn get_condition_code(&self, cc: u32) -> bool {
+        // FCCR is made for this purpose. Just used a wrapper method to avoid bad selection.
+        return (self.get_fccr() >> cc) & 1 == 1;
+    }
+
+    /// Set the given condition code. Updates FCSR.
+    pub fn set_condition_code(&mut self, cc: u32, value: bool) {
+        match cc {
+            0 => self.control_registers[FCSR_INDEX] |= (value as u32) << 22,
+            1..7 => self.control_registers[FCSR_INDEX] |= (value as u32) << (24 + cc),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -294,6 +319,16 @@ impl ProgramState {
 
     pub fn is_exception(&self) -> bool {
         return self.cp0.get_exception_level() == EXCEPTION_BEING_HANDLED;
+    }
+
+    /// Helper function for facilitating branch instructions.
+    /// Abstracts the logic of ensuring valid memory space and such.
+    pub fn jump_if_valid(&mut self, address: u32) -> () {
+        if !self.memory.allows_execution_of(address) {
+            self.set_exception(ExceptionType::AddressExceptionLoad);
+        } else {
+            self.cpu.pc = address;
+        }
     }
 }
 

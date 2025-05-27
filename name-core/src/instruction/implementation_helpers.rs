@@ -33,8 +33,8 @@ pub fn pack_up_u64(program_state: &mut ProgramState, target: u32, value: u64) {
 /// For details, see the definition of FCSR (FS bit).
 /// This function facilitates the subnormal stuff.
 pub fn perform_op_with_flush<T>(program_state: &mut ProgramState, result: T) -> T
-    where
-        T: FloatFlush + Copy,
+where
+    T: FloatFlush + Copy,
 {
     if program_state.cp1.fenr_fs_bit_set() && result.is_subnormal() {
         T::flush_zero_with_sign(result)

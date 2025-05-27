@@ -599,8 +599,8 @@ fn get_string_from_strtab(strtab: &Vec<u8>, offset: u32) -> Option<&str> {
 pub fn extract_lineinfo(elf: &Elf) -> Vec<LineInfo> {
     let shstrtab = &elf.sections[elf.file_header.e_shstrndx as usize - 1];
     let idx = match find_target_section_index(&elf.section_header_table, shstrtab, ".line") {
-        Some(i) => i,
-        None => unreachable!(),
+        Some(i) => i - 1,
+        None => panic!("No lineinfo supplied in ELF!"),
     };
 
     deserialize_line_info(&elf.sections[idx])

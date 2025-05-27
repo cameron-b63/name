@@ -34,14 +34,7 @@ pub fn srl(program_state: &mut ProgramState, args: RArgs) -> () {
 
 // 0x08 - jr
 pub fn jr(program_state: &mut ProgramState, args: RArgs) -> () {
-    if !program_state
-        .memory
-        .allows_execution_of(program_state.cpu.general_purpose_registers[args.rs as usize])
-    {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-    }
-
-    program_state.cpu.pc = program_state.cpu.general_purpose_registers[args.rs as usize];
+    program_state.jump_if_valid(program_state.cpu.general_purpose_registers[args.rs as usize])
 }
 
 // 0x09 - jalr
@@ -51,14 +44,8 @@ pub fn jalr(program_state: &mut ProgramState, args: RArgs) -> () {
         x => x,
     };
 
-    if !program_state
-        .memory
-        .allows_execution_of(program_state.cpu.general_purpose_registers[args.rs as usize])
-    {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-    }
     program_state.cpu.general_purpose_registers[rd as usize] = program_state.cpu.pc;
-    program_state.cpu.pc = program_state.cpu.general_purpose_registers[args.rs as usize];
+    program_state.jump_if_valid(program_state.cpu.general_purpose_registers[args.rd as usize]);
 }
 
 // 0x0A - slti
@@ -197,25 +184,15 @@ pub fn sltu(program_state: &mut ProgramState, args: RArgs) -> () {
 pub fn j(program_state: &mut ProgramState, args: JArgs) -> () {
     let address: u32 = (args.address << 2) | (program_state.cpu.pc & 0xF0000000);
 
-    if !program_state.memory.allows_execution_of(address) {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    program_state.cpu.pc = address;
+    program_state.jump_if_valid(address);
 }
 
 // 0x03 - jal
 pub fn jal(program_state: &mut ProgramState, args: JArgs) -> () {
     let address: u32 = (args.address << 2) | (program_state.cpu.pc & 0xF0000000);
 
-    if !program_state.memory.allows_execution_of(address) {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
     program_state.cpu.general_purpose_registers[Ra as usize] = program_state.cpu.pc;
-    program_state.cpu.pc = address;
+    program_state.jump_if_valid(address);
 }
 
 // 0x04 - beq
@@ -231,12 +208,7 @@ pub fn beq(program_state: &mut ProgramState, args: IArgs) -> () {
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
-    if !program_state.memory.allows_execution_of(temp) {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    program_state.cpu.pc = temp;
+    program_state.jump_if_valid(temp);
 }
 
 // 0x05 - bne
@@ -252,13 +224,7 @@ pub fn bne(program_state: &mut ProgramState, args: IArgs) -> () {
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
-    if !program_state.memory.allows_execution_of(temp) {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    // Bro once again forgot the actual jump logic
-    program_state.cpu.pc = temp;
+    program_state.jump_if_valid(temp);
 }
 
 // 0x06 - blez
@@ -271,12 +237,7 @@ pub fn blez(program_state: &mut ProgramState, args: IArgs) -> () {
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
-    if !program_state.memory.allows_execution_of(temp) {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    program_state.cpu.pc = temp;
+    program_state.jump_if_valid(temp);
 }
 
 // 0x07 - bgtz
@@ -290,12 +251,7 @@ pub fn bgtz(program_state: &mut ProgramState, args: IArgs) -> () {
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
-    if !program_state.memory.allows_execution_of(temp) {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    program_state.cpu.pc = temp;
+    program_state.jump_if_valid(temp);
 }
 
 // 0x08 - addi

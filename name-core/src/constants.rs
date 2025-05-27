@@ -65,7 +65,7 @@ pub mod fpu_control {
     (FCSR, CP1 Control Register 31)
 
      - (31-25; 23) = 0; floating-point condition codes. Default to all 0's. Non-contiguous fields. Default => 0.
-     - (24) = 1; floating-point operations WILL be flushed if subnormal. 
+     - (24) = 1; floating-point operations WILL be flushed if subnormal.
      This is because it's unpredictable accross different hardware otherwise.\
      - (22-21) = 0; Implementation-dependent and unneeded => 0.
      - (20) = 0; Reserved => 0.

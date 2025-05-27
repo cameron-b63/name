@@ -83,9 +83,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             implementation: wrap_imp(implementation::beq),
             instruction_type: InstructionType::IType,
             args: &[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Immediate],
-            alt_args: Some(&[
-                &[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Identifier],
-            ]),
+            alt_args: Some(&[&[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Identifier]]),
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
