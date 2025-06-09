@@ -31,7 +31,7 @@ pub fn div_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
     let numerator: f64 = f64::from_bits(extract_u64(program_state, args.fs));
     let denominator: f64 = f64::from_bits(extract_u64(program_state, args.ft));
 
-    let result: f64 = perform_op_with_flush(program_state, numerator / denominator );
+    let result: f64 = perform_op_with_flush(program_state, numerator / denominator);
 
     pack_up_u64(program_state, args.fd, f64::to_bits(result));
 }

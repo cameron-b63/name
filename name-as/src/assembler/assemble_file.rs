@@ -72,6 +72,12 @@ pub fn assemble_file<'sess, 'sess_ref>(
     }
 
     // process line info
+    // TODO: What the hell?? Is this??
+    // This doesn't work properly in any world. 
+    // This will never produce the correct lineinfo for any file.
+    // I simply want a one-to-one mapping between the program counter and a line.
+    // If the line contains an instruction, assign its lineinfo and increment the fake pc.
+    // If it contains a pseudo-instruction, figure out how many expanded lines it spans.
     for line in file.str.lines() {
         let start_address = match assembler.current_section {
             Section::Text => assembler.current_address,

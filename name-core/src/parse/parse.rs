@@ -264,6 +264,22 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
                 })?
             }
             .clone(),
+            TokenKind::HexNumber => u32::from_str_radix(&src[2..], 16).map_err(|e| Span {
+                kind: ErrorKind::InvalidNumber(e),
+                src_span: tok.src_span.clone(),
+            })? as f32,
+            TokenKind::DecimalNumber => u32::from_str_radix(src, 10).map_err(|e| Span {
+                kind: ErrorKind::InvalidNumber(e),
+                src_span: tok.src_span.clone(),
+            })? as f32,
+            TokenKind::OctalNumber => u32::from_str_radix(&src[2..], 8).map_err(|e| Span {
+                kind: ErrorKind::InvalidNumber(e),
+                src_span: tok.src_span.clone(),
+            })? as f32,
+            TokenKind::BinaryNumber => u32::from_str_radix(&src[2..], 2).map_err(|e| Span {
+                kind: ErrorKind::InvalidNumber(e),
+                src_span: tok.src_span.clone(),
+            })? as f32,
             _ => return Err(tok.clone().map(|k| ErrorKind::UnexpectedToken(k))),
         };
 
@@ -287,7 +303,27 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
                 })?
             }
             .clone(),
-            _ => return Err(tok.clone().map(|k| ErrorKind::UnexpectedToken(k))),
+            // If it didn't parse as a double, try parsing as a number. Simply cast the number to double.
+            // TODO: This is ugly and should be pulled out as a function but I needed a quick-n-dirty
+            TokenKind::HexNumber => u32::from_str_radix(&src[2..], 16).map_err(|e| Span {
+                kind: ErrorKind::InvalidNumber(e),
+                src_span: tok.src_span.clone(),
+            })? as f64,
+            TokenKind::DecimalNumber => u32::from_str_radix(src, 10).map_err(|e| Span {
+                kind: ErrorKind::InvalidNumber(e),
+                src_span: tok.src_span.clone(),
+            })? as f64,
+            TokenKind::OctalNumber => u32::from_str_radix(&src[2..], 8).map_err(|e| Span {
+                kind: ErrorKind::InvalidNumber(e),
+                src_span: tok.src_span.clone(),
+            })? as f64,
+            TokenKind::BinaryNumber => u32::from_str_radix(&src[2..], 2).map_err(|e| Span {
+                kind: ErrorKind::InvalidNumber(e),
+                src_span: tok.src_span.clone(),
+            })? as f64,
+            _ => {
+                return Err(tok.clone().map(|k| ErrorKind::UnexpectedToken(k)));
+            }
         };
 
         if is_minus {
