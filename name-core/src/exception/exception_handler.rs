@@ -1,3 +1,5 @@
+use std::process::exit;
+
 use crate::{
     debug::debug_utils::DebuggerState,
     exception::definitions::ExceptionType,
@@ -30,23 +32,27 @@ pub fn handle_exception(
     match exception_type {
         ExceptionType::AddressExceptionLoad => {
             // TODO: Detect difference between instructions like bad lw and bad/misaligned pc
-            panic!("{}", generate_err(lineinfo, epc, "Illegal address provided for load/fetch; misaligned, unreachable, or unowned address."));
+            eprintln!("{}", generate_err(lineinfo, epc, "Illegal address provided for load/fetch; misaligned, unreachable, or unowned address."));
+            exit(0);
         }
         ExceptionType::AddressExceptionStore => {
-            panic!("{}", generate_err(lineinfo, epc, "Illegal address provided on store operation; misaligned, unreachable, or unowned address."));
+            eprintln!("{}", generate_err(lineinfo, epc, "Illegal address provided on store operation; misaligned, unreachable, or unowned address."));
+            exit(0);
         }
         ExceptionType::BusFetch => {
-            panic!("{}", generate_err(
+            eprintln!("{}", generate_err(
                 lineinfo,
                 epc,
                 "Failed to interpret instruction as word; Unrecognized bytes in ELF .text space.",
             ));
+            exit(0);
         }
         ExceptionType::BusLoadStore => {
-            panic!(
+            eprintln!(
                 "{}",
                 generate_err(lineinfo, epc, "Failed to store data in given address.")
             );
+            exit(0);
         }
         ExceptionType::Syscall => {
             // Invoke the syscall handler on program state
@@ -67,7 +73,7 @@ pub fn handle_exception(
             }
         }
         ExceptionType::ReservedInstruction => {
-            panic!(
+            eprintln!(
                 "{}",
                 generate_err(
                     lineinfo,
@@ -75,9 +81,10 @@ pub fn handle_exception(
                     "Unrecognized bytes in ELF at program counter.",
                 )
             );
+            exit(0);
         }
         ExceptionType::CoprocessorUnusable => {
-            panic!(
+            eprintln!(
                 "{}",
                 generate_err(
                     lineinfo,
@@ -85,10 +92,11 @@ pub fn handle_exception(
                     "Attempted to access a coprocessor without correct operating mode.",
                 )
             );
+            exit(0);
         }
         ExceptionType::ArithmeticOverflow => {
             // TODO: Differentiate between these
-            panic!(
+            eprintln!(
                 "{}",
                 generate_err(
                     lineinfo,
@@ -96,16 +104,18 @@ pub fn handle_exception(
                     "Arithmetic overflow, underflow, or divide by zero detected on instruction.",
                 )
             );
+            exit(0);
         }
         ExceptionType::Trap => {
             todo!("Not sure how we want trap to work yet.");
         }
         ExceptionType::FloatingPoint => {
             // Will be more useful once cp1 is implemented
-            panic!(
+            eprintln!(
                 "{}",
                 generate_err(lineinfo, epc, "Floating point exception occurred.")
             );
+            exit(0);
         }
     }
 
