@@ -4,7 +4,6 @@ use name_core::parse::session::Session;
 use crate::assembler::assembler::Assembler;
 use name_core::{
     parse::{lexer::Lexer, parse::Parser},
-    structs::{LineInfo, Section},
 };
 
 use std::path::PathBuf;
@@ -72,39 +71,7 @@ pub fn assemble_file<'sess, 'sess_ref>(
     }
 
     // process line info
-    // TODO: What the hell?? Is this??
-    // This doesn't work properly in any world. 
-    // This will never produce the correct lineinfo for any file.
-    // I simply want a one-to-one mapping between the program counter and a line.
-    // If the line contains an instruction, assign its lineinfo and increment the fake pc.
-    // If it contains a pseudo-instruction, figure out how many expanded lines it spans.
-    for line in file.str.lines() {
-        let start_address = match assembler.current_section {
-            Section::Text => assembler.current_address,
-            Section::Data => assembler.text_address,
-            Section::Null => 0,
-        };
-
-        // Extend section .line to include the new line
-        assembler.section_dot_line.extend(
-            LineInfo {
-                content: line.to_string(),
-                line_number: assembler.line_number as u32,
-                start_address: match assembler.current_section {
-                    Section::Text => start_address,
-                    _ => 0,
-                },
-                end_address: match assembler.current_section {
-                    Section::Text => assembler.current_address,
-                    Section::Data => assembler.text_address,
-                    _ => 0,
-                },
-            }
-            .to_bytes(),
-        );
-
-        assembler.line_number += 1;
-    }
+    // this was completely obsoleted and must be replaced with spans generated during expansion.
 
     // Return the assembler state.
     Ok(assembler)
