@@ -2,6 +2,7 @@ use std::{fmt, io, path::PathBuf};
 
 use super::information::{ArgumentType, FpInstructionInformation, InstructionInformation};
 use crate::{
+    instruction::information::FpFmt,
     parse::{parse::AstKind, span::Span},
     structs::ProgramState,
 };
@@ -184,13 +185,24 @@ impl RawInstruction {
     }
 
     pub fn get_lookup(self) -> u32 {
+        // Normal instructions follow this form:
+        // | opcode | multiplexer |
+        // Where "multiplexer" might be a funct code or some other secondary identifier.
         let base = self.get_opcode() << 6;
         if self.is_rtype() {
             base | self.get_funct()
         } else if self.is_regimm() {
             base | self.get_rt()
         } else if self.is_floating() {
-            (self.get_opcode() << 11) | (self.get_funct() << 5) | self.get_fmt()
+            // Floating-point instructions have a special format that deviates from standard base.
+            // | opcode | funct | fmt | add'l |
+            if self.get_fmt() == u32::from(FpFmt::ReservedFunctCodeBC) {
+                // If the instruction is a comparison branch, there exists a special case.
+                (self.get_opcode() << 13) | (self.get_fmt() << 2) | self.get_ft() & 0b11
+            } else {
+                // Most floating-point instructions follow this pattern.
+                (self.get_opcode() << 13) | (self.get_funct() << 7) | (self.get_fmt() << 2)
+            }
         } else {
             base
         }
@@ -500,6 +512,7 @@ impl From<RawInstruction> for FpCCArgs {
 // FpCCBranchArgs
 /// The FpCCBranchArgs is for instructions like bc1t and bc1fl.
 /// The fields tf and nd are another layer of indirection to get the right instruction.
+#[derive(Debug)]
 pub struct FpCCBranchArgs {
     pub opcode: u32,
     pub funky_funct: u32, // The funct code is in a different place for this format. Little odd.

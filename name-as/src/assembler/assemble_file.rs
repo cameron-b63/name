@@ -2,9 +2,7 @@ use name_core::parse::preprocessor::Preprocessor;
 use name_core::parse::session::Session;
 
 use crate::assembler::assembler::Assembler;
-use name_core::{
-    parse::{lexer::Lexer, parse::Parser},
-};
+use name_core::parse::{lexer::Lexer, parse::Parser};
 
 use std::path::PathBuf;
 

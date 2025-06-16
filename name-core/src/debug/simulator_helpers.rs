@@ -39,7 +39,12 @@ pub fn generate_err(lineinfo: &Vec<LineInfo>, address: u32, message: &str) -> St
         // If no lineinfo was found, just give a general message
         // Note that odd spacing is a subtle way to detect whether applicable lineinfo could be found.
         // General messages will be printed like "0x  400000", while lineinfo errors will be printed as "0x400000".
-        None => return format!("{}[*] At pc 0x{:8x}:\n - {}", error_header, address, message),
+        None => {
+            return format!(
+                "{}[*] At pc 0x{:8x}:\n - {}",
+                error_header, address, message
+            )
+        }
     };
 
     // If lineinfo was retrieved, print a well-formed error message

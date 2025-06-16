@@ -564,8 +564,10 @@ impl OperatingSystem {
         match syscall_num {
             0x01 => sys_print_int(program_state, &mut self.stdout.lock()),
             0x02 => sys_print_float(program_state, &mut self.stdout.lock()),
+            0x03 => sys_print_double(program_state, &mut self.stdout.lock()),
             0x04 => sys_print_string(program_state, &mut self.stdout.lock()),
             0x05 => sys_read_int(program_state, &mut self.stdin.lock()),
+            0x07 => sys_read_double(program_state, &mut self.stdin.lock()),
             0x0A => sys_exit(program_state),
             0x0B => sys_print_char(program_state, &mut self.stdout.lock()),
             0x0C => sys_read_char(program_state, &mut self.stdin.lock()),
