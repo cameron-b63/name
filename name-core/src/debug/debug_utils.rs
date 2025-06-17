@@ -91,14 +91,19 @@ pub fn single_step(_lineinfo: &Vec<LineInfo>, program_state: &mut ProgramState) 
     program_state.cpu.pc += MIPS_ADDRESS_ALIGNMENT;
 
     // Execute the instruction; program_state is modified.
-    if false
-    /* Allowing for some later verbose mode */
+    match option_env!("NAME_TRACE")
+    /* Allowing for verbose mode */
     {
-        eprintln!(
-            "Executing {}@0x{:x}",
-            instr_info.get_mnemonic(),
-            program_state.cpu.pc - MIPS_ADDRESS_ALIGNMENT
-        );
+        Some("0") => (),
+        Some(_) => {
+            eprintln!(
+                "[+] Executing {}@0x{:x} | 0x{:x}",
+                instr_info.get_mnemonic(),
+                program_state.cpu.pc - MIPS_ADDRESS_ALIGNMENT,
+                raw_instruction.raw,
+            );
+        },
+        None => (),
     }
     let _ = (instr_info.get_implementation())(program_state, raw_instruction);
 

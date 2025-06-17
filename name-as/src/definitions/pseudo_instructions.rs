@@ -6,6 +6,10 @@ use crate::definitions::structs::PseudoInstruction;
 /// The expansion functions operate on AST nodes.
 pub(crate) const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
     PseudoInstruction {
+        mnemonic: "b",
+        expand: expand_b,
+    },
+    PseudoInstruction {
         mnemonic: "bnez",
         expand: expand_bnez,
     },
@@ -24,5 +28,9 @@ pub(crate) const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
     PseudoInstruction {
         mnemonic: "mv",
         expand: expand_move,
+    },
+    PseudoInstruction {
+        mnemonic: "s.d",
+        expand: expand_s_d,
     },
 ];

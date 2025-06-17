@@ -8,17 +8,17 @@ use std::{
 
 use crate::{
     constants::{
-        MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_HEAP_START_ADDR, MIPS_STACK_END_ADDR,
-        MIPS_TEXT_START_ADDR,
+        fpu_control::FCSR_INDEX, MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR,
+        MIPS_HEAP_START_ADDR, MIPS_STACK_END_ADDR, MIPS_TEXT_START_ADDR,
     },
     dbprint, dbprintln,
     debug::{debug_utils::*, debugger_methods::* /* implementations::* */},
-    exception::constants::EXCEPTION_BEING_HANDLED,
+    exception::{constants::EXCEPTION_BEING_HANDLED, definitions::ExceptionType},
     syscalls::*,
 };
 
 /// Symbol is used for assembly -> ELF, ET_REL -> ET_EXEC, and ELF -> ProgramState construction.
-/// Its definition is provided in the ELF TIS: https://refspecs.linuxfoundation.org/elf/elf.pdf
+/// Its definition is provided in the [ELF TIS](https://refspecs.linuxfoundation.org/elf/elf.pdf).
 #[derive(Debug, Clone)]
 pub struct Symbol {
     pub symbol_type: u8,
@@ -47,6 +47,48 @@ pub struct Coprocessor0 {
 #[derive(Debug, Default)]
 pub struct Coprocessor1 {
     pub registers: [f32; 32],
+    pub control_registers: [u32; 2],
+}
+
+impl Coprocessor1 {
+    pub fn fenr_fs_bit_set(&self) -> bool {
+        (self.get_fenr() >> 2) & 0b01 == 1
+    }
+
+    /// Obtain the pseudo-register FCSR.
+    /// See [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00082-2B-MIPS32INT-AFP-06.01.pdf#page=101)
+    pub fn get_fenr(&self) -> u32 {
+        // get enables from FCSR
+        (self.control_registers[FCSR_INDEX] & 0b1111_1000_0000)
+        // get FS from FCSR
+        | ((self.control_registers[FCSR_INDEX] & 0b0000_0001_0000_0000_0000_0000_0000_0000) >> 22)
+        // get FRM from FCSR
+        | (self.control_registers[FCSR_INDEX] & 0b11)
+    }
+
+    /// Obtain the pseudo-register FCCR.
+    /// See [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00082-2B-MIPS32INT-AFP-06.01.pdf#page=101)
+    pub fn get_fccr(&self) -> u32 {
+        // get contiguous cc's
+        (self.control_registers[FCSR_INDEX] >> 24 & 0b1111110)
+        // get the non-contiguous cc 0
+        | (self.control_registers[FCSR_INDEX] >> 22 & 0b1)
+    }
+
+    /// Get the given condition code.
+    pub fn get_condition_code(&self, cc: u32) -> bool {
+        // FCCR is made for this purpose. Just used a wrapper method to avoid bad selection.
+        return (self.get_fccr() >> cc) & 1 == 1;
+    }
+
+    /// Set the given condition code. Updates FCSR.
+    pub fn set_condition_code(&mut self, cc: u32, value: bool) {
+        match cc {
+            0 => self.control_registers[FCSR_INDEX] |= (value as u32) << 22,
+            1..7 => self.control_registers[FCSR_INDEX] |= (value as u32) << (24 + cc),
+            _ => unreachable!(),
+        }
+    }
 }
 
 /// Memory is a conglomerate of program text, program data, the heap, the stack, and other segments.
@@ -58,7 +100,7 @@ pub struct Coprocessor1 {
 ///  - stack begins at 0x7ffffe00 in memory (and grows downward);
 ///  - kernel data begins at 0x90000000 in memory;
 ///  - mem-mapped I/O begins at 0xffff0000 in memory.
-/// The Memory struct relies on address translation for proper use. Each segment is represented as a Vec<u8>.
+/// The Memory struct relies on address translation for proper use. Each segment is represented as a `Vec<u8>`.
 #[derive(Debug)]
 pub struct Memory {
     pub text: Vec<u8>,
@@ -117,7 +159,7 @@ impl Memory {
         }
     }
 
-    /// The burden of alignment checking rests on each read_<type> function.
+    /// The burden of alignment checking rests on each `read_<type>` function.
     /// read_byte reads a byte, performing address translation.
     pub fn read_byte(&self, address: u32) -> Result<u8, MemoryError> {
         // Obtain values for segment boundaries:
@@ -166,7 +208,7 @@ impl Memory {
         }
     }
 
-    /// The burden of alignment checking rests on each set_<type> function.
+    /// The burden of alignment checking rests on each `set_<type>` function.
     /// set_byte performs address translation on the provided address and sets the value at that address to value.
     pub fn set_byte(&mut self, address: u32, value: u8) -> Result<(), MemoryError> {
         // Obtain values for segment boundaries:
@@ -277,6 +319,16 @@ impl ProgramState {
 
     pub fn is_exception(&self) -> bool {
         return self.cp0.get_exception_level() == EXCEPTION_BEING_HANDLED;
+    }
+
+    /// Helper function for facilitating branch instructions.
+    /// Abstracts the logic of ensuring valid memory space and such.
+    pub fn jump_if_valid(&mut self, address: u32) -> () {
+        if !self.memory.allows_execution_of(address) {
+            self.set_exception(ExceptionType::AddressExceptionLoad);
+        } else {
+            self.cpu.pc = address;
+        }
     }
 }
 
@@ -512,8 +564,10 @@ impl OperatingSystem {
         match syscall_num {
             0x01 => sys_print_int(program_state, &mut self.stdout.lock()),
             0x02 => sys_print_float(program_state, &mut self.stdout.lock()),
+            0x03 => sys_print_double(program_state, &mut self.stdout.lock()),
             0x04 => sys_print_string(program_state, &mut self.stdout.lock()),
             0x05 => sys_read_int(program_state, &mut self.stdin.lock()),
+            0x07 => sys_read_double(program_state, &mut self.stdin.lock()),
             0x0A => sys_exit(program_state),
             0x0B => sys_print_char(program_state, &mut self.stdout.lock()),
             0x0C => sys_read_char(program_state, &mut self.stdin.lock()),

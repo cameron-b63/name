@@ -6,7 +6,7 @@
 use std::io::{BufRead, Read, Write};
 
 use crate::structs::{
-    FpRegister::F12,
+    FpRegister::{F12, F13},
     ProgramState,
     Register::{A0, A1, V0},
 };
@@ -33,6 +33,17 @@ pub fn sys_print_float<W: Write>(
     sys: &mut W,
 ) -> Result<(), String> {
     write!(sys, "{}", program_state.cp1.registers[F12 as usize]).map_err(|_| "Failed to read")?;
+    sys.flush().map_err(|_| "Failed to flush sys".to_string())
+}
+
+/// Syscall 3 - SysPrintDouble
+pub fn sys_print_double<W: Write>(
+    program_state: &mut ProgramState,
+    sys: &mut W,
+) -> Result<(), String> {
+    let bits: u64 = ((program_state.cp1.registers[F12 as usize].to_bits() as u64) << 32) | program_state.cp1.registers[F13 as usize].to_bits() as u64;
+    let to_print: f64 = f64::from_bits(bits);
+    write!(sys, "{}", to_print).map_err(|_| "Failed to read")?;
     sys.flush().map_err(|_| "Failed to flush sys".to_string())
 }
 
@@ -82,6 +93,51 @@ pub fn sys_read_int<R: BufRead>(
         }
         Err(_) => Err(format!("Failed to convert input to Int")),
     }
+}
+
+/// Syscall 7 - SysReadDouble
+/// Read a string from the keyboard.
+/// Attempt to parse it as a double.
+/// Store that double in the first register pair of Coprocessor 1.
+pub fn sys_read_double<R: Read>(
+    program_state: &mut ProgramState,
+    sys: &mut R,
+) -> Result<(), String> {
+    let mut accumulated: Vec<u8> = vec![];
+    let mut buf: [u8; 1] = [b'\0'];
+
+    // Read exact from input buffer until newline is reached
+    // Each byte read is pushed to a vector
+    while buf[0] != b'\n' {
+        match sys.read_exact(&mut buf) {
+            Ok(_) => (),
+            Err(_) => return Err(format!("Failed to open stdin during SysReadDouble.")),
+        };
+
+        accumulated.push(buf[0]);
+    }
+
+    // Convert accumulated bytes to a string
+    let new_string: String = match String::from_utf8(accumulated) {
+        Ok(s) => s,
+        Err(_) => {
+            return Err(format!(
+                "Failed to convert read bytes to String in SysReadDouble."
+            ))
+        }
+    };
+
+    // Parse that string as a double
+    let read_double: f64 = new_string
+        .trim()
+        .parse()
+        .map_err(|_| format!("Failed to parse input as double: '{}'", new_string))?;
+
+    // Store the double in register pair $f0-$f1
+    program_state.cp1.registers[0] = f32::from_bits((read_double.to_bits() >> 32) as u32);
+    program_state.cp1.registers[1] = f32::from_bits((read_double.to_bits() & 0xFFFFFFFF) as u32);
+
+    Ok(())
 }
 
 // Syscall 8 - sys_read_string  -- Read a string from the keyboard one character at a time

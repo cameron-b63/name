@@ -324,7 +324,8 @@ pub struct RelocationEntry {
     pub r_type: RelocationEntryType, // Type of relocation entry
 }
 
-/// Enumerate the types of relocation entry based on https://refspecs.linuxfoundation.org/elf/mipsabi.pdf
+/// Enumerate the types of relocation entry.
+/// Constants obtained from [here](https://refspecs.linuxfoundation.org/elf/mipsabi.pdf).
 // TODO: Fix relocation types! They are not correct (exactly)!
 #[repr(u32)]
 #[derive(Clone, Copy, Debug)]

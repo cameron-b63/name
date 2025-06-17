@@ -58,6 +58,7 @@ pub struct FpInstructionInformation {
     pub op_code: u32,
     pub funct_code: Option<u32>,
     pub fmt: Option<FpFmt>,
+    pub additional_code: Option<u32>,
     pub implementation: Box<dyn Fn(&mut ProgramState, RawInstruction) -> () + Sync + Send>,
     pub args: &'static [ArgumentType],
     pub alt_args: Option<&'static [&'static [ArgumentType]]>,
@@ -80,6 +81,7 @@ impl Debug for FpInstructionInformation {
                 op_code: {:?},
                 funct_code {:?},
                 fmt {:?},
+                additional_code {:?},
                 implementation: {:?},
                 args: {:?},
                 alt_args: {:?},
@@ -90,6 +92,7 @@ impl Debug for FpInstructionInformation {
             self.op_code,
             self.funct_code,
             self.fmt,
+            self.additional_code,
             self.instruction_type,
             self.args,
             self.alt_args,
@@ -100,9 +103,10 @@ impl Debug for FpInstructionInformation {
 
 impl FpInstructionInformation {
     pub fn lookup_code(&self) -> u32 {
-        (self.op_code << 11)
-            | (self.funct_code.unwrap_or(0) << 5)
-            | u32::from(self.fmt.unwrap_or(FpFmt::Reserved))
+        (self.op_code << 13)
+            | (self.funct_code.unwrap_or(0) << 7)
+            | u32::from(self.fmt.unwrap_or(FpFmt::Reserved)) << 2
+            | self.additional_code.unwrap_or(0)
     }
 }
 
@@ -117,6 +121,8 @@ pub enum InstructionType {
     RType,
     IType,
     JType,
+    FpCCType,
+    FpBranchType,
     FpRType,
 }
 
@@ -136,6 +142,7 @@ pub enum ArgumentType {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FpFmt {
     Reserved,
+    ReservedFunctCodeBC,
     Single,
     Double,
 }
@@ -146,6 +153,7 @@ impl From<FpFmt> for u32 {
     fn from(fmt: FpFmt) -> Self {
         match fmt {
             FpFmt::Reserved => 0,
+            FpFmt::ReservedFunctCodeBC => 8,
             FpFmt::Single => 16,
             FpFmt::Double => 17,
         }

@@ -1,35 +1,11 @@
 use crate::{exception::definitions::ExceptionType, structs::ProgramState};
 
-use super::FpRArgs;
-
-/// Helper function for instructions that operate on register pairs to remove invalid cases.
-/// If the register is improperly aligned given current program state, it will trigger
-/// an exception in Coprocessor 0.
-fn is_register_aligned(program_state: &mut ProgramState, reg: u32) -> bool {
-    if reg % 2 == 0 {
-        return true;
-    } else {
-        program_state.set_exception(ExceptionType::ReservedInstruction);
-        return false;
-    }
-}
-
-/// This is a helper function for implementations that extracts a register pair's value as bits.
-/// The passed argument, target, should be the u32 repr of the high register (even register).
-/// For instance, extracting the double word inside $f2/$f3 means you should pass $f2's repr.
-fn extract_u64(program_state: &mut ProgramState, target: u32) -> u64 {
-    ((program_state.cp1.registers[target as usize] as u64) << 32)
-        | (program_state.cp1.registers[target as usize + 1] as u64)
-}
-
-/// This is a helper function for implementations that packs a u64 double-word value
-/// back into a register pair given by target.
-/// The target register should be the u32 repr of the high (even) register.
-/// For instance, extracting the double word inside $f2/$f3 means you should pass $f2's repr.
-fn pack_up_u64(program_state: &mut ProgramState, target: u32, value: u64) {
-    program_state.cp1.registers[target as usize] = f32::from_bits((value >> 32) as u32);
-    program_state.cp1.registers[target as usize + 1] = f32::from_bits(value as u32);
-}
+use super::{
+    implementation_helpers::{
+        extract_u64, is_register_aligned, pack_up_u64, perform_op_with_flush,
+    },
+    FpCCBranchArgs, FpRArgs,
+};
 
 /*
 
@@ -43,6 +19,22 @@ fn pack_up_u64(program_state: &mut ProgramState, target: u32, value: u64) {
 
 
 */
+
+// 0x03 - div.fmt
+
+// 0x03.d - div.d
+pub fn div_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let _ = is_register_aligned(program_state, args.fs);
+    let _ = is_register_aligned(program_state, args.ft);
+
+    let numerator: f64 = f64::from_bits(extract_u64(program_state, args.fs));
+    let denominator: f64 = f64::from_bits(extract_u64(program_state, args.ft));
+
+    let result: f64 = perform_op_with_flush(program_state, numerator / denominator);
+
+    pack_up_u64(program_state, args.fd, f64::to_bits(result));
+}
 
 // 0x05 - abs.fmt
 
@@ -65,4 +57,57 @@ pub fn abs_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
 pub fn abs_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
     program_state.cp1.registers[args.fd as usize] =
         f32::abs(program_state.cp1.registers[args.fs as usize]);
+}
+
+// 0x06.d - mov.d
+pub fn mov_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let _ = is_register_aligned(program_state, args.fs);
+
+    let temp: u64 = extract_u64(program_state, args.fs);
+    let _ = pack_up_u64(program_state, args.fd, temp);
+}
+
+// 0x08 (secondary funct code) - bc1<cond><nd>
+/// All implementations (t/f, likely/unlikely) are contained in this function.
+/// This simplifies the table.
+pub fn bc1(program_state: &mut ProgramState, args: FpCCBranchArgs) -> () {
+    // match on the type of instruction (update later to account for likely)
+    match args.tf {
+        0 => {
+            // Branch on floating-point false (bc1f)
+            if program_state.cp1.get_condition_code(args.cc) {
+                return;
+            }
+
+            // Sign extend offset
+            let offset: i32 = ((args.offset & 0xFFFF) as i16 as i32) << 2;
+            let temp = (program_state.cpu.pc as i32 + offset) as u32;
+            program_state.jump_if_valid(temp);
+        }
+        1 => {
+            // Branch on floating-point true (bc1t)
+            if !program_state.cp1.get_condition_code(args.cc) {
+                return;
+            }
+
+            // Sign extend offset
+            let offset: i32 = ((args.offset & 0xFFFF) as i16 as i32) << 2;
+            let temp = (program_state.cpu.pc as i32 + offset) as u32;
+            program_state.jump_if_valid(temp);
+        }
+        _ => {
+            // Represents an impossible true/false. Should actually be unreachable!() but you never know...
+            program_state.set_exception(ExceptionType::ReservedInstruction);
+        }
+    }
+}
+
+// 0x32.d - c.eq.d
+pub fn c_eq_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    program_state.cp1.set_condition_code(
+        args.fd >> 2,
+        program_state.cp1.registers[args.ft as usize]
+            == program_state.cp1.registers[args.fs as usize],
+    );
 }

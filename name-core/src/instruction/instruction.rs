@@ -1,7 +1,8 @@
-use std::{fmt, io};
+use std::{fmt, io, path::PathBuf};
 
 use super::information::{ArgumentType, FpInstructionInformation, InstructionInformation};
 use crate::{
+    instruction::information::FpFmt,
     parse::{parse::AstKind, span::Span},
     structs::ProgramState,
 };
@@ -10,10 +11,12 @@ use crate::{
 #[derive(Debug)]
 pub enum ErrorKind {
     DuplicateSymbol(String),
+    FileNotFound(PathBuf),
     Io(io::Error),
     String(String),
     BadArguments,
     LabelOutsideOfSection,
+    MissingAdditional,
     MissingFmt,
     MissingFunct,
     UnknownInstruction(String),
@@ -29,10 +32,16 @@ impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ErrorKind::DuplicateSymbol(str) => write!(f, "duplicate symbol: {}", str),
+            ErrorKind::FileNotFound(path) => write!(f, "File {:?} not found", path),
             ErrorKind::Io(err) => write!(f, "{:#?}", err),
             ErrorKind::String(s) => write!(f, "{}", s),
             ErrorKind::BadArguments => write!(f, "bad arguments"),
             ErrorKind::LabelOutsideOfSection => write!(f, "label outside of section"),
+            ErrorKind::MissingAdditional => write!(
+                f,
+                "Improper implementation of instructions, \
+                missing additional needed info for instruction (possibly bc1t or similar)."
+            ),
             ErrorKind::MissingFunct => write!(
                 f,
                 "Improper implmentation of instructions (funct field undefined for R-type instr)
@@ -176,13 +185,24 @@ impl RawInstruction {
     }
 
     pub fn get_lookup(self) -> u32 {
+        // Normal instructions follow this form:
+        // | opcode | multiplexer |
+        // Where "multiplexer" might be a funct code or some other secondary identifier.
         let base = self.get_opcode() << 6;
         if self.is_rtype() {
             base | self.get_funct()
         } else if self.is_regimm() {
             base | self.get_rt()
         } else if self.is_floating() {
-            (self.get_opcode() << 11) | (self.get_funct() << 5) | self.get_fmt()
+            // Floating-point instructions have a special format that deviates from standard base.
+            // | opcode | funct | fmt | add'l |
+            if self.get_fmt() == u32::from(FpFmt::ReservedFunctCodeBC) {
+                // If the instruction is a comparison branch, there exists a special case.
+                (self.get_opcode() << 13) | (self.get_fmt() << 2) | self.get_ft() & 0b11
+            } else {
+                // Most floating-point instructions follow this pattern.
+                (self.get_opcode() << 13) | (self.get_funct() << 7) | (self.get_fmt() << 2)
+            }
         } else {
             base
         }
@@ -217,6 +237,32 @@ impl From<RArgs> for RawInstruction {
                 | ((r_args.rd) << 11)
                 | ((r_args.shamt) << 6)
                 | (r_args.funct),
+        )
+    }
+}
+
+impl From<FpCCArgs> for RawInstruction {
+    fn from(fp_cc_args: FpCCArgs) -> Self {
+        RawInstruction::new(
+            (fp_cc_args.opcode << 26)
+                | ((fp_cc_args.fmt) << 21)
+                | ((fp_cc_args.ft) << 16)
+                | ((fp_cc_args.fs) << 11)
+                | ((fp_cc_args.cc) << 8)    // Note that this is 8, not 6.
+                | (fp_cc_args.funct),
+        )
+    }
+}
+
+impl From<FpCCBranchArgs> for RawInstruction {
+    fn from(fp_cc_branch_args: FpCCBranchArgs) -> Self {
+        RawInstruction::new(
+            (fp_cc_branch_args.opcode << 26)
+                | ((fp_cc_branch_args.funky_funct) << 21)
+                | ((fp_cc_branch_args.cc) << 18)
+                | ((fp_cc_branch_args.nd) << 17)
+                | ((fp_cc_branch_args.tf) << 16)
+                | (fp_cc_branch_args.offset as u32),
         )
     }
 }
@@ -392,6 +438,140 @@ impl From<RawInstruction> for RArgs {
             rd: raw.get_rd(),
             shamt: raw.get_shamt(),
             funct: raw.get_funct(),
+        }
+    }
+}
+
+// FpCCArgs
+pub struct FpCCArgs {
+    pub opcode: u32,
+    pub fmt: u32,
+    pub ft: u32,
+    pub fs: u32,
+    pub cc: u32,
+    pub funct: u32,
+}
+
+impl FpCCArgs {
+    pub fn assign_fp_cc_arguments(
+        arguments: Vec<AstKind>,
+        args_to_use: &[ArgumentType],
+    ) -> AssembleResult<Self> {
+        let mut ft = 0;
+        let mut fs = 0;
+        let mut cc = 0;
+
+        for (i, passed) in arguments.into_iter().enumerate() {
+            match args_to_use[i] {
+                ArgumentType::Ft => {
+                    ft = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)? as u32;
+                }
+                ArgumentType::Fs => {
+                    fs = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)? as u32;
+                }
+                ArgumentType::Immediate => {
+                    if let AstKind::Immediate(num) = passed {
+                        // This may need more editing later should we end up implementing paired-single format.
+                        if num < 8 {
+                            cc = num;
+                        }
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        return Ok(Self {
+            opcode: 0, // Filled in by caller
+            fmt: 0,    // Filled in by caller
+            ft,
+            fs,
+            cc,
+            funct: 0, // Filled in by caller
+        });
+    }
+}
+
+impl From<RawInstruction> for FpCCArgs {
+    fn from(raw: RawInstruction) -> Self {
+        Self {
+            opcode: raw.get_opcode(),
+            fmt: raw.get_fmt(),
+            ft: raw.get_ft(),
+            fs: raw.get_fs(),
+            cc: raw.get_fd() >> 2,
+            funct: raw.get_funct(),
+        }
+    }
+}
+
+// FpCCBranchArgs
+/// The FpCCBranchArgs is for instructions like bc1t and bc1fl.
+/// The fields tf and nd are another layer of indirection to get the right instruction.
+#[derive(Debug)]
+pub struct FpCCBranchArgs {
+    pub opcode: u32,
+    pub funky_funct: u32, // The funct code is in a different place for this format. Little odd.
+    pub cc: u32,
+    pub tf: u32, // True/False
+    pub nd: u32, // Nullify delay slot (likely will set this bit to 1)
+    pub offset: u16,
+}
+
+impl FpCCBranchArgs {
+    pub fn assign_fp_cc_branch_arguments(
+        arguments: Vec<AstKind>,
+        args_to_use: &[ArgumentType],
+    ) -> AssembleResult<Self> {
+        let mut cc = 0;
+        let mut is_first_imm: bool = true; // This just keeps track of whether this is the first immediate we've encountered.
+        for (i, passed) in arguments.into_iter().enumerate() {
+            match args_to_use[i] {
+                ArgumentType::Immediate => {
+                    if is_first_imm {
+                        if let AstKind::Immediate(num) = passed {
+                            if num < 8 {
+                                cc = num;
+                            } else {
+                                return Err(ErrorKind::InvalidArgument);
+                            }
+                        }
+
+                        is_first_imm = false;
+                    } else {
+                        // Must be the second immediate, should go to zero.
+                        // Do nothing.
+                    }
+                }
+                ArgumentType::Identifier => (),
+                _ => todo!("Figure out what to do about bc1t cc, (imm) issue? maybe?"),
+            }
+        }
+
+        Ok(Self {
+            opcode: 0,
+            funky_funct: 0,
+            cc,
+            tf: 0,
+            nd: 0,
+            offset: 0,
+        })
+    }
+}
+
+impl From<RawInstruction> for FpCCBranchArgs {
+    fn from(raw: RawInstruction) -> Self {
+        Self {
+            opcode: raw.get_opcode(),
+            funky_funct: raw.get_fmt(),
+            cc: raw.get_ft() >> 2,
+            tf: raw.get_ft() & 1,
+            nd: (raw.get_ft() >> 1) & 1,
+            offset: raw.get_immediate(),
         }
     }
 }

@@ -2,10 +2,7 @@ use name_core::parse::preprocessor::Preprocessor;
 use name_core::parse::session::Session;
 
 use crate::assembler::assembler::Assembler;
-use name_core::{
-    parse::{lexer::Lexer, parse::Parser},
-    structs::{LineInfo, Section},
-};
+use name_core::parse::{lexer::Lexer, parse::Parser};
 
 use std::path::PathBuf;
 
@@ -17,7 +14,10 @@ pub fn assemble_file<'sess, 'sess_ref>(
     file_path: PathBuf,
 ) -> Result<Assembler, ()> {
     // Add the given infile to the parser session.
-    let file = session.add_file(file_path);
+    let file = match session.add_file(file_path) {
+        Ok(f) => f,
+        Err(e) => panic!("{e}"),
+    };
 
     // Create a lexer on the file content to tokenize it.
     let mut lexer = Lexer::new(&file.str, 0);
@@ -69,33 +69,7 @@ pub fn assemble_file<'sess, 'sess_ref>(
     }
 
     // process line info
-    for line in file.str.lines() {
-        let start_address = match assembler.current_section {
-            Section::Text => assembler.current_address,
-            Section::Data => assembler.text_address,
-            Section::Null => 0,
-        };
-
-        // Extend section .line to include the new line
-        assembler.section_dot_line.extend(
-            LineInfo {
-                content: line.to_string(),
-                line_number: assembler.line_number as u32,
-                start_address: match assembler.current_section {
-                    Section::Text => start_address,
-                    _ => 0,
-                },
-                end_address: match assembler.current_section {
-                    Section::Text => assembler.current_address,
-                    Section::Data => assembler.text_address,
-                    _ => 0,
-                },
-            }
-            .to_bytes(),
-        );
-
-        assembler.line_number += 1;
-    }
+    // this was completely obsoleted and must be replaced with spans generated during expansion.
 
     // Return the assembler state.
     Ok(assembler)

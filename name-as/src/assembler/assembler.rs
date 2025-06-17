@@ -34,7 +34,6 @@ pub struct Assembler {
     pub(crate) current_address: u32,
     pub(crate) text_address: u32,
     pub(crate) data_address: u32,
-    pub(crate) line_number: usize,
     pub(crate) most_recent_label: String,
 }
 
@@ -52,7 +51,6 @@ impl Assembler {
             current_address: 0,
             text_address: MIPS_TEXT_START_ADDR,
             data_address: MIPS_DATA_START_ADDR,
-            line_number: 1,
             most_recent_label: String::from(""),
         }
     }
@@ -140,17 +138,17 @@ impl Assembler {
             }
         }
 
-        // convert any Symbol args into a dummy zero immediate for packing
-        let processed_args: Vec<AstKind> = args
-            .into_iter()
-            .map(|arg| match arg {
-                AstKind::Symbol(_) => AstKind::Immediate(0),
-                other => other,
-            })
-            .collect();
+        // // convert any Symbol args into a dummy zero immediate for packing
+        // let processed_args: Vec<AstKind> = args
+        //     .into_iter()
+        //     .map(|arg| match arg {
+        //         AstKind::Symbol(_) => AstKind::Immediate(0),
+        //         other => other,
+        //     })
+        //     .collect();
 
         // do the actual packing based on Int vs. Fp
-        let packed: RawInstruction = assemble_instruction(meta, processed_args)?;
+        let packed: RawInstruction = assemble_instruction(meta, /*processed_args*/ args)?;
 
         // append the bytes to .text
         self.section_dot_text
@@ -216,6 +214,7 @@ impl Assembler {
             }
             AstKind::Asciiz(s) => self.assemble_asciiz(s),
             AstKind::Float(f) => self.add_data_bytes(&f.to_be_bytes(f32::to_be_bytes)),
+            AstKind::Double(d) => self.add_data_bytes(&d.to_be_bytes(f64::to_be_bytes)),
             AstKind::Section(section) => match section {
                 Section::Text => self.switch_to_text_section(),
                 Section::Data => self.switch_to_data_section(),
