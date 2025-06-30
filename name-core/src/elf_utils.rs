@@ -657,43 +657,39 @@ impl Elf {
     }
 }
 
-fn deserialize_line_info(data: &Vec<u8>) -> Vec<LineInfo> {
+pub fn create_serialized_line_information(
+    _line_information: Vec<LineInfo>,
+    _file_name: PathBuf,
+) -> Vec<u8> {
+    todo!();
+}
+
+pub fn deserialize_line_info(data: &Vec<u8>) -> Vec<LineInfo> {
     let mut result = Vec::new();
     let mut cursor = &data[..];
 
     while !cursor.is_empty() {
-        // Find the null terminator (0 byte) to extract the string
-        if let Some(pos) = cursor.iter().position(|&c| c == 0) {
-            let content_bytes = &cursor[..pos];
-            let content = String::from_utf8_lossy(content_bytes).to_string();
-
-            // Move cursor past the null terminator and string
-            cursor = &cursor[pos + 1..];
-
-            // Ensure we have at least 12 bytes remaining for three u32 values
-            if cursor.len() < 12 {
-                break;
-            }
-
-            // Read the u32 values
-            let line_number = u32::from_be_bytes(cursor[0..4].try_into().unwrap());
-            let start_address = u32::from_be_bytes(cursor[4..8].try_into().unwrap());
-            let end_address = u32::from_be_bytes(cursor[8..12].try_into().unwrap());
-
-            // Move cursor past the u32 values
-            cursor = &cursor[12..];
-
-            // Add the deserialized LineInfo to the result
-            result.push(LineInfo {
-                content,
-                line_number,
-                start_address,
-                end_address,
-            });
-        } else {
-            // If there's no null terminator found, stop processing
+        // Ensure we have at least 16 bytes remaining for four u32 values
+        if cursor.len() < 16 {
             break;
         }
+
+        // Read the u32 values
+        let file_table_index = u32::from_be_bytes(cursor[0..4].try_into().unwrap());
+        let line_number = u32::from_be_bytes(cursor[4..8].try_into().unwrap());
+        let start_address = u32::from_be_bytes(cursor[8..12].try_into().unwrap());
+        let end_address = u32::from_be_bytes(cursor[12..16].try_into().unwrap());
+
+        // Move cursor past the u32 values
+        cursor = &cursor[16..];
+
+        // Add the deserialized LineInfo to the result
+        result.push(LineInfo {
+            file_table_index,
+            line_number,
+            start_address,
+            end_address,
+        });
     }
 
     result

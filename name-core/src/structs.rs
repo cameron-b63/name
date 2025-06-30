@@ -375,7 +375,7 @@ pub enum Section {
 /// The definition for section .line
 #[derive(Debug)]
 pub struct LineInfo {
-    pub content: String,
+    pub file_table_index: u32,
     pub line_number: u32,
     pub start_address: u32,
     pub end_address: u32,
@@ -384,14 +384,18 @@ pub struct LineInfo {
 /// For serializing lineinfo to ELF
 impl LineInfo {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = self.content.as_bytes().to_vec();
-        bytes.push(b'\0');
+        let mut bytes = Vec::new();
 
+        bytes.extend_from_slice(&self.file_table_index.to_be_bytes());
         bytes.extend_from_slice(&self.line_number.to_be_bytes());
         bytes.extend_from_slice(&self.start_address.to_be_bytes());
         bytes.extend_from_slice(&self.end_address.to_be_bytes());
 
         bytes
+    }
+
+    pub fn get_content(&self) -> String {
+        todo!();
     }
 }
 

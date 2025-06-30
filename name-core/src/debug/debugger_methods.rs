@@ -51,7 +51,7 @@ pub fn list_text(
                     "{:>3} #{:08x}  {}",
                     line.line_number,
                     line.start_address,
-                    line.content
+                    line.get_content()
                 );
             }
             Ok(())

@@ -96,7 +96,7 @@ impl DebuggerState {
                 "{:>3} #{:08x}  {}",
                 lineinfo[i].line_number,
                 lineinfo[i].start_address,
-                lineinfo[i].content
+                lineinfo[i].get_content()
             );
         }
 

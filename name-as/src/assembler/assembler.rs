@@ -64,7 +64,6 @@ pub struct Assembler {
     pub(crate) current_address: u32,
     pub(crate) text_address: u32,
     pub(crate) data_address: u32,
-    pub(crate) line_number: usize,
     pub(crate) most_recent_label: String,
 }
 
@@ -82,7 +81,6 @@ impl Assembler {
             current_address: 0,
             text_address: MIPS_TEXT_START_ADDR,
             data_address: MIPS_DATA_START_ADDR,
-            line_number: 1,
             most_recent_label: String::from(""),
         }
     }

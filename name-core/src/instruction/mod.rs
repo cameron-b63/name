@@ -1,3 +1,4 @@
+pub mod helpers;
 pub mod implementation;
 pub mod information;
 pub mod instruction;

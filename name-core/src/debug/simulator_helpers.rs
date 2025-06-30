@@ -43,7 +43,7 @@ pub fn generate_err(lineinfo: &Vec<LineInfo>, address: u32, message: &str) -> St
         "[*] At pc 0x{:x}:\n - {}: {}\n - {}",
         address,
         found_lineinfo.line_number,
-        found_lineinfo.content.trim(),
+        found_lineinfo.get_content().trim(),
         message,
     );
 }

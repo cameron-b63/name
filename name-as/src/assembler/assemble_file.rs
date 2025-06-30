@@ -2,10 +2,7 @@ use name_core::parse::preprocessor::Preprocessor;
 use name_core::parse::session::Session;
 
 use crate::assembler::assembler::Assembler;
-use name_core::{
-    parse::{lexer::Lexer, parse::Parser},
-    structs::{LineInfo, Section},
-};
+use name_core::parse::{lexer::Lexer, parse::Parser};
 
 use std::path::PathBuf;
 
@@ -33,7 +30,7 @@ pub fn assemble_file<'sess, 'sess_ref>(
         return Err(());
     }
 
-    // Run the preprocessor over the parser session.
+    // Run the preprocessor over the (tokenized) parser session.
     let ppd = Preprocessor::new(session).preprocess(toks);
 
     // Preprocess the lexed tokens to handle .include, .eqv, .macro, etc.
@@ -66,35 +63,6 @@ pub fn assemble_file<'sess, 'sess_ref>(
             session.report_error(&format!("{}", aerr.kind), &aerr.src_span);
         }
         return Err(());
-    }
-
-    // process line info
-    for line in file.str.lines() {
-        let start_address = match assembler.current_section {
-            Section::Text => assembler.current_address,
-            Section::Data => assembler.text_address,
-            Section::Null => 0,
-        };
-
-        // Extend section .line to include the new line
-        assembler.section_dot_line.extend(
-            LineInfo {
-                content: line.to_string(),
-                line_number: assembler.line_number as u32,
-                start_address: match assembler.current_section {
-                    Section::Text => start_address,
-                    _ => 0,
-                },
-                end_address: match assembler.current_section {
-                    Section::Text => assembler.current_address,
-                    Section::Data => assembler.text_address,
-                    _ => 0,
-                },
-            }
-            .to_bytes(),
-        );
-
-        assembler.line_number += 1;
     }
 
     // Return the assembler state.
