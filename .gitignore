@@ -32,3 +32,6 @@ test_files/bubblesort/*
 */rusty-tags.vi
 */launch.json
 .vscode
+
+MIPS/*
+MIPS
