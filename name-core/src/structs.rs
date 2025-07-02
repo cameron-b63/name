@@ -2,7 +2,8 @@
 /// It's gonna be quite a few definitions, so buckle up.
 use std::{
     fmt,
-    io::{stdin, stdout, Stdin, Stdout, Write},
+    fs::File,
+    io::{stdin, stdout, Read, Stdin, Stdout, Write},
     str::FromStr,
 };
 
@@ -394,8 +395,35 @@ impl LineInfo {
         bytes
     }
 
-    pub fn get_content(&self, _filenames: &Vec<String>) -> String {
-        todo!();
+    /// Get the line content pointed to by this LineInfo.
+    /// If the indicated file cannot be opened, an empty string is returned.
+    // I considered using a Result to be improper, as the source file being
+    // inaccessible is a fairly common case (i.e. sharing only compiled output).
+    pub fn get_content(&self, filenames: &Vec<String>) -> String {
+        // This should be super easy, just utilizing the index to attempt to read from file.
+        if self.file_table_index as usize > filenames.len() {
+            return String::new();
+        }
+        let target_filename = filenames[self.file_table_index as usize].clone();
+
+        // Attempt to open the target file
+        let mut target_file = match File::open(target_filename) {
+            Ok(f) => f,
+            Err(_) => return String::new(),
+        };
+
+        // Attempt to read target file content to string
+        let mut contents: String = String::new();
+        match target_file.read_to_string(&mut contents) {
+            Ok(_) => {}
+            Err(_) => return String::new(),
+        };
+
+        // Find the requested line to read
+        let target_line_content =
+            contents.lines().collect::<Vec<&str>>()[self.line_number as usize];
+
+        return String::from(target_line_content);
     }
 }
 
