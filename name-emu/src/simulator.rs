@@ -5,7 +5,8 @@ use name_core::debug::debug_utils::{single_step, DebuggerState};
 
 use name_core::elf_def::Elf;
 use name_core::elf_utils::extract_lineinfo;
-use name_core::structs::{LineInfo, Memory, OperatingSystem, Processor, ProgramState};
+use name_core::exception::definitions::SourceContext;
+use name_core::structs::{Memory, OperatingSystem, Processor, ProgramState};
 
 pub fn simulate(elf: Elf, debug: bool, separate_io_channels: bool) -> Result<(), String> {
     // Set up simulation environment from information in ELF
@@ -13,7 +14,7 @@ pub fn simulate(elf: Elf, debug: bool, separate_io_channels: bool) -> Result<(),
 
     let (data, text) = extract_loadable_sections(&elf);
 
-    let lineinfo: Vec<LineInfo> = extract_lineinfo(&elf);
+    let source_context: SourceContext = extract_lineinfo(&elf);
 
     let memory: Memory = Memory::new(data, text);
 
@@ -30,7 +31,7 @@ pub fn simulate(elf: Elf, debug: bool, separate_io_channels: bool) -> Result<(),
         // run the CLI debugger right away or to engage in soon-to-be-defined behavior
         // depending on whether the user ran this from the command line or from the nice little VSCode button
         return operating_system.cli_debugger(
-            &lineinfo,
+            &source_context,
             &mut program_state,
             &mut DebuggerState::new(separate_io_channels),
         );
@@ -38,13 +39,13 @@ pub fn simulate(elf: Elf, debug: bool, separate_io_channels: bool) -> Result<(),
         // Begin fetch/decode/execute cycle to run program normally
         while program_state.should_continue_execution {
             // Run the next instruction
-            single_step(&lineinfo, &mut program_state);
+            single_step(&source_context, &mut program_state);
             // If an exception occurred, handle it
             if program_state.is_exception() {
                 handle_exception(
                     &mut program_state,
                     &mut operating_system,
-                    &lineinfo,
+                    &source_context,
                     &mut DebuggerState::new(separate_io_channels),
                 );
                 if program_state.cp0.is_debug_mode() {} // ooops you have to put the cd in the computer

@@ -2,13 +2,14 @@
 // use std::collections::HashMap;
 use crate::dbprintln;
 use crate::debug::debug_utils::{Breakpoint, DebuggerState};
-use crate::structs::{LineInfo, ProgramState};
+use crate::exception::definitions::SourceContext;
+use crate::structs::ProgramState;
 
 impl Breakpoint {
     pub fn new(
         bp_num: usize,
         line_address: u32,
-        lineinfo: &Vec<LineInfo>,
+        source_context: &SourceContext,
         program_state: &mut ProgramState,
     ) -> Result<Self, String> {
         let old_instr = match program_state.insert_breakpoint(line_address, bp_num) {
@@ -21,7 +22,8 @@ impl Breakpoint {
         let bp = Breakpoint {
             // bp_num,
             line_num: {
-                match lineinfo
+                match source_context
+                    .lineinfo
                     .iter()
                     .find(|&line| line.start_address == line_address)
                 {
@@ -82,28 +84,28 @@ impl DebuggerState {
     // It lists the lines that surround lnum. Right now, that's fixed to be
     // within the range of plus or minus 4, but we can surely add a flag
     // to change that, if it ever matters enough.
-    pub fn list_lines(&mut self, lineinfo: &Vec<LineInfo>, mut lnum: usize) {
+    pub fn list_lines(&mut self, source_context: &SourceContext, mut lnum: usize) {
         if lnum == 0 {
             lnum = self.global_list_loc;
         }
 
         let begin = lnum.saturating_sub(5);
-        let end = std::cmp::min(lnum.saturating_add(3), lineinfo.len() - 1);
+        let end = std::cmp::min(lnum.saturating_add(3), source_context.lineinfo.len() - 1);
         for i in begin..=end {
             // let arrow = self.pc_is_on_this_address(lineinfo[i].start_address,);
             dbprintln!(
                 self.sioc,
                 "{:>3} #{:08x}  {}",
-                lineinfo[i].line_number,
-                lineinfo[i].start_address,
-                lineinfo[i].get_content()
+                source_context.lineinfo[i].line_number,
+                source_context.lineinfo[i].start_address,
+                source_context.lineinfo[i].get_content(&source_context.source_filenames)
             );
         }
 
         // by default, bind the global list pointer (i.e. the line number that is selected when no args are provided)
         // to this current line number.
         // in a hypothetical future, we can add a flag to make this an option
-        if lnum + 9 <= lineinfo.len() {
+        if lnum + 9 <= source_context.lineinfo.len() {
             self.global_list_loc = lnum + 9;
         } else {
             self.global_list_loc = 5;
@@ -113,7 +115,7 @@ impl DebuggerState {
     /// Adds a breakpoint at the given line number. Invoked by "b" in the CLI.
     pub fn add_breakpoint(
         &mut self,
-        lineinfo: &Vec<LineInfo>,
+        source_context: &SourceContext,
         db_args: &Vec<String>,
         program_state: &mut ProgramState,
     ) -> Result<(), String> {
@@ -136,13 +138,17 @@ impl DebuggerState {
             Err(_) => return Err("b takes 32-bit unsigned int as input".to_string()),
         };
 
-        if line_num > lineinfo.len().try_into().unwrap() {
+        if line_num > source_context.lineinfo.len().try_into().unwrap() {
             // something like that
             return Err(format!("{} exceeds number of lines in program.", line_num));
         }
 
         // get the line address associated with the line number
-        let line_address: u32 = match lineinfo.iter().find(|line| line.line_number == line_num) {
+        let line_address: u32 = match source_context
+            .lineinfo
+            .iter()
+            .find(|line| line.line_number == line_num)
+        {
             Some(ln) => ln.start_address,
             None => {
                 return Err(format!(
@@ -152,11 +158,15 @@ impl DebuggerState {
             }
         };
 
-        let new_bp =
-            match Breakpoint::new(self.global_bp_num, line_address, lineinfo, program_state) {
-                Ok(bp) => bp,
-                Err(e) => return Err(format!("{e}")),
-            };
+        let new_bp = match Breakpoint::new(
+            self.global_bp_num,
+            line_address,
+            &source_context,
+            program_state,
+        ) {
+            Ok(bp) => bp,
+            Err(e) => return Err(format!("{e}")),
+        };
 
         self.breakpoints.insert(self.global_bp_num as usize, new_bp);
 

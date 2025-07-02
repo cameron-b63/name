@@ -6,11 +6,11 @@ use std::{collections::HashMap, sync::LazyLock};
 use crate::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_TEXT_START_ADDR},
     debug::{exception_handler::handle_exception, fetch::fetch},
-    exception::definitions::ExceptionType,
+    exception::definitions::{ExceptionType, SourceContext},
     instruction::{
         information::InstructionInformation, instruction_set::INSTRUCTION_SET, RawInstruction,
     },
-    structs::{LineInfo, OperatingSystem, ProgramState},
+    structs::{OperatingSystem, ProgramState},
 };
 
 static INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static InstructionInformation>> =
@@ -43,7 +43,7 @@ macro_rules! dbprintln {
     };
 }
 
-pub fn single_step(_lineinfo: &Vec<LineInfo>, program_state: &mut ProgramState) -> () {
+pub fn single_step(_source_context: &SourceContext, program_state: &mut ProgramState) -> () {
     if !program_state
         .memory
         .allows_execution_of(program_state.cpu.pc)
@@ -83,7 +83,7 @@ pub fn single_step(_lineinfo: &Vec<LineInfo>, program_state: &mut ProgramState) 
 /// Executes only the next line of code. Invoked by "s" in the CLI.
 // Also called by continuously_execute
 pub fn db_step(
-    lineinfo: &Vec<LineInfo>,
+    source_context: &SourceContext,
     program_state: &mut ProgramState,
     os: &mut OperatingSystem,
     debugger_state: &mut DebuggerState,
@@ -154,12 +154,12 @@ pub fn db_step(
         }
     }
 
-    single_step(lineinfo, program_state);
+    single_step(&source_context, program_state);
     if program_state.is_exception() {
         // todo!("Handle exception");
         // return Err("exceptionnnnnnnnn".to_string())
         if program_state.cp0.get_exc_code() != ExceptionType::Breakpoint.into() {
-            handle_exception(program_state, os, lineinfo, debugger_state);
+            handle_exception(program_state, os, &source_context, debugger_state);
         } else {
             return Err("Breakpoint reached.".to_string());
         }

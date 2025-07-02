@@ -199,7 +199,7 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
 
         // Create serialized line information from collected information
         self.serialized_line_information =
-            create_serialized_line_information(line_information, file_name.to_path_buf());
+            create_serialized_line_information(line_information, vec![file_name.to_path_buf()]);
     }
 
     /// Third pass:

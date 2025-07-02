@@ -6,6 +6,7 @@ use std::{fs, io::Write, path::PathBuf, vec::Vec};
 
 use crate::constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR};
 use crate::elf_def::*;
+use crate::exception::definitions::SourceContext;
 use crate::structs::{LineInfo, Section, Symbol, Visibility}; // Used for ELF sections
 
 // Macros - had to learn somehow!
@@ -597,7 +598,7 @@ fn get_string_from_strtab(strtab: &Vec<u8>, offset: u32) -> Option<&str> {
     std::str::from_utf8(&strtab[start..start + end]).ok()
 }
 
-pub fn extract_lineinfo(elf: &Elf) -> Vec<LineInfo> {
+pub fn extract_lineinfo(elf: &Elf) -> SourceContext {
     let shstrtab = &elf.sections[elf.file_header.e_shstrndx as usize - 1];
     let idx = match find_target_section_index(&elf.section_header_table, shstrtab, ".line") {
         Some(i) => i,
@@ -663,23 +664,29 @@ impl Elf {
 /// serialized LineInfo (indexes table)
 pub fn create_serialized_line_information(
     line_information: Vec<LineInfo>,
-    file_name: PathBuf,
+    file_names: Vec<PathBuf>,
 ) -> Vec<u8> {
     // This will be the output vector, a u8 byte stream.
     let mut bytes: Vec<u8> = vec![];
-    // Write the file name to a new Vec<u8> as bytes, null-terminated.
-    let checked_file_name: &str = match file_name.to_str() {
-        Some(s) => s,
-        None => {
-            eprintln!(
-                "Failed to serialize filename {:?} to section .line",
-                file_name
-            );
-            exit(1);
-        }
-    };
-    bytes.extend(checked_file_name.as_bytes());
-    bytes.push(b'\0');
+
+    // First, write the number of files in the table.
+    bytes.extend_from_slice(&(file_names.len() as u32).to_be_bytes());
+
+    // Write the file names to a new Vec<u8> as bytes, null-terminated.
+    for file_name in file_names.iter() {
+        let checked_file_name: &str = match file_name.to_str() {
+            Some(s) => s,
+            None => {
+                eprintln!(
+                    "Failed to serialize filename {:?} to section .line",
+                    file_name
+                );
+                exit(1);
+            }
+        };
+        bytes.extend(checked_file_name.as_bytes());
+        bytes.push(b'\0');
+    }
 
     // Map the lineinfo to a bytestream and append it.
     bytes.extend(line_information.iter().flat_map(|info| info.to_bytes()));
@@ -688,9 +695,30 @@ pub fn create_serialized_line_information(
     bytes
 }
 
-pub fn deserialize_line_info(data: &Vec<u8>) -> Vec<LineInfo> {
+pub fn deserialize_line_info(data: &Vec<u8>) -> SourceContext {
     let mut result = Vec::new();
     let mut cursor = &data[..];
+
+    // Read the file table
+    // Find out how many names are in the table
+    let num_of_filenames = u32::from_be_bytes(cursor[0..4].try_into().unwrap());
+    cursor = &cursor[4..];
+
+    // Collect filenames from table
+    let mut filenames: Vec<String> = vec![];
+    for _ in [0..num_of_filenames] {
+        let mut found_string: String = String::new();
+
+        while cursor[0] != b'\0' {
+            found_string.push(cursor[0] as char);
+            cursor = &cursor[1..];
+        }
+
+        // Consume the null terminator
+        cursor = &cursor[1..];
+
+        filenames.push(found_string);
+    }
 
     while !cursor.is_empty() {
         // Ensure we have at least 16 bytes remaining for four u32 values
@@ -716,5 +744,5 @@ pub fn deserialize_line_info(data: &Vec<u8>) -> Vec<LineInfo> {
         });
     }
 
-    result
+    return SourceContext::new(result, filenames);
 }

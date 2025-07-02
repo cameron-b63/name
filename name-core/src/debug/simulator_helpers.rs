@@ -1,6 +1,7 @@
 use crate::elf_utils::find_target_section_index;
 
 use crate::elf_def::Elf;
+use crate::exception::definitions::SourceContext;
 use crate::structs::LineInfo;
 
 // Extract section .text and section .data from the ELF
@@ -27,23 +28,26 @@ pub fn extract_loadable_sections(elf: &Elf) -> (Vec<u8>, Vec<u8>) {
     (data_section, text_section)
 }
 
-pub fn generate_err(lineinfo: &Vec<LineInfo>, address: u32, message: &str) -> String {
+pub fn generate_err(source_context: &SourceContext, address: u32, message: &str) -> String {
     // Perform an address-based search for the correct line info
-    let found_lineinfo: &LineInfo = match lineinfo
+    let found_lineinfo: &LineInfo = match source_context
+        .lineinfo
         .iter()
         .find(|li| (li.start_address <= address) && (address < li.end_address))
     {
         Some(info) => info,
-        // If no lineinfo was found, just give a general message
+        // If no source_context was found, just give a general message
         None => return format!("[*] At pc 0x{:8x}:\n - {}", address, message),
     };
 
-    // If lineinfo was retrieved, print a well-formed error message
+    // If source_context was retrieved, print a well-formed error message
     return format!(
         "[*] At pc 0x{:x}:\n - {}: {}\n - {}",
         address,
         found_lineinfo.line_number,
-        found_lineinfo.get_content().trim(),
+        found_lineinfo
+            .get_content(&source_context.source_filenames)
+            .trim(),
         message,
     );
 }

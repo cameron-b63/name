@@ -13,7 +13,7 @@ use crate::{
     },
     dbprint, dbprintln,
     debug::{debug_utils::*, debugger_methods::* /* implementations::* */},
-    exception::constants::EXCEPTION_BEING_HANDLED,
+    exception::{constants::EXCEPTION_BEING_HANDLED, definitions::SourceContext},
     syscalls::*,
 };
 
@@ -394,7 +394,7 @@ impl LineInfo {
         bytes
     }
 
-    pub fn get_content(&self) -> String {
+    pub fn get_content(&self, _filenames: &Vec<String>) -> String {
         todo!();
     }
 }
@@ -435,7 +435,7 @@ impl OperatingSystem {
     pub fn handle_breakpoint(
         &mut self,
         program_state: &mut ProgramState,
-        lineinfo: &Vec<LineInfo>,
+        source_context: &SourceContext,
         debugger_state: &mut DebuggerState,
     ) -> () {
         /* Needs to do the following:
@@ -475,7 +475,7 @@ impl OperatingSystem {
         if program_state.cp0.is_debug_mode() {
             // terminate existing debugger process????
             // what
-            match self.cli_debugger(lineinfo, program_state, debugger_state) {
+            match self.cli_debugger(source_context, program_state, debugger_state) {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("{e}");
@@ -491,7 +491,7 @@ impl OperatingSystem {
     // Pass control to the user upon hitting a breakpoint
     pub fn cli_debugger(
         &mut self,
-        lineinfo: &Vec<LineInfo>,
+        source_context: &SourceContext,
         program_state: &mut ProgramState,
         debugger_state: &mut DebuggerState,
     ) -> Result<(), String> {
@@ -525,15 +525,21 @@ impl OperatingSystem {
                 "q" => return Ok(()),
                 "exit" => return Ok(()),
                 "quit" => return Ok(()),
-                "r" => match continuously_execute(lineinfo, program_state, self, debugger_state) {
-                    Ok(_) => continue,
-                    Err(e) => eprintln!("{e}"),
-                },
-                "c" => match continuously_execute(lineinfo, program_state, self, debugger_state) {
-                    Ok(_) => continue,
-                    Err(e) => eprintln!("{e}"),
-                },
-                "s" => match db_step(lineinfo, program_state, self, debugger_state) {
+                "r" => {
+                    match continuously_execute(source_context, program_state, self, debugger_state)
+                    {
+                        Ok(_) => continue,
+                        Err(e) => eprintln!("{e}"),
+                    }
+                }
+                "c" => {
+                    match continuously_execute(source_context, program_state, self, debugger_state)
+                    {
+                        Ok(_) => continue,
+                        Err(e) => eprintln!("{e}"),
+                    }
+                }
+                "s" => match db_step(source_context, program_state, self, debugger_state) {
                     Ok(_) => continue,
                     Err(e) => {
                         if e == "Breakpoint reached." {
@@ -543,7 +549,7 @@ impl OperatingSystem {
                         }
                     }
                 },
-                "l" => match list_text(lineinfo, debugger_state, &db_args) {
+                "l" => match list_text(source_context, debugger_state, &db_args) {
                     Ok(_) => continue,
                     Err(e) => eprintln!("{e}"),
                 },
@@ -563,7 +569,8 @@ impl OperatingSystem {
                     Ok(_) => continue,
                     Err(e) => eprintln!("{e}"),
                 },
-                "b" => match debugger_state.add_breakpoint(lineinfo, &db_args, program_state) {
+                "b" => match debugger_state.add_breakpoint(source_context, &db_args, program_state)
+                {
                     Ok(_) => continue,
                     Err(e) => eprintln!("{e}"),
                 },
