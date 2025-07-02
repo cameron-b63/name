@@ -1,4 +1,4 @@
-use name_core::{parse::parse::AstKind, structs::Register};
+use crate::{parse::parse::AstKind, structs::Register};
 
 /*
 Each pseudo instruction must implement its own `expand` fn. This function expands the pseudoinstruction's content into its respective instructions.
@@ -33,7 +33,7 @@ pub(crate) fn expand_li(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<Ast
 
     let rd = args[0].clone();
     let imm = args[1].clone();
-    let zero: AstKind = AstKind::Register(name_core::structs::Register::Zero);
+    let zero: AstKind = AstKind::Register(crate::structs::Register::Zero);
 
     Ok(vec![
         // ori  $rd, $zero, imm

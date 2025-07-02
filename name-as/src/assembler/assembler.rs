@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt, io};
 use name_core::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
-    instruction::instruction_set::INSTRUCTION_TABLE,
+    instruction::{instruction_set::INSTRUCTION_TABLE, pseudo_instruction_set::PseudoInstruction},
     parse::{
         parse::{Ast, AstKind},
         span::Span,
@@ -14,8 +14,6 @@ use name_core::{
 use crate::assembler::assemble_instruction::assemble_instruction;
 
 use crate::assembler::assembly_helpers::generate_pseudo_instruction_hashmap;
-
-use crate::definitions::structs::PseudoInstruction;
 
 /// Possible assemble error codes
 #[derive(Debug)]

@@ -1,6 +1,7 @@
 use crate::constants::MIPS_TEXT_START_ADDR;
 use crate::elf_utils::create_serialized_line_information;
 use crate::instruction::helpers::is_standard_instruction;
+use crate::instruction::pseudo_instruction_set::PSEUDO_INSTRUCTION_SET;
 use crate::parse::lexer::Lexer;
 use crate::parse::session::Session;
 use crate::parse::span::{Span, SrcSpan};
@@ -114,10 +115,10 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
     fn lineinfo_creation_pass(&mut self, parent_cursor: &TokenCursor) {
         // needed temp variables
         let mut lineinfo_cursor: TokenCursor = parent_cursor.clone(); // Take advantage of the cursor type
-        let mut line_number = 1; // Line number for serializing line information
-        let mut dummy_pc = MIPS_TEXT_START_ADDR; // PC for serializing line information (line<->PC relationship)
-        let mut last_text = 0; // Used for proper switching back and forth between .text and .data
-        let mut increment_pc_by = 0; // Tracker for each line to see how much to add to dummy PC (0 if no instruction)
+        let mut line_number: u32 = 1; // Line number for serializing line information
+        let mut dummy_pc: u32 = MIPS_TEXT_START_ADDR; // PC for serializing line information (line<->PC relationship)
+        let mut last_text: u32 = 0; // Used for proper switching back and forth between .text and .data
+        let mut increment_pc_by: u32 = 0; // Tracker for each line to see how much to add to dummy PC (0 if no instruction)
 
         // Initialize the line information with the current file we were given
         let file_name = match lineinfo_cursor.peek() {
@@ -141,9 +142,18 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
                     // First, make the common case fast and see if token is a normal instruction.
                     if is_standard_instruction(self.sess.get_src_str(&tok.src_span)) {
                         increment_pc_by = 4;
+                        continue;
                     }
 
-                    // TODO: Handle pseudoinstructions, etc.
+                    // If it wasn't a standard instruction, it's probably a pesudo instruction.
+                    if let Some(pseudo_instruction_information) = PSEUDO_INSTRUCTION_SET
+                        .iter()
+                        .find(|info| info.mnemonic == self.sess.get_src_str(&tok.src_span))
+                    {
+                        increment_pc_by =
+                            4 * pseudo_instruction_information.lines_expanded_to as u32;
+                        continue;
+                    }
                 }
                 TokenKind::Directive => {
                     // LineInfo should ideally not be creating pc mapping unless it really matters.
