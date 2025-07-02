@@ -1,5 +1,6 @@
 // Utilities to assemble to ELF.
 
+use std::process::exit;
 // Imports
 use std::{fs, io::Write, path::PathBuf, vec::Vec};
 
@@ -657,11 +658,34 @@ impl Elf {
     }
 }
 
+/// Serialized line information should follow this format:
+/// file name table
+/// serialized LineInfo (indexes table)
 pub fn create_serialized_line_information(
-    _line_information: Vec<LineInfo>,
-    _file_name: PathBuf,
+    line_information: Vec<LineInfo>,
+    file_name: PathBuf,
 ) -> Vec<u8> {
-    todo!();
+    // This will be the output vector, a u8 byte stream.
+    let mut bytes: Vec<u8> = vec![];
+    // Write the file name to a new Vec<u8> as bytes, null-terminated.
+    let checked_file_name: &str = match file_name.to_str() {
+        Some(s) => s,
+        None => {
+            eprintln!(
+                "Failed to serialize filename {:?} to section .line",
+                file_name
+            );
+            exit(1);
+        }
+    };
+    bytes.extend(checked_file_name.as_bytes());
+    bytes.push(b'\0');
+
+    // Map the lineinfo to a bytestream and append it.
+    bytes.extend(line_information.iter().flat_map(|info| info.to_bytes()));
+
+    // Return bytes
+    bytes
 }
 
 pub fn deserialize_line_info(data: &Vec<u8>) -> Vec<LineInfo> {

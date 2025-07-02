@@ -30,10 +30,13 @@ pub fn assemble_file<'sess, 'sess_ref>(
         return Err(());
     }
 
-    // Run the preprocessor over the (tokenized) parser session.
-    let ppd = Preprocessor::new(session).preprocess(toks);
-
     // Preprocess the lexed tokens to handle .include, .eqv, .macro, etc.
+    // Run the preprocessor over the (tokenized) parser session.
+    let mut preprocessor = Preprocessor::new(session);
+    let ppd = preprocessor.preprocess(toks);
+
+    // Go ahead and store section .line content from preprocessor
+    let section_dot_line = preprocessor.serialized_line_information;
 
     // Create a new parser using the preprocessed (expanded) tokens and the file content.
     let mut parser = Parser::new(ppd, session);
@@ -55,6 +58,9 @@ pub fn assemble_file<'sess, 'sess_ref>(
     let mut assembler = Assembler::new();
     // This is the point at which "assembly" actually occurs.
     let aerrs = assembler.assemble(asts);
+
+    // Assign the line information (obtained from preprocessor)
+    assembler.section_dot_line = section_dot_line;
 
     // If there exist errors in the folding process, print them and return.
     // This is the last point of user error.

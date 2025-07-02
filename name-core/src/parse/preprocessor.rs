@@ -12,7 +12,8 @@ use std::process::exit;
 pub struct Preprocessor<'sess, 'sess_ref> {
     sess: &'sess_ref mut Session<'sess>,
     eqvs: HashMap<&'sess str, Vec<Token>>,
-    serialized_line_information: Vec<u8>,
+    _expandable_sizes: HashMap<&'sess str, usize>,
+    pub serialized_line_information: Vec<u8>,
 }
 
 impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
@@ -20,6 +21,7 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
         Preprocessor {
             sess,
             eqvs: HashMap::new(),
+            _expandable_sizes: HashMap::new(),
             serialized_line_information: Vec::new(),
         }
     }
@@ -27,12 +29,68 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
     /// The preprocessor is responsible for:
     ///  - creating line information
     ///  - expanding our expandables
+    ///
     /// Anything that performs something akin to string replacement happens here (just on the token level).
+    ///
+    /// To accomplish these goals, the preprocessor performs multiple passes:
+    ///  - Pass 1: Identify expandable symbols
+    ///  - Pass 2: Generate line information for section .line in output
+    ///  - Pass 3: Carry out expansions
     pub fn preprocess(&mut self, mut cursor: TokenCursor) -> TokenCursor {
-        // First pass: simply create line information by serializing a bunch of spans
+        // First pass: Find expandable tokens.
+        // Move through the file token-by-token, matching on directives that declare expandables.
+        // If you're familiar with the initial iteration of logic, this is just a decoupling of
+        // the "search" pass and the "expand" pass.
+        let mut expandable_pass_cursor: TokenCursor = cursor.clone();
+
+        // Move through the file token-by-token
+        while let Some(tok) = expandable_pass_cursor.next() {
+            match tok.kind {
+                TokenKind::Directive => match self.sess.get_src_str(&tok.src_span) {
+                    // For now, we will assume that included files DO NOT contain program text.
+                    // This will probably need to be fixed later.
+                    ".include" => {}
+                    // If an eqv was declared, add it to the eqvs list
+                    ".eqv" => {
+                        let src_span = &expandable_pass_cursor
+                            .next_if(TokenKind::Ident)
+                            .unwrap()
+                            .src_span;
+                        let ident = self.sess.get_src_str(src_span);
+
+                        let mut expansion = Vec::new();
+
+                        // read until and consume the newline but ignore it
+                        while let Some(tok) = expandable_pass_cursor
+                            .next()
+                            .filter(|tok| !tok.is_kind(TokenKind::Newline))
+                        {
+                            let src = self.sess.get_src_str(&tok.src_span);
+                            if let Some(c_expansion) = self.eqvs.get(src) {
+                                expansion.extend(c_expansion.clone());
+                            } else {
+                                expansion.push(tok.clone())
+                            }
+                        }
+
+                        let _ = self.eqvs.insert(ident, expansion);
+                    }
+                    ".macro" => todo!("implement macros"),
+                    _ => {
+                        // Nothing in this pass.
+                    }
+                },
+                _ => {
+                    // Nothing in this pass.
+                }
+            }
+        }
+
+        // Second pass: simply create line information by iterating through tokens and delimiting TokenKind::Newline
         let mut lineinfo_cursor: TokenCursor = cursor.clone(); // Take advantage of the cursor type
         let mut line_number = 1; // Line number for serializing line information
         let mut dummy_pc = MIPS_TEXT_START_ADDR; // PC for serializing line information (line<->PC relationship)
+        let mut last_text = 0; // Used for proper switching back and forth between .text and .data
         let mut increment_pc_by = 0; // Tracker for each line to see how much to add to dummy PC (0 if no instruction)
 
         // Initialize the line information with the current file we were given
@@ -49,6 +107,7 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
 
         let mut line_information: Vec<LineInfo> = Vec::new();
 
+        // Gather the line information
         while let Some(tok) = lineinfo_cursor.next() {
             match tok.kind {
                 // If the token is an ident, it might be an instruction. Let's find out.
@@ -59,6 +118,23 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
                     }
 
                     // TODO: Handle pseudoinstructions, etc.
+                }
+                TokenKind::Directive => {
+                    // LineInfo should ideally not be creating pc mapping unless it really matters.
+                    match self.sess.get_src_str(&tok.src_span) {
+                        ".data" => {
+                            last_text = dummy_pc;
+                            dummy_pc = 0;
+                        }
+                        ".text" => {
+                            if last_text == 0 {
+                                dummy_pc = MIPS_TEXT_START_ADDR;
+                            } else {
+                                dummy_pc = last_text;
+                            }
+                        }
+                        _ => {}
+                    }
                 }
                 // If the token is a newline, we must update the line number and maybe the dummy program counter too.
                 TokenKind::Newline => {
@@ -89,6 +165,7 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
         self.serialized_line_information =
             create_serialized_line_information(line_information, file_name.to_path_buf());
 
+        // Pass 3: Carry out expansions
         // Declare a deque to handle expansions
         let mut tokens = VecDeque::new();
 
@@ -96,6 +173,15 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
         while let Some(tok) = cursor.next() {
             match tok.kind {
                 TokenKind::Directive => match self.sess.get_src_str(&tok.src_span) {
+                    // Consume all the ".eqv" content, as it's already been handled and doesn't need to be pushed through.
+                    ".eqv" => {
+                        // Consume everything
+                        while let Some(_) =
+                            cursor.next().filter(|tok| !tok.is_kind(TokenKind::Newline))
+                        {
+                            // Nothing to do except consume.
+                        }
+                    }
                     // Handle include by creating a mini-lexer and pushing lexed content to current session.
                     ".include" => {
                         let src_span = &cursor.next_if(TokenKind::String).unwrap().src_span;
@@ -125,28 +211,6 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
                         // This is the part where the lexed content from the included file gets handled.
                         tokens.extend(pre.toks);
                     }
-                    // If an eqv was declared, add it to the eqvs list
-                    ".eqv" => {
-                        let src_span = &cursor.next_if(TokenKind::Ident).unwrap().src_span;
-                        let ident = self.sess.get_src_str(src_span);
-
-                        let mut expansion = Vec::new();
-
-                        // read until and consume the newline but ignore it
-                        while let Some(tok) =
-                            cursor.next().filter(|tok| !tok.is_kind(TokenKind::Newline))
-                        {
-                            let src = self.sess.get_src_str(&tok.src_span);
-                            if let Some(c_expansion) = self.eqvs.get(src) {
-                                expansion.extend(c_expansion.clone());
-                            } else {
-                                expansion.push(tok.clone())
-                            }
-                        }
-
-                        let _ = self.eqvs.insert(ident, expansion);
-                    }
-                    ".macro" => todo!("implement macros"),
                     _ => tokens.push_back(tok.clone()),
                 },
                 // Handle ".eqv" uses with eqvs Vec
@@ -162,6 +226,8 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
                 _ => tokens.push_back(tok.clone()),
             }
         }
+
+        // Return the new TokenCursor with tokens of expanded content
         TokenCursor::new(tokens)
     }
 }
