@@ -1,7 +1,7 @@
 use name_core::debug::exception_handler::handle_exception;
-use name_core::debug::simulator_helpers::extract_loadable_sections;
+use name_core::simulator_helpers::{extract_loadable_sections, single_step};
 
-use name_core::debug::debug_utils::{single_step, DebuggerState};
+use name_core::debug::debug_utils::DebuggerState;
 
 use name_core::elf_def::Elf;
 use name_core::elf_utils::extract_lineinfo;

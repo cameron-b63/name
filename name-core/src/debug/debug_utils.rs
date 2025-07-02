@@ -1,25 +1,11 @@
-use std::{collections::HashMap, sync::LazyLock};
-// use std::io::{self, Write};
-
-// use crate::debug::debugger_methods::*;
-
 use crate::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_TEXT_START_ADDR},
-    debug::{exception_handler::handle_exception, fetch::fetch},
+    debug::exception_handler::handle_exception,
     exception::definitions::{ExceptionType, SourceContext},
-    instruction::{
-        information::InstructionInformation, instruction_set::INSTRUCTION_SET, RawInstruction,
-    },
+    instruction::{information::InstructionInformation, RawInstruction},
+    simulator_helpers::{single_step, INSTRUCTION_LOOKUP},
     structs::{OperatingSystem, ProgramState},
 };
-
-static INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static InstructionInformation>> =
-    LazyLock::new(|| {
-        INSTRUCTION_SET
-            .iter()
-            .map(|instr| (instr.lookup_code(), instr))
-            .collect()
-    });
 
 #[macro_export]
 macro_rules! dbprint {
@@ -43,44 +29,8 @@ macro_rules! dbprintln {
     };
 }
 
-pub fn single_step(_source_context: &SourceContext, program_state: &mut ProgramState) -> () {
-    if !program_state
-        .memory
-        .allows_execution_of(program_state.cpu.pc)
-    {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    // check if there's a breakpoint before instruction on the line is executed
-    // TODO: implement break instruction. check after fetch.
-
-    // Fetch
-    let raw_instruction = fetch(program_state);
-    let instr_info = match INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
-        Some(info) => info,
-        None => {
-            program_state.set_exception(ExceptionType::ReservedInstruction);
-            return;
-        }
-    };
-
-    program_state.cpu.pc += MIPS_ADDRESS_ALIGNMENT;
-
-    // Execute the instruction; program_state is modified.
-    if false
-    /* Allowing for some later verbose mode */
-    {
-        eprintln!("Executing {}", instr_info.mnemonic);
-    }
-    let _ = (instr_info.implementation)(program_state, raw_instruction);
-
-    // The $0 register should never have been permanently changed. Don't let it remain changed.
-
-    program_state.cpu.general_purpose_registers[0] = 0;
-}
-
 /// Executes only the next line of code. Invoked by "s" in the CLI.
+/// Essentially just a wrapper over single_step that contains additional debugger context.
 // Also called by continuously_execute
 pub fn db_step(
     source_context: &SourceContext,

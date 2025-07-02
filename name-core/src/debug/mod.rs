@@ -3,4 +3,3 @@ pub mod debugger_methods;
 pub mod exception_handler;
 pub mod fetch;
 pub mod implementations;
-pub mod simulator_helpers;
