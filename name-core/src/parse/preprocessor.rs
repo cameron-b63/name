@@ -3,12 +3,18 @@ use crate::elf_utils::create_serialized_line_information;
 use crate::instruction::helpers::is_standard_instruction;
 use crate::parse::lexer::Lexer;
 use crate::parse::session::Session;
-use crate::parse::span::SrcSpan;
+use crate::parse::span::{Span, SrcSpan};
 use crate::parse::token::{Token, TokenCursor, TokenKind};
 use crate::structs::LineInfo;
 use std::collections::{HashMap, VecDeque};
 use std::process::exit;
 
+/// The preprocessor struct is pretty much an extension of a parser session.
+/// It contains a few additional fields solely related to preprocessing,
+/// but must always be constructed with some parser session.
+///
+/// The serialized line information is public so that the caller can access it
+/// in order to construct section .line in the output executable.
 pub struct Preprocessor<'sess, 'sess_ref> {
     sess: &'sess_ref mut Session<'sess>,
     eqvs: HashMap<&'sess str, Vec<Token>>,
@@ -36,20 +42,36 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
     ///  - Pass 1: Identify expandable symbols
     ///  - Pass 2: Generate line information for section .line in output
     ///  - Pass 3: Carry out expansions
-    pub fn preprocess(&mut self, mut cursor: TokenCursor) -> TokenCursor {
-        // First pass: Find expandable tokens.
-        // Move through the file token-by-token, matching on directives that declare expandables.
-        // If you're familiar with the initial iteration of logic, this is just a decoupling of
-        // the "search" pass and the "expand" pass.
-        let mut expandable_pass_cursor: TokenCursor = cursor.clone();
+    pub fn preprocess(&mut self, cursor: TokenCursor) -> TokenCursor {
+        // Detect expandables
+        let _ = self.expandable_detection_pass(&cursor);
 
+        // Gather LineInfo
+        let _ = self.lineinfo_creation_pass(&cursor);
+
+        // Carry out expansions
+        let tokens = self.token_expansion_pass(&cursor);
+
+        // Return the new TokenCursor with tokens of expanded content
+        return TokenCursor::new(tokens);
+    }
+
+    /// First pass: Find expandable tokens.
+    /// Move through the file token-by-token, matching on directives that declare expandables.
+    /// If you're familiar with the initial iteration of logic, this is just a decoupling of
+    /// the "search" pass and the "expand" pass.
+    fn expandable_detection_pass(&mut self, parent_cursor: &TokenCursor) {
+        // Create temporary cursor for this pass
+        let mut expandable_pass_cursor = parent_cursor.clone();
         // Move through the file token-by-token
         while let Some(tok) = expandable_pass_cursor.next() {
             match tok.kind {
                 TokenKind::Directive => match self.sess.get_src_str(&tok.src_span) {
                     // For now, we will assume that included files DO NOT contain program text.
-                    // This will probably need to be fixed later.
-                    ".include" => {}
+                    // This will need to be fixed later.
+                    ".include" => {
+                        // Nothing yet
+                    }
                     // If an eqv was declared, add it to the eqvs list
                     ".eqv" => {
                         let src_span = &expandable_pass_cursor
@@ -85,16 +107,20 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
                 }
             }
         }
+    }
 
-        // Second pass: simply create line information by iterating through tokens and delimiting TokenKind::Newline
-        let mut lineinfo_cursor: TokenCursor = cursor.clone(); // Take advantage of the cursor type
+    /// Second pass:
+    /// simply create line information by iterating through tokens and delimiting by TokenKind::Newline.
+    fn lineinfo_creation_pass(&mut self, parent_cursor: &TokenCursor) {
+        // needed temp variables
+        let mut lineinfo_cursor: TokenCursor = parent_cursor.clone(); // Take advantage of the cursor type
         let mut line_number = 1; // Line number for serializing line information
         let mut dummy_pc = MIPS_TEXT_START_ADDR; // PC for serializing line information (line<->PC relationship)
         let mut last_text = 0; // Used for proper switching back and forth between .text and .data
         let mut increment_pc_by = 0; // Tracker for each line to see how much to add to dummy PC (0 if no instruction)
 
         // Initialize the line information with the current file we were given
-        let file_name = match cursor.peek() {
+        let file_name = match lineinfo_cursor.peek() {
             Some(found) => self.sess.src.get_span_details(&found.src_span).0,
             None => {
                 self.sess.report_error(
@@ -164,8 +190,15 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
         // Create serialized line information from collected information
         self.serialized_line_information =
             create_serialized_line_information(line_information, file_name.to_path_buf());
+    }
 
-        // Pass 3: Carry out expansions
+    /// Third pass:
+    /// Consume declaration of expansions and expand uses of expandables (lots of expanding going on...)
+    /// Token-level expansion is performed instead of string replacement.
+    fn token_expansion_pass(&mut self, parent_cursor: &TokenCursor) -> VecDeque<Span<TokenKind>> {
+        // Declare a cursor for use in this pass
+        let mut cursor: TokenCursor = parent_cursor.clone();
+
         // Declare a deque to handle expansions
         let mut tokens = VecDeque::new();
 
@@ -227,7 +260,6 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
             }
         }
 
-        // Return the new TokenCursor with tokens of expanded content
-        TokenCursor::new(tokens)
+        tokens
     }
 }
