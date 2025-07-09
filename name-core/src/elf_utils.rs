@@ -1,5 +1,4 @@
 // Utilities to assemble to ELF.
-
 use std::process::exit;
 // Imports
 use std::{fs, io::Write, path::PathBuf, vec::Vec};
@@ -675,8 +674,6 @@ pub fn create_serialized_line_information(
     // This will be the output vector, a u8 byte stream.
     let mut bytes: Vec<u8> = vec![];
 
-    dbg!(&file_names);
-
     // First, write the number of files in the table.
     bytes.extend_from_slice(&(file_names.len() as u32).to_be_bytes());
 
@@ -714,7 +711,7 @@ pub fn deserialize_line_info(data: &Vec<u8>) -> SourceContext {
 
     // Collect filenames from table
     let mut filenames: Vec<String> = vec![];
-    for _ in [0..num_of_filenames] {
+    for _ in 0..num_of_filenames {
         let mut found_string: String = String::new();
 
         while cursor[0] != b'\0' {

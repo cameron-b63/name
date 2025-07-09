@@ -552,7 +552,6 @@ impl LineInfo {
             return String::new();
         }
         let target_filename = filenames[self.file_table_index as usize].clone();
-        dbg!(&target_filename);
 
         // Attempt to open the target file
         let mut target_file = match File::open(target_filename) {
@@ -569,7 +568,7 @@ impl LineInfo {
 
         // Find the requested line to read
         let target_line_content =
-            contents.lines().collect::<Vec<&str>>()[self.line_number as usize];
+            contents.lines().collect::<Vec<&str>>()[(self.line_number-1) as usize];
 
         return String::from(target_line_content);
     }

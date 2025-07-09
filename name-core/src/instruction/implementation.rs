@@ -45,7 +45,7 @@ pub fn jalr(program_state: &mut ProgramState, args: RArgs) -> () {
     };
 
     program_state.cpu.general_purpose_registers[rd as usize] = program_state.cpu.pc;
-    program_state.jump_if_valid(program_state.cpu.general_purpose_registers[args.rd as usize]);
+    program_state.jump_if_valid(program_state.cpu.general_purpose_registers[args.rs as usize]);
 }
 
 // 0x0A - slti

@@ -370,6 +370,7 @@ impl From<RawInstruction> for JArgs {
 }
 
 // RArgs
+#[derive(Debug)]
 pub struct RArgs {
     pub opcode: u32,
     pub rs: u32,
