@@ -109,6 +109,8 @@ impl<'a> Session<'a> {
         }
     }
 
+    /// Add a file to the current session; returns a File (which is defined by us).
+    /// Turns the file into a set of spans and details.
     pub fn add_file(&mut self, path: PathBuf) -> &'a File {
         let cont = fs::read_to_string(&path).unwrap();
         let file = self.bump.alloc(File::new(path, cont, self.src.length));
@@ -116,16 +118,18 @@ impl<'a> Session<'a> {
         file
     }
 
+    /// Get the original source content associated with a SrcSpan
     pub fn get_src_str(&self, src_span: &SrcSpan) -> &'a str {
         self.src.get_str(src_span)
     }
 
+    /// Generate the pretty-print error string.
     pub fn report_error(&mut self, err: &str, src_span: &SrcSpan) {
         self.should_assemble = false;
 
         let (file, str, mut line, col) = self.src.get_span_details(&src_span);
 
-        println!("error: {}\n\t--> {:?}:{}:{}", err, file, line, col);
+        println!("[*] Error: {}\n\t--> {:?}:{}:{}", err, file, line, col);
 
         for str_line in str.lines() {
             println!("\t{} | {}", line, str_line);
