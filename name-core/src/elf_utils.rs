@@ -601,8 +601,14 @@ fn get_string_from_strtab(strtab: &Vec<u8>, offset: u32) -> Option<&str> {
 pub fn extract_lineinfo(elf: &Elf) -> SourceContext {
     let shstrtab = &elf.sections[elf.file_header.e_shstrndx as usize - 1];
     let idx = match find_target_section_index(&elf.section_header_table, shstrtab, ".line") {
+        // Absolute wizard shit going on here.
+        // I have absolutely ZERO clue why find_target_section_index is now magically no longer off-by-one.
+        // My best guess is that something is malformed and still accounting for section .rel,
+        // but I can find no evidence to support this thought. I'm very lost.
+        // Please watch out when using find_target_section_index, as it may magically not be off by one I guess??
+        // Will do my best to fix this but at this point I'm more scared of the fix than the problem...
         Some(i) => i,
-        None => unreachable!(),
+        None => panic!("No lineinfo supplied in ELF!"),
     };
 
     deserialize_line_info(&elf.sections[idx])

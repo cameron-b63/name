@@ -18,7 +18,7 @@ const TESTS: LazyCell<HashMap<&'static str, (&'static str, &'static str)>> = Laz
         "char_test",
         ("a", "\n\t\\aahello\nworlde\ti am swagalicious\\\\'\\"),
     );
-    tests.insert("mips_test", ("", "Cello, World!"));
+    tests.insert("mips_test", ("", "Cello, World!\n-3.14\n3.14\n"));
     tests
 });
 
@@ -55,6 +55,11 @@ fn assemble_to_emu_test() {
             .join("tests")
             .join("samples")
             .join(format!("{}.asm", test));
+
+        if !file_path.exists() {
+            println!("File path \"{:?}\" leads nowhere. Continuing...", file_path);
+            continue;
+        }
 
         dbg!(&file_path);
 

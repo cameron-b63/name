@@ -9,17 +9,17 @@ use std::{
 
 use crate::{
     constants::{
-        MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_HEAP_START_ADDR, MIPS_STACK_END_ADDR,
-        MIPS_TEXT_START_ADDR,
+        fpu_control::FCSR_INDEX, MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR,
+        MIPS_HEAP_START_ADDR, MIPS_STACK_END_ADDR, MIPS_TEXT_START_ADDR,
     },
     dbprint, dbprintln,
     debug::{debug_utils::*, debugger_methods::* /* implementations::* */},
-    exception::{constants::EXCEPTION_BEING_HANDLED, definitions::SourceContext},
+    exception::{constants::EXCEPTION_BEING_HANDLED, definitions::ExceptionType},
     syscalls::*,
 };
 
 /// Symbol is used for assembly -> ELF, ET_REL -> ET_EXEC, and ELF -> ProgramState construction.
-/// Its definition is provided in the ELF TIS: https://refspecs.linuxfoundation.org/elf/elf.pdf
+/// Its definition is provided in the [ELF TIS](https://refspecs.linuxfoundation.org/elf/elf.pdf).
 #[derive(Debug, Clone)]
 pub struct Symbol {
     pub symbol_type: u8,
@@ -44,6 +44,54 @@ pub struct Coprocessor0 {
     pub debug_mode: bool, // TODO: implement EJTAG
 }
 
+/// Coprocessor 1 is the FPU (floating-point unit).
+#[derive(Debug, Default)]
+pub struct Coprocessor1 {
+    pub registers: [f32; 32],
+    pub control_registers: [u32; 2],
+}
+
+impl Coprocessor1 {
+    pub fn fenr_fs_bit_set(&self) -> bool {
+        (self.get_fenr() >> 2) & 0b01 == 1
+    }
+
+    /// Obtain the pseudo-register FCSR.
+    /// See [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00082-2B-MIPS32INT-AFP-06.01.pdf#page=101)
+    pub fn get_fenr(&self) -> u32 {
+        // get enables from FCSR
+        (self.control_registers[FCSR_INDEX] & 0b1111_1000_0000)
+        // get FS from FCSR
+        | ((self.control_registers[FCSR_INDEX] & 0b0000_0001_0000_0000_0000_0000_0000_0000) >> 22)
+        // get FRM from FCSR
+        | (self.control_registers[FCSR_INDEX] & 0b11)
+    }
+
+    /// Obtain the pseudo-register FCCR.
+    /// See [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00082-2B-MIPS32INT-AFP-06.01.pdf#page=101)
+    pub fn get_fccr(&self) -> u32 {
+        // get contiguous cc's
+        (self.control_registers[FCSR_INDEX] >> 24 & 0b1111110)
+        // get the non-contiguous cc 0
+        | (self.control_registers[FCSR_INDEX] >> 22 & 0b1)
+    }
+
+    /// Get the given condition code.
+    pub fn get_condition_code(&self, cc: u32) -> bool {
+        // FCCR is made for this purpose. Just used a wrapper method to avoid bad selection.
+        return (self.get_fccr() >> cc) & 1 == 1;
+    }
+
+    /// Set the given condition code. Updates FCSR.
+    pub fn set_condition_code(&mut self, cc: u32, value: bool) {
+        match cc {
+            0 => self.control_registers[FCSR_INDEX] |= (value as u32) << 22,
+            1..7 => self.control_registers[FCSR_INDEX] |= (value as u32) << (24 + cc),
+            _ => unreachable!(),
+        }
+    }
+}
+
 /// Memory is a conglomerate of program text, program data, the heap, the stack, and other segments.
 /// There exist predefined offsets for each of these segments in 32-bit MIPS:
 ///  - reserved space from 0x00000000 to 0x3fffffff;
@@ -53,7 +101,7 @@ pub struct Coprocessor0 {
 ///  - stack begins at 0x7ffffe00 in memory (and grows downward);
 ///  - kernel data begins at 0x90000000 in memory;
 ///  - mem-mapped I/O begins at 0xffff0000 in memory.
-/// The Memory struct relies on address translation for proper use. Each segment is represented as a Vec<u8>.
+/// The Memory struct relies on address translation for proper use. Each segment is represented as a `Vec<u8>`.
 #[derive(Debug)]
 pub struct Memory {
     pub text: Vec<u8>,
@@ -112,7 +160,7 @@ impl Memory {
         }
     }
 
-    /// The burden of alignment checking rests on each read_<type> function.
+    /// The burden of alignment checking rests on each `read_<type>` function.
     /// read_byte reads a byte, performing address translation.
     pub fn read_byte(&self, address: u32) -> Result<u8, MemoryError> {
         // Obtain values for segment boundaries:
@@ -161,7 +209,7 @@ impl Memory {
         }
     }
 
-    /// The burden of alignment checking rests on each set_<type> function.
+    /// The burden of alignment checking rests on each `set_<type>` function.
     /// set_byte performs address translation on the provided address and sets the value at that address to value.
     pub fn set_byte(&mut self, address: u32, value: u8) -> Result<(), MemoryError> {
         // Obtain values for segment boundaries:
@@ -255,6 +303,7 @@ pub struct ProgramState {
     pub should_continue_execution: bool,
     pub cpu: Processor,
     pub cp0: Coprocessor0,
+    pub cp1: Coprocessor1,
     pub memory: Memory,
 }
 
@@ -264,12 +313,23 @@ impl ProgramState {
             should_continue_execution: true,
             cpu: cpu,
             cp0: Coprocessor0::new(),
+            cp1: Coprocessor1::new(),
             memory: memory,
         }
     }
 
     pub fn is_exception(&self) -> bool {
         return self.cp0.get_exception_level() == EXCEPTION_BEING_HANDLED;
+    }
+
+    /// Helper function for facilitating branch instructions.
+    /// Abstracts the logic of ensuring valid memory space and such.
+    pub fn jump_if_valid(&mut self, address: u32) -> () {
+        if !self.memory.allows_execution_of(address) {
+            self.set_exception(ExceptionType::AddressExceptionLoad);
+        } else {
+            self.cpu.pc = address;
+        }
     }
 }
 
@@ -352,6 +412,90 @@ impl FromStr for Register {
             "$fp" => Register::Fp,
             "$ra" => Register::Ra,
             _ => return Err(ParseRegisterError(s.to_string())),
+        };
+        Ok(reg)
+    }
+}
+
+/// Enumeration of FPU (floating-point) registers
+#[derive(Debug, Clone, Copy)]
+#[repr(usize)]
+pub enum FpRegister {
+    F0,
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
+    F13,
+    F14,
+    F15,
+    F16,
+    F17,
+    F18,
+    F19,
+    F20,
+    F21,
+    F22,
+    F23,
+    F24,
+    F25,
+    F26,
+    F27,
+    F28,
+    F29,
+    F30,
+    F31,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseFpRegisterError(pub String);
+
+impl FromStr for FpRegister {
+    type Err = ParseFpRegisterError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let reg = match s {
+            "$f0" => FpRegister::F0,
+            "$f1" => FpRegister::F1,
+            "$f2" => FpRegister::F2,
+            "$f3" => FpRegister::F3,
+            "$f4" => FpRegister::F4,
+            "$f5" => FpRegister::F5,
+            "$f6" => FpRegister::F6,
+            "$f7" => FpRegister::F7,
+            "$f8" => FpRegister::F8,
+            "$f9" => FpRegister::F9,
+            "$f10" => FpRegister::F10,
+            "$f11" => FpRegister::F11,
+            "$f12" => FpRegister::F12,
+            "$f13" => FpRegister::F13,
+            "$f14" => FpRegister::F14,
+            "$f15" => FpRegister::F15,
+            "$f16" => FpRegister::F16,
+            "$f17" => FpRegister::F17,
+            "$f18" => FpRegister::F18,
+            "$f19" => FpRegister::F19,
+            "$f20" => FpRegister::F20,
+            "$f21" => FpRegister::F21,
+            "$f22" => FpRegister::F22,
+            "$f23" => FpRegister::F23,
+            "$f24" => FpRegister::F24,
+            "$f25" => FpRegister::F25,
+            "$f26" => FpRegister::F26,
+            "$f27" => FpRegister::F27,
+            "$f28" => FpRegister::F28,
+            "$f29" => FpRegister::F29,
+            "$f30" => FpRegister::F30,
+            "$f31" => FpRegister::F31,
+            _ => return Err(ParseFpRegisterError(s.to_string())),
         };
         Ok(reg)
     }
@@ -451,8 +595,11 @@ impl OperatingSystem {
 
         match syscall_num {
             0x01 => sys_print_int(program_state, &mut self.stdout.lock()),
+            0x02 => sys_print_float(program_state, &mut self.stdout.lock()),
+            0x03 => sys_print_double(program_state, &mut self.stdout.lock()),
             0x04 => sys_print_string(program_state, &mut self.stdout.lock()),
             0x05 => sys_read_int(program_state, &mut self.stdin.lock()),
+            0x07 => sys_read_double(program_state, &mut self.stdin.lock()),
             0x0A => sys_exit(program_state),
             0x0B => sys_print_char(program_state, &mut self.stdout.lock()),
             0x0C => sys_read_char(program_state, &mut self.stdin.lock()),

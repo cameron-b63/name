@@ -12,6 +12,10 @@ pub struct PseudoInstruction {
 /// The expansion functions operate on AST nodes.
 pub const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
     PseudoInstruction {
+        mnemonic: "b",
+        expand: expand_b,
+    },
+    PseudoInstruction {
         mnemonic: "bnez",
         expand: expand_bnez,
         lines_expanded_to: 1,
@@ -35,5 +39,9 @@ pub const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
         mnemonic: "mv",
         expand: expand_move,
         lines_expanded_to: 1,
+    },
+    PseudoInstruction {
+        mnemonic: "s.d",
+        expand: expand_s_d,
     },
 ];

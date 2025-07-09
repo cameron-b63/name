@@ -3,6 +3,9 @@
 
     .include    "SysCalls.asm"
     .data
+coolfloat:
+    .float      -3.14
+
 skipNotSkippedString:
     .asciiz     "Something was meant to be skipped, but wasn't skipped.\n"
 
@@ -114,15 +117,42 @@ demo8:
     sltiu       $t8, $zero, -18
     sltu        $t6, $t5, $zero
     srl         $t5, $t5, 2
-    sub         $t0, $t0, $t0
+    # sub         $t0, $t0, $t0
     subu        $t7, $t7, $t0
     la          $t0, testString
     sw          $t7, $t0
     la          $a0, testString
     li          $v0, SysPrintString
-    syscall
+    # syscall
     xor         $t7, $t7, $zero
     xori        $t1, $t1, 0b10101010
+
+demo9:
+    # newline for separation
+    li          $a0, '\n'
+    li          $v0, SysPrintChar
+    syscall
+
+    # Test some floating-point instructions
+    la          $t0, coolfloat  # Load -3.14 into $f12
+    lwc1        $f12, $t0       # Here is lwc1 functional
+    li          $v0, SysPrintFloat
+    syscall
+
+    # Newline
+    li          $a0, '\n'
+    li          $v0, SysPrintChar
+    syscall
+
+    # Absolute value
+    abs.s       $f12, $f12      # Absolute value of single register
+    li          $v0, SysPrintFloat
+    syscall
+
+    # Newline
+    li          $a0, '\n'
+    li          $v0, SysPrintChar
+    syscall
 
 exit:
     li          $v0, SysExit

@@ -1,46 +1,95 @@
-use crate::assembler::assembler::{AssembleResult, ErrorKind};
 use crate::assembler::assembly_helpers::arg_configuration_is_ok;
-use crate::assembler::assembly_utils::*;
-use name_core::instruction::information::{InstructionInformation, InstructionType};
+use name_core::instruction::information::InstructionType;
+use name_core::instruction::{
+    AssembleResult, ErrorKind, FpCCArgs, FpCCBranchArgs, FpRArgs, IArgs, InstructionMeta, JArgs,
+    RArgs, RawInstruction,
+};
 use name_core::parse::parse::AstKind;
 
-// Big logic for instruction assembly - this is the main driver code for actual packing of instructions once parsed.
 pub fn assemble_instruction(
-    info: &InstructionInformation,
+    meta: &InstructionMeta,
     arguments: Vec<AstKind>,
-) -> AssembleResult<u32> {
-    // dbg!(info);
-    // dbg!(&arguments);
-    // Find proper argument configuration early
-    let config = if arg_configuration_is_ok(&arguments, info.args) {
-        info.args
-    } else {
-        info.alt_args
-            .and_then(|args| {
-                args.iter()
-                    .find(|alt| arg_configuration_is_ok(&arguments, alt))
-            })
-            .ok_or(ErrorKind::BadArguments)?
-    };
+) -> AssembleResult<RawInstruction> {
+    match meta {
+        InstructionMeta::Int(info) => {
+            // Determine which arg‐config fits
+            let config = if arg_configuration_is_ok(&arguments, info.args) {
+                info.args
+            } else {
+                info.alt_args
+                    .and_then(|alts| {
+                        alts.iter()
+                            .find(|alt| arg_configuration_is_ok(&arguments, alt))
+                    })
+                    .ok_or(ErrorKind::BadArguments)?
+            };
 
-    match info.instruction_type {
-        InstructionType::RType => {
-            let funct: u32 = info.funct_code.expect("Improper implmentation of instructions (funct field undefined for R-type instr)\nIf you are a student reading this, understand this error comes entirely from a fundamental failure in the codebase of this vscode extension.") as u32;
-
-            let (rd, rs, rt, shamt) = assign_r_type_arguments(arguments, config)?;
-            assemble_r_type(rd, rs, rt, shamt, funct)
+            // Dispatch on integer instruction types
+            match info.instruction_type {
+                InstructionType::RType => {
+                    let mut r_args = RArgs::assign_r_type_arguments(arguments, config)?;
+                    r_args.funct = info.funct_code.ok_or(ErrorKind::MissingFunct)? as u32;
+                    r_args.opcode = info.op_code;
+                    Ok(RawInstruction::from(r_args))
+                }
+                InstructionType::IType => {
+                    let mut i_args = IArgs::assign_i_type_arguments(arguments, config)?;
+                    i_args.opcode = info.op_code;
+                    Ok(RawInstruction::from(i_args))
+                }
+                InstructionType::JType => {
+                    let mut j_args = JArgs::assign_j_type_arguments(arguments, config)?;
+                    j_args.opcode = info.op_code;
+                    Ok(RawInstruction::from(j_args))
+                }
+                _ => Err(ErrorKind::WrongInstructionType)?,
+            }
         }
-        InstructionType::IType => {
-            let opcode: u32 = info.op_code as u32;
 
-            let (rs, rt, imm) = assign_i_type_arguments(arguments, config)?;
+        InstructionMeta::Fp(info) => {
+            // Determine which arg‐config fits
+            let config = if arg_configuration_is_ok(&arguments, info.args) {
+                info.args
+            } else {
+                info.alt_args
+                    .and_then(|alts| {
+                        alts.iter()
+                            .find(|alt| arg_configuration_is_ok(&arguments, alt))
+                    })
+                    .ok_or(ErrorKind::BadArguments)?
+            };
 
-            assemble_i_type(opcode, rs, rt, imm)
-        }
-        InstructionType::JType => {
-            let opcode: u32 = info.op_code as u32;
-
-            Ok(assemble_j_type(opcode))
+            // Dispatch on FP instruction types
+            match info.instruction_type {
+                InstructionType::FpBranchType => {
+                    let mut fp_branch =
+                        FpCCBranchArgs::assign_fp_cc_branch_arguments(arguments, config)?;
+                    fp_branch.opcode = info.op_code;
+                    fp_branch.funky_funct = u32::from(info.fmt.ok_or(ErrorKind::MissingFmt)?);
+                    let additional_info =
+                        info.additional_code.ok_or(ErrorKind::MissingAdditional)?;
+                    fp_branch.nd = additional_info >> 1;
+                    fp_branch.tf = additional_info & 1;
+                    Ok(RawInstruction::from(fp_branch))
+                }
+                InstructionType::FpCCType => {
+                    let mut fp_cc = FpCCArgs::assign_fp_cc_arguments(arguments, config)?;
+                    fp_cc.opcode = info.op_code;
+                    fp_cc.fmt = u32::from(info.fmt.ok_or(ErrorKind::MissingFmt)?);
+                    fp_cc.funct = info.funct_code.ok_or(ErrorKind::MissingFunct)?;
+                    Ok(RawInstruction::from(fp_cc))
+                }
+                InstructionType::FpRType => {
+                    let mut fp_r = FpRArgs::assign_fp_r_arguments(arguments, config)?;
+                    fp_r.opcode = info.op_code;
+                    fp_r.fmt = u32::from(info.fmt.ok_or(ErrorKind::MissingFmt)?);
+                    fp_r.funct = info.funct_code.ok_or(ErrorKind::MissingFunct)?;
+                    Ok(RawInstruction::from(fp_r))
+                }
+                InstructionType::RType | InstructionType::IType | InstructionType::JType => {
+                    Err(ErrorKind::WrongInstructionType)?
+                }
+            }
         }
     }
 }

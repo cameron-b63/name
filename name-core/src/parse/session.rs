@@ -1,3 +1,4 @@
+use crate::instruction::{AssembleResult, ErrorKind};
 use crate::parse::span::SrcSpan;
 use bumpalo::Bump;
 use std::fs;
@@ -109,13 +110,11 @@ impl<'a> Session<'a> {
         }
     }
 
-    /// Add a file to the current session; returns a File (which is defined by us).
-    /// Turns the file into a set of spans and details.
-    pub fn add_file(&mut self, path: PathBuf) -> &'a File {
-        let cont = fs::read_to_string(&path).unwrap();
+    pub fn add_file(&mut self, path: PathBuf) -> AssembleResult<&'a File> {
+        let cont = fs::read_to_string(&path).map_err(|_| ErrorKind::FileNotFound(path.clone()))?;
         let file = self.bump.alloc(File::new(path, cont, self.src.length));
         self.src.add_file(file);
-        file
+        Ok(file)
     }
 
     /// Get the original source content associated with a SrcSpan

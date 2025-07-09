@@ -1,6 +1,8 @@
-use crate::constants::{MIPS_TEXT_START_ADDR, REGISTERS};
-use crate::structs::{Coprocessor0, Processor, ProgramState /*, OperatingSystem*/};
-// use crate::instruction::instruction_set;
+use crate::constants::{
+    fpu_control::{FCSR_DEFAULT_VALUES, FIR_DEFAULT_VALUES},
+    {MIPS_TEXT_START_ADDR, REGISTERS},
+};
+use crate::structs::{Coprocessor0, Coprocessor1, Processor, ProgramState, /*, OperatingSystem*/};
 
 impl Default for Processor {
     fn default() -> Self {
@@ -26,6 +28,15 @@ impl Coprocessor0 {
         Coprocessor0 {
             registers: [0; 32],
             debug_mode: false,
+        }
+    }
+}
+
+impl Coprocessor1 {
+    pub fn new() -> Self {
+        Coprocessor1 {
+            registers: [0.0; 32],
+            control_registers: [FIR_DEFAULT_VALUES, FCSR_DEFAULT_VALUES],
         }
     }
 }

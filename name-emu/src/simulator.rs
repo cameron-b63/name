@@ -1,12 +1,11 @@
-use name_core::debug::exception_handler::handle_exception;
-use name_core::simulator_helpers::{extract_loadable_sections, single_step};
+use name_core::debug::simulator_helpers::extract_loadable_sections;
 
 use name_core::debug::debug_utils::DebuggerState;
 
 use name_core::elf_def::Elf;
 use name_core::elf_utils::extract_lineinfo;
-use name_core::exception::definitions::SourceContext;
-use name_core::structs::{Memory, OperatingSystem, Processor, ProgramState};
+use name_core::exception::exception_handler::handle_exception;
+use name_core::structs::{LineInfo, Memory, OperatingSystem, Processor, ProgramState};
 
 pub fn simulate(elf: Elf, debug: bool, separate_io_channels: bool) -> Result<(), String> {
     // Set up simulation environment from information in ELF

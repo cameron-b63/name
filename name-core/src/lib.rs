@@ -9,4 +9,3 @@ pub mod parse;
 pub mod simulator_helpers;
 pub mod structs;
 pub mod syscalls;
-pub mod traits;
