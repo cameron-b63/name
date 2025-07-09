@@ -101,6 +101,14 @@ impl InstructionMeta {
             Self::Int(info) => &info.implementation,
         }
     }
+
+    /// Get the lookup code of the underlying information
+    pub fn get_lookup(&self) -> u32 {
+        match self {
+            Self::Fp(i) => i.lookup_code(),
+            Self::Int(i) => i.lookup_code(),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]

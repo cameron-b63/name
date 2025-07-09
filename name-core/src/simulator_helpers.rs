@@ -7,17 +7,17 @@ use crate::elf_utils::find_target_section_index;
 
 use crate::elf_def::Elf;
 use crate::exception::definitions::{ExceptionType, SourceContext};
-use crate::instruction::information::InstructionInformation;
-use crate::instruction::instruction_set::INSTRUCTION_SET;
+use crate::instruction::instruction_table::INSTRUCTION_TABLE;
+use crate::instruction::InstructionMeta;
 use crate::structs::{LineInfo, ProgramState};
 
 /// Hashmap to lookup instructions based on their lookup code. Used in the "decode"
 /// portion of the Von Neumann fetch-decode-execute cycle.
-pub static INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static InstructionInformation>> =
+pub static INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static InstructionMeta>> =
     LazyLock::new(|| {
-        INSTRUCTION_SET
+        INSTRUCTION_TABLE
             .iter()
-            .map(|instr| (instr.lookup_code(), instr))
+            .map(|(_mnemonic, info)| (info.get_lookup(), info))
             .collect()
     });
 
@@ -27,6 +27,7 @@ pub fn single_step(_source_context: &SourceContext, program_state: &mut ProgramS
         .memory
         .allows_execution_of(program_state.cpu.pc)
     {
+        program_state.cpu.pc += MIPS_ADDRESS_ALIGNMENT; // Bugfix since set_exception expects pre-incremented PC
         program_state.set_exception(ExceptionType::AddressExceptionLoad);
         return;
     }
@@ -39,6 +40,8 @@ pub fn single_step(_source_context: &SourceContext, program_state: &mut ProgramS
     let instr_info = match INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
         Some(info) => info,
         None => {
+            program_state.cpu.pc += MIPS_ADDRESS_ALIGNMENT; // Bugfix since set_exception expects pre-incremented PC
+            dbg!(raw_instruction);
             program_state.set_exception(ExceptionType::ReservedInstruction);
             return;
         }
@@ -50,9 +53,9 @@ pub fn single_step(_source_context: &SourceContext, program_state: &mut ProgramS
     if false
     /* Allowing for some later verbose mode */
     {
-        eprintln!("Executing {}", instr_info.mnemonic);
+        eprintln!("Executing {}", instr_info.get_mnemonic());
     }
-    let _ = (instr_info.implementation)(program_state, raw_instruction);
+    let _ = (instr_info.get_implementation())(program_state, raw_instruction);
 
     // The $0 register should never have been permanently changed. Don't let it remain changed.
 
