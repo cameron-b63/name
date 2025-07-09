@@ -1,11 +1,10 @@
 // use std::os;
 
 use crate::{
-    constants::{/*MIPS_ADDRESS_ALIGNMENT,*/ REGISTERS},
-    // exception::definitions::ExceptionType,
+    constants::REGISTERS,
     dbprintln,
-    // structs::Register,
-    structs::{LineInfo, OperatingSystem, ProgramState},
+    exception::definitions::SourceContext,
+    structs::{OperatingSystem, ProgramState},
 };
 
 use crate::debug::debug_utils::{db_step, DebuggerState};
@@ -19,14 +18,14 @@ use crate::debug::debug_utils::{db_step, DebuggerState};
 
 /// Executes program normally until otherwise noted. Invoked by "r" or "c" in the CLI.
 pub fn continuously_execute(
-    lineinfo: &Vec<LineInfo>,
+    source_context: &SourceContext,
     program_state: &mut ProgramState,
     os: &mut OperatingSystem,
     debugger_state: &mut DebuggerState,
 ) -> Result<(), String> {
     // TODO: make a reinitializer
     while program_state.should_continue_execution {
-        match db_step(lineinfo, program_state, os, debugger_state) {
+        match db_step(&source_context, program_state, os, debugger_state) {
             Ok(_) => continue,
             Err(e) => return Err(e),
         }
@@ -36,22 +35,22 @@ pub fn continuously_execute(
 
 /// Lists the text surrounding a given line number. Invoked by "l" in the CLI.
 pub fn list_text(
-    lineinfo: &Vec<LineInfo>,
+    source_context: &SourceContext,
     debugger_state: &mut DebuggerState,
     db_args: &Vec<String>,
 ) -> Result<(), String> {
     if db_args.len() == 1 {
-        debugger_state.list_lines(lineinfo, debugger_state.global_list_loc);
+        debugger_state.list_lines(&source_context, debugger_state.global_list_loc);
         Ok(())
     } else if db_args.len() == 2 {
         if db_args[1] == "all" {
-            for line in lineinfo {
+            for line in &source_context.lineinfo {
                 dbprintln!(
                     debugger_state.sioc,
                     "{:>3} #{:08x}  {}",
                     line.line_number,
                     line.start_address,
-                    line.content
+                    line.get_content(&source_context.source_filenames)
                 );
             }
             Ok(())
@@ -63,10 +62,10 @@ pub fn list_text(
                     ));
                 }
                 Ok(lnum) => {
-                    if lnum > lineinfo.len() {
+                    if lnum > source_context.lineinfo.len() {
                         return Err(format!("{} out of bounds of program.", lnum));
                     } else {
-                        debugger_state.list_lines(lineinfo, lnum);
+                        debugger_state.list_lines(&source_context, lnum);
                     }
                 }
             };

@@ -1,5 +1,3 @@
-use super::expandables::ExpansionFn;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum LineComponent {
     Mnemonic(String),
@@ -10,10 +8,4 @@ pub enum LineComponent {
     Directive(String),
     DoubleQuote(String),
     Colon,
-}
-
-#[derive(Debug)]
-pub(crate) struct PseudoInstruction {
-    pub(crate) mnemonic: &'static str,
-    pub(crate) expand: ExpansionFn,
 }

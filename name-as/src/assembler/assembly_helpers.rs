@@ -3,18 +3,16 @@ use name_core::{
     instruction::{
         information::{ArgumentType, InstructionInformation},
         instruction_table::INSTRUCTION_TABLE,
+        pseudo_instruction_set::{PseudoInstruction, PSEUDO_INSTRUCTION_SET},
         InstructionMeta,
     },
     parse::parse::AstKind,
     structs::Symbol,
 };
 
-use crate::definitions::{
-    pseudo_instructions::PSEUDO_INSTRUCTION_SET,
-    structs::{LineComponent, PseudoInstruction},
-};
-
 use std::collections::HashMap;
+
+use crate::definitions::structs::LineComponent;
 
 use super::assembler::Assembler;
 

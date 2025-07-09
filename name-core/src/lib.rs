@@ -6,5 +6,6 @@ pub mod exception;
 pub mod implementations;
 pub mod instruction;
 pub mod parse;
+pub mod simulator_helpers;
 pub mod structs;
 pub mod syscalls;

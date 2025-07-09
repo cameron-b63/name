@@ -4,8 +4,11 @@ use name_core::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
     instruction::{
-        instruction_table::INSTRUCTION_TABLE, AssembleResult, ErrorKind, InstructionMeta,
-        RawInstruction,
+        pseudo_instruction_set::PseudoInstruction,
+        {
+            instruction_table::INSTRUCTION_TABLE, AssembleResult, ErrorKind, InstructionMeta,
+            RawInstruction,
+        },
     },
     parse::{
         parse::{Ast, AstKind},
@@ -17,8 +20,6 @@ use name_core::{
 use crate::assembler::assemble_instruction::assemble_instruction;
 
 use crate::assembler::assembly_helpers::generate_pseudo_instruction_hashmap;
-
-use crate::definitions::structs::PseudoInstruction;
 
 // This file contains the struct definition and extracted functions used in the assembler_logic file. There was far too much inlined, so I have extracted it.
 

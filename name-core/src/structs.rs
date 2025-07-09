@@ -2,7 +2,8 @@
 /// It's gonna be quite a few definitions, so buckle up.
 use std::{
     fmt,
-    io::{stdin, stdout, Stdin, Stdout, Write},
+    fs::File,
+    io::{stdin, stdout, Read, Stdin, Stdout, Write},
     str::FromStr,
 };
 
@@ -13,7 +14,10 @@ use crate::{
     },
     dbprint, dbprintln,
     debug::{debug_utils::*, debugger_methods::* /* implementations::* */},
-    exception::{constants::EXCEPTION_BEING_HANDLED, definitions::ExceptionType},
+    exception::{
+        constants::EXCEPTION_BEING_HANDLED,
+        definitions::{ExceptionType, SourceContext},
+    },
     syscalls::*,
 };
 
@@ -517,9 +521,9 @@ pub enum Section {
 }
 
 /// The definition for section .line
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct LineInfo {
-    pub content: String,
+    pub file_table_index: u32,
     pub line_number: u32,
     pub start_address: u32,
     pub end_address: u32,
@@ -528,14 +532,45 @@ pub struct LineInfo {
 /// For serializing lineinfo to ELF
 impl LineInfo {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = self.content.as_bytes().to_vec();
-        bytes.push(b'\0');
+        let mut bytes = Vec::new();
 
+        bytes.extend_from_slice(&self.file_table_index.to_be_bytes());
         bytes.extend_from_slice(&self.line_number.to_be_bytes());
         bytes.extend_from_slice(&self.start_address.to_be_bytes());
         bytes.extend_from_slice(&self.end_address.to_be_bytes());
 
         bytes
+    }
+
+    /// Get the line content pointed to by this LineInfo.
+    /// If the indicated file cannot be opened, an empty string is returned.
+    // I considered using a Result to be improper, as the source file being
+    // inaccessible is a fairly common case (i.e. sharing only compiled output).
+    pub fn get_content(&self, filenames: &Vec<String>) -> String {
+        // This should be super easy, just utilizing the index to attempt to read from file.
+        if self.file_table_index as usize > filenames.len() {
+            return String::new();
+        }
+        let target_filename = filenames[self.file_table_index as usize].clone();
+
+        // Attempt to open the target file
+        let mut target_file = match File::open(target_filename) {
+            Ok(f) => f,
+            Err(_) => return String::new(),
+        };
+
+        // Attempt to read target file content to string
+        let mut contents: String = String::new();
+        match target_file.read_to_string(&mut contents) {
+            Ok(_) => {}
+            Err(_) => return String::new(),
+        };
+
+        // Find the requested line to read
+        let target_line_content =
+            contents.lines().collect::<Vec<&str>>()[(self.line_number-1) as usize];
+
+        return String::from(target_line_content);
     }
 }
 
@@ -578,7 +613,7 @@ impl OperatingSystem {
     pub fn handle_breakpoint(
         &mut self,
         program_state: &mut ProgramState,
-        lineinfo: &Vec<LineInfo>,
+        source_context: &SourceContext,
         debugger_state: &mut DebuggerState,
     ) -> () {
         /* Needs to do the following:
@@ -618,7 +653,7 @@ impl OperatingSystem {
         if program_state.cp0.is_debug_mode() {
             // terminate existing debugger process????
             // what
-            match self.cli_debugger(lineinfo, program_state, debugger_state) {
+            match self.cli_debugger(source_context, program_state, debugger_state) {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("{e}");
@@ -634,7 +669,7 @@ impl OperatingSystem {
     // Pass control to the user upon hitting a breakpoint
     pub fn cli_debugger(
         &mut self,
-        lineinfo: &Vec<LineInfo>,
+        source_context: &SourceContext,
         program_state: &mut ProgramState,
         debugger_state: &mut DebuggerState,
     ) -> Result<(), String> {
@@ -668,15 +703,21 @@ impl OperatingSystem {
                 "q" => return Ok(()),
                 "exit" => return Ok(()),
                 "quit" => return Ok(()),
-                "r" => match continuously_execute(lineinfo, program_state, self, debugger_state) {
-                    Ok(_) => continue,
-                    Err(e) => eprintln!("{e}"),
-                },
-                "c" => match continuously_execute(lineinfo, program_state, self, debugger_state) {
-                    Ok(_) => continue,
-                    Err(e) => eprintln!("{e}"),
-                },
-                "s" => match db_step(lineinfo, program_state, self, debugger_state) {
+                "r" => {
+                    match continuously_execute(source_context, program_state, self, debugger_state)
+                    {
+                        Ok(_) => continue,
+                        Err(e) => eprintln!("{e}"),
+                    }
+                }
+                "c" => {
+                    match continuously_execute(source_context, program_state, self, debugger_state)
+                    {
+                        Ok(_) => continue,
+                        Err(e) => eprintln!("{e}"),
+                    }
+                }
+                "s" => match db_step(source_context, program_state, self, debugger_state) {
                     Ok(_) => continue,
                     Err(e) => {
                         if e == "Breakpoint reached." {
@@ -686,7 +727,7 @@ impl OperatingSystem {
                         }
                     }
                 },
-                "l" => match list_text(lineinfo, debugger_state, &db_args) {
+                "l" => match list_text(source_context, debugger_state, &db_args) {
                     Ok(_) => continue,
                     Err(e) => eprintln!("{e}"),
                 },
@@ -706,7 +747,8 @@ impl OperatingSystem {
                     Ok(_) => continue,
                     Err(e) => eprintln!("{e}"),
                 },
-                "b" => match debugger_state.add_breakpoint(lineinfo, &db_args, program_state) {
+                "b" => match debugger_state.add_breakpoint(source_context, &db_args, program_state)
+                {
                     Ok(_) => continue,
                     Err(e) => eprintln!("{e}"),
                 },

@@ -1,19 +1,19 @@
 use std::{collections::HashMap, sync::LazyLock};
-// use std::io::{self, Write};
-
-// use crate::debug::debugger_methods::*;
 
 use crate::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_TEXT_START_ADDR},
-    debug::fetch::fetch,
-    exception::{definitions::ExceptionType, exception_handler::handle_exception},
+    exception::{
+        definitions::{ExceptionType, SourceContext},
+        exception_handler::handle_exception,
+    },
     instruction::{
         fp_instruction_set::FP_INSTRUCTION_SET,
         information::{FpInstructionInformation, InstructionInformation},
         instruction_set::INSTRUCTION_SET,
         InstructionMeta, RawInstruction,
     },
-    structs::{LineInfo, OperatingSystem, ProgramState},
+    simulator_helpers::single_step,
+    structs::{OperatingSystem, ProgramState},
 };
 
 static INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static InstructionInformation>> =
@@ -54,68 +54,11 @@ macro_rules! dbprintln {
     };
 }
 
-pub fn single_step(_lineinfo: &Vec<LineInfo>, program_state: &mut ProgramState) -> () {
-    if !program_state
-        .memory
-        .allows_execution_of(program_state.cpu.pc)
-    {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    // check if there's a breakpoint before instruction on the line is executed
-    // TODO: implement break instruction. check after fetch.
-
-    // Fetch
-    let raw_instruction = fetch(program_state);
-    let instr_info: InstructionMeta;
-
-    if raw_instruction.is_floating() {
-        instr_info = match FP_INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
-            Some(info) => InstructionMeta::Fp(info),
-            None => {
-                program_state.set_exception(ExceptionType::ReservedInstruction);
-                return;
-            }
-        };
-    } else {
-        instr_info = match INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
-            Some(info) => InstructionMeta::Int(info),
-            None => {
-                program_state.set_exception(ExceptionType::ReservedInstruction);
-                return;
-            }
-        };
-    }
-
-    program_state.cpu.pc += MIPS_ADDRESS_ALIGNMENT;
-
-    // Execute the instruction; program_state is modified.
-    match option_env!("NAME_TRACE")
-    /* Allowing for verbose mode */
-    {
-        Some("0") => (),
-        Some(_) => {
-            eprintln!(
-                "[+] Executing {}@0x{:x} | 0x{:x}",
-                instr_info.get_mnemonic(),
-                program_state.cpu.pc - MIPS_ADDRESS_ALIGNMENT,
-                raw_instruction.raw,
-            );
-        },
-        None => (),
-    }
-    let _ = (instr_info.get_implementation())(program_state, raw_instruction);
-
-    // The $0 register should never have been permanently changed. Don't let it remain changed.
-
-    program_state.cpu.general_purpose_registers[0] = 0;
-}
-
 /// Executes only the next line of code. Invoked by "s" in the CLI.
+/// Essentially just a wrapper over single_step that contains additional debugger context.
 // Also called by continuously_execute
 pub fn db_step(
-    lineinfo: &Vec<LineInfo>,
+    source_context: &SourceContext,
     program_state: &mut ProgramState,
     os: &mut OperatingSystem,
     debugger_state: &mut DebuggerState,
@@ -199,12 +142,12 @@ pub fn db_step(
         }
     }
 
-    single_step(lineinfo, program_state);
+    single_step(&source_context, program_state);
     if program_state.is_exception() {
         // todo!("Handle exception");
         // return Err("exceptionnnnnnnnn".to_string())
         if program_state.cp0.get_exc_code() != ExceptionType::Breakpoint.into() {
-            handle_exception(program_state, os, lineinfo, debugger_state);
+            handle_exception(program_state, os, &source_context, debugger_state);
         } else {
             return Err("Breakpoint reached.".to_string());
         }

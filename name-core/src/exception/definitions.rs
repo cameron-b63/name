@@ -2,6 +2,24 @@
 
 // The implementation here was derived entirely from this document: https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00090-2B-MIPS32PRA-AFP-06.02.pdf
 
+use crate::structs::LineInfo;
+
+/// SourceContext contains the information from section .line for retrieving source context in exceptions.
+#[derive(Debug)]
+pub struct SourceContext {
+    pub lineinfo: Vec<LineInfo>,
+    pub source_filenames: Vec<String>,
+}
+
+impl SourceContext {
+    pub fn new(lineinfo: Vec<LineInfo>, source_filenames: Vec<String>) -> Self {
+        Self {
+            lineinfo,
+            source_filenames,
+        }
+    }
+}
+
 // This enum contains all the exceptions we could generate.
 #[derive(Debug)]
 pub enum ExceptionType {

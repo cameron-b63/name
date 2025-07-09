@@ -1,10 +1,11 @@
 // Utilities to assemble to ELF.
-
+use std::process::exit;
 // Imports
 use std::{fs, io::Write, path::PathBuf, vec::Vec};
 
 use crate::constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR};
 use crate::elf_def::*;
+use crate::exception::definitions::SourceContext;
 use crate::structs::{LineInfo, Section, Symbol, Visibility}; // Used for ELF sections
 
 // Macros - had to learn somehow!
@@ -596,7 +597,7 @@ fn get_string_from_strtab(strtab: &Vec<u8>, offset: u32) -> Option<&str> {
     std::str::from_utf8(&strtab[start..start + end]).ok()
 }
 
-pub fn extract_lineinfo(elf: &Elf) -> Vec<LineInfo> {
+pub fn extract_lineinfo(elf: &Elf) -> SourceContext {
     let shstrtab = &elf.sections[elf.file_header.e_shstrndx as usize - 1];
     let idx = match find_target_section_index(&elf.section_header_table, shstrtab, ".line") {
         // Absolute wizard shit going on here.
@@ -663,44 +664,90 @@ impl Elf {
     }
 }
 
-fn deserialize_line_info(data: &Vec<u8>) -> Vec<LineInfo> {
+/// Serialized line information should follow this format:
+/// file name table
+/// serialized LineInfo (indexes table)
+pub fn create_serialized_line_information(
+    line_information: &Vec<LineInfo>,
+    file_names: &Vec<PathBuf>,
+) -> Vec<u8> {
+    // This will be the output vector, a u8 byte stream.
+    let mut bytes: Vec<u8> = vec![];
+
+    // First, write the number of files in the table.
+    bytes.extend_from_slice(&(file_names.len() as u32).to_be_bytes());
+
+    // Write the file names to a new Vec<u8> as bytes, null-terminated.
+    for file_name in file_names.iter() {
+        let checked_file_name: &str = match file_name.to_str() {
+            Some(s) => s,
+            None => {
+                eprintln!(
+                    "Failed to serialize filename {:?} to section .line",
+                    file_name
+                );
+                exit(1);
+            }
+        };
+        bytes.extend(checked_file_name.as_bytes());
+        bytes.push(b'\0');
+    }
+
+    // Map the lineinfo to a bytestream and append it.
+    bytes.extend(line_information.iter().flat_map(|info| info.to_bytes()));
+
+    // Return bytes
+    bytes
+}
+
+pub fn deserialize_line_info(data: &Vec<u8>) -> SourceContext {
     let mut result = Vec::new();
     let mut cursor = &data[..];
 
-    while !cursor.is_empty() {
-        // Find the null terminator (0 byte) to extract the string
-        if let Some(pos) = cursor.iter().position(|&c| c == 0) {
-            let content_bytes = &cursor[..pos];
-            let content = String::from_utf8_lossy(content_bytes).to_string();
+    // Read the file table
+    // Find out how many names are in the table
+    let num_of_filenames = u32::from_be_bytes(cursor[0..4].try_into().unwrap());
+    cursor = &cursor[4..];
 
-            // Move cursor past the null terminator and string
-            cursor = &cursor[pos + 1..];
+    // Collect filenames from table
+    let mut filenames: Vec<String> = vec![];
+    for _ in 0..num_of_filenames {
+        let mut found_string: String = String::new();
 
-            // Ensure we have at least 12 bytes remaining for three u32 values
-            if cursor.len() < 12 {
-                break;
-            }
-
-            // Read the u32 values
-            let line_number = u32::from_be_bytes(cursor[0..4].try_into().unwrap());
-            let start_address = u32::from_be_bytes(cursor[4..8].try_into().unwrap());
-            let end_address = u32::from_be_bytes(cursor[8..12].try_into().unwrap());
-
-            // Move cursor past the u32 values
-            cursor = &cursor[12..];
-
-            // Add the deserialized LineInfo to the result
-            result.push(LineInfo {
-                content,
-                line_number,
-                start_address,
-                end_address,
-            });
-        } else {
-            // If there's no null terminator found, stop processing
-            break;
+        while cursor[0] != b'\0' {
+            found_string.push(cursor[0] as char);
+            cursor = &cursor[1..];
         }
+
+        // Consume the null terminator
+        cursor = &cursor[1..];
+
+        filenames.push(found_string);
     }
 
-    result
+    while !cursor.is_empty() {
+        // Ensure we have at least 16 bytes remaining for four u32 values
+        if cursor.len() < 16 {
+            break;
+        }
+
+        // Read the u32 values
+        let file_table_index = u32::from_be_bytes(cursor[0..4].try_into().unwrap());
+        let line_number = u32::from_be_bytes(cursor[4..8].try_into().unwrap());
+        let start_address = u32::from_be_bytes(cursor[8..12].try_into().unwrap());
+        let end_address = u32::from_be_bytes(cursor[12..16].try_into().unwrap());
+
+        // Move cursor past the u32 values
+        cursor = &cursor[16..];
+
+        // Add the deserialized LineInfo to the result
+        result.push(LineInfo {
+            file_table_index,
+            line_number,
+            start_address,
+            end_address,
+        });
+    }
+
+    return SourceContext::new(result, filenames);
 }

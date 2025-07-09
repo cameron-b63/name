@@ -2,11 +2,11 @@ use std::process::exit;
 
 use crate::{
     debug::debug_utils::DebuggerState,
-    exception::definitions::ExceptionType,
-    structs::{LineInfo, OperatingSystem, ProgramState},
+    exception::definitions::{ExceptionType, SourceContext},
+    structs::{OperatingSystem, ProgramState},
 };
 
-use crate::debug::simulator_helpers::generate_err;
+use crate::simulator_helpers::generate_err;
 
 /// The exception handler is invoked whenever an exception has occurred.
 /// Some common exceptions include breakpoints, syscalls, and arithmetic overflow.
@@ -14,7 +14,7 @@ use crate::debug::simulator_helpers::generate_err;
 pub fn handle_exception(
     program_state: &mut ProgramState,
     os: &mut OperatingSystem,
-    lineinfo: &Vec<LineInfo>,
+    source_context: &SourceContext,
     debugger_state: &mut DebuggerState,
 ) {
     // In order to invoke this function, certain values (like exception_level == 1) are already assumed.
@@ -32,16 +32,16 @@ pub fn handle_exception(
     match exception_type {
         ExceptionType::AddressExceptionLoad => {
             // TODO: Detect difference between instructions like bad lw and bad/misaligned pc
-            eprintln!("{}", generate_err(lineinfo, epc, "Illegal address provided for load/fetch; misaligned, unreachable, or unowned address."));
+            eprintln!("{}", generate_err(source_context, epc, "Illegal address provided for load/fetch; misaligned, unreachable, or unowned address."));
             exit(0);
         }
         ExceptionType::AddressExceptionStore => {
-            eprintln!("{}", generate_err(lineinfo, epc, "Illegal address provided on store operation; misaligned, unreachable, or unowned address."));
+            eprintln!("{}", generate_err(source_context, epc, "Illegal address provided on store operation; misaligned, unreachable, or unowned address."));
             exit(0);
         }
         ExceptionType::BusFetch => {
             eprintln!("{}", generate_err(
-                lineinfo,
+                source_context,
                 epc,
                 "Failed to interpret instruction as word; Unrecognized bytes in ELF .text space.",
             ));
@@ -50,7 +50,11 @@ pub fn handle_exception(
         ExceptionType::BusLoadStore => {
             eprintln!(
                 "{}",
-                generate_err(lineinfo, epc, "Failed to store data in given address.")
+                generate_err(
+                    source_context,
+                    epc,
+                    "Failed to store data in given address."
+                )
             );
             exit(0);
         }
@@ -59,7 +63,11 @@ pub fn handle_exception(
             if let Err(e) = os.handle_syscall(program_state) {
                 panic!(
                     "{}",
-                    generate_err(lineinfo, epc, &format!("Failed to handle a syscall: {e}"))
+                    generate_err(
+                        source_context,
+                        epc,
+                        &format!("Failed to handle a syscall: {e}")
+                    )
                 )
             }
         }
@@ -67,7 +75,7 @@ pub fn handle_exception(
             // Invoke the breakpoint handler on program state and lineinfo
             if program_state.cp0.is_debug_mode() {
                 // debugger is running.
-                os.handle_breakpoint(program_state, lineinfo, debugger_state);
+                os.handle_breakpoint(program_state, source_context, debugger_state);
             } else {
                 panic!("Break not recognized outside of debug mode. To run in debug mode, pass -d as a command line argument.");
             }
@@ -76,7 +84,7 @@ pub fn handle_exception(
             eprintln!(
                 "{}",
                 generate_err(
-                    lineinfo,
+                    source_context,
                     epc,
                     "Unrecognized bytes in ELF at program counter.",
                 )
@@ -87,7 +95,7 @@ pub fn handle_exception(
             eprintln!(
                 "{}",
                 generate_err(
-                    lineinfo,
+                    source_context,
                     epc,
                     "Attempted to access a coprocessor without correct operating mode.",
                 )
@@ -99,7 +107,7 @@ pub fn handle_exception(
             eprintln!(
                 "{}",
                 generate_err(
-                    lineinfo,
+                    source_context,
                     epc,
                     "Arithmetic overflow, underflow, or divide by zero detected on instruction.",
                 )
@@ -113,7 +121,7 @@ pub fn handle_exception(
             // Will be more useful once cp1 is implemented
             eprintln!(
                 "{}",
-                generate_err(lineinfo, epc, "Floating point exception occurred.")
+                generate_err(source_context, epc, "Floating point exception occurred.")
             );
             exit(0);
         }
