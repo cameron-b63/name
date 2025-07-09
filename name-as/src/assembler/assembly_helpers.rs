@@ -3,6 +3,7 @@ use name_core::{
     instruction::{
         information::{ArgumentType, InstructionInformation},
         instruction_table::INSTRUCTION_TABLE,
+        pseudo_instruction_set::{PseudoInstruction, PSEUDO_INSTRUCTION_SET},
         InstructionMeta,
     },
     parse::parse::AstKind,

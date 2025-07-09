@@ -70,23 +70,7 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
                 TokenKind::Directive => match self.sess.get_src_str(&tok.src_span) {
                     // For now, we will assume that included files DO NOT contain program text.
                     // This will need to be fixed later.
-                    ".include" => {
-                        let src_span = &cursor.next_if(TokenKind::String).unwrap().src_span;
-                        let src = self.sess.get_src_str(src_span);
-                        let file_name = &src[1..src.len() - 1];
-
-                        let file = match self.sess.add_file(self.sess.dir.join(file_name)) {
-                            Ok(f) => f,
-                            Err(e) => panic!("{e}"), // TODO: More graceful handling the way it's supposed to be. Pushed back for now because I know preprocessor is still in works.
-                        };
-
-                        let mut lexer = Lexer::new(&file.str, file.src_span.pos);
-                        //Todo: handle errors
-                        let (_errs, cursor) = lexer.lex();
-
-                        let pre = self.preprocess(cursor);
-                        tokens.extend(pre.toks);
-                    }
+                    ".include" => {}
                     // If an eqv was declared, add it to the eqvs list
                     ".eqv" => {
                         let src_span = &expandable_pass_cursor
@@ -245,7 +229,14 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
                         let src = self.sess.get_src_str(src_span);
                         let file_name = &src[1..src.len() - 1];
 
-                        let file = self.sess.add_file(self.sess.dir.join(file_name));
+                        let file = match self.sess.add_file(self.sess.dir.join(file_name)) {
+                            Ok(f) => f,
+                            // If an error occurred in opening file, fix it.
+                            Err(e) => {
+                                self.sess.report_error(&e.to_string(), src_span);
+                                exit(1);
+                            }
+                        };
 
                         // Create mini-lexer to handle included file
                         let mut lexer = Lexer::new(&file.str, file.src_span.pos);

@@ -2,8 +2,8 @@ use std::process::exit;
 
 use crate::{
     debug::debug_utils::DebuggerState,
-    exception::definitions::ExceptionType,
-    structs::{LineInfo, OperatingSystem, ProgramState},
+    exception::definitions::{ExceptionType, SourceContext},
+    structs::{OperatingSystem, ProgramState},
 };
 
 use crate::simulator_helpers::generate_err;
@@ -32,16 +32,16 @@ pub fn handle_exception(
     match exception_type {
         ExceptionType::AddressExceptionLoad => {
             // TODO: Detect difference between instructions like bad lw and bad/misaligned pc
-            eprintln!("{}", generate_err(lineinfo, epc, "Illegal address provided for load/fetch; misaligned, unreachable, or unowned address."));
+            eprintln!("{}", generate_err(source_context, epc, "Illegal address provided for load/fetch; misaligned, unreachable, or unowned address."));
             exit(0);
         }
         ExceptionType::AddressExceptionStore => {
-            eprintln!("{}", generate_err(lineinfo, epc, "Illegal address provided on store operation; misaligned, unreachable, or unowned address."));
+            eprintln!("{}", generate_err(source_context, epc, "Illegal address provided on store operation; misaligned, unreachable, or unowned address."));
             exit(0);
         }
         ExceptionType::BusFetch => {
             eprintln!("{}", generate_err(
-                lineinfo,
+                source_context,
                 epc,
                 "Failed to interpret instruction as word; Unrecognized bytes in ELF .text space.",
             ));

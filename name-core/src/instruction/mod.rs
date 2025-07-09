@@ -1,5 +1,7 @@
+pub mod expandables;
 pub mod fp_implementations;
 pub mod fp_instruction_set;
+pub mod helpers;
 pub mod implementation;
 pub mod implementation_helpers;
 pub mod information;

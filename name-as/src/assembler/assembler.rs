@@ -4,9 +4,12 @@ use name_core::{
     constants::{MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_TEXT_START_ADDR},
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
     instruction::{
-        {instruction_table::INSTRUCTION_TABLE, AssembleResult, ErrorKind, InstructionMeta,
-        RawInstruction,
-    }, pseudo_instruction_set::PseudoInstruction},
+        pseudo_instruction_set::PseudoInstruction,
+        {
+            instruction_table::INSTRUCTION_TABLE, AssembleResult, ErrorKind, InstructionMeta,
+            RawInstruction,
+        },
+    },
     parse::{
         parse::{Ast, AstKind},
         span::Span,

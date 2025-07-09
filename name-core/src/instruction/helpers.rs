@@ -1,4 +1,4 @@
-use crate::instruction::instruction_set::INSTRUCTION_TABLE;
+use crate::instruction::instruction_table::INSTRUCTION_TABLE;
 
 /// This function determines if a given string is a standard instruction.
 pub fn is_standard_instruction(passed_ident: &str) -> bool {

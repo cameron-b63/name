@@ -14,6 +14,7 @@ pub const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
     PseudoInstruction {
         mnemonic: "b",
         expand: expand_b,
+        lines_expanded_to: 1,
     },
     PseudoInstruction {
         mnemonic: "bnez",
@@ -43,5 +44,6 @@ pub const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
     PseudoInstruction {
         mnemonic: "s.d",
         expand: expand_s_d,
+        lines_expanded_to: 1,
     },
 ];

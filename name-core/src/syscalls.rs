@@ -41,7 +41,8 @@ pub fn sys_print_double<W: Write>(
     program_state: &mut ProgramState,
     sys: &mut W,
 ) -> Result<(), String> {
-    let bits: u64 = ((program_state.cp1.registers[F12 as usize].to_bits() as u64) << 32) | program_state.cp1.registers[F13 as usize].to_bits() as u64;
+    let bits: u64 = ((program_state.cp1.registers[F12 as usize].to_bits() as u64) << 32)
+        | program_state.cp1.registers[F13 as usize].to_bits() as u64;
     let to_print: f64 = f64::from_bits(bits);
     write!(sys, "{}", to_print).map_err(|_| "Failed to read")?;
     sys.flush().map_err(|_| "Failed to flush sys".to_string())
