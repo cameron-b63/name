@@ -90,6 +90,7 @@ pub fn extract_loadable_sections(elf: &Elf) -> (Vec<u8>, Vec<u8>) {
 ///
 ///  - An error occurred.
 pub fn generate_err(source_context: &SourceContext, address: u32, message: &str) -> String {
+    // dbg!(&source_context.lineinfo[0..80]);
     // Perform an address-based search for the correct line info
     let found_lineinfo: &LineInfo = match source_context
         .lineinfo
@@ -98,12 +99,13 @@ pub fn generate_err(source_context: &SourceContext, address: u32, message: &str)
     {
         Some(info) => info,
         // If no source_context was found, just give a general message
-        None => return format!("[*] At pc 0x{:8x}:\n - {}", address, message),
+        None => return format!("[*] At pc 0x{:8x} ({}):\n - {}", address, address, message),
     };
 
     // If source_context was retrieved, print a well-formed error message
     return format!(
-        "[*] At pc 0x{:x}:\n - {}: {}\n - {}",
+        "[*] At pc 0x{:x} ({}):\n - {}: {}\n - {}",
+        address,
         address,
         found_lineinfo.line_number,
         found_lineinfo

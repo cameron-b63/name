@@ -669,11 +669,13 @@ impl Elf {
 /// file name table
 /// serialized LineInfo (indexes table)
 pub fn create_serialized_line_information(
-    line_information: Vec<LineInfo>,
-    file_names: Vec<PathBuf>,
+    line_information: &Vec<LineInfo>,
+    file_names: &Vec<PathBuf>,
 ) -> Vec<u8> {
     // This will be the output vector, a u8 byte stream.
     let mut bytes: Vec<u8> = vec![];
+
+    dbg!(&file_names);
 
     // First, write the number of files in the table.
     bytes.extend_from_slice(&(file_names.len() as u32).to_be_bytes());

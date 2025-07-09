@@ -39,7 +39,7 @@ pub fn assemble_file<'sess, 'sess_ref>(
     let ppd = preprocessor.preprocess(toks);
 
     // Go ahead and store section .line content from preprocessor
-    let section_dot_line = preprocessor.serialized_line_information;
+    let section_dot_line = preprocessor.get_serialized_line_information();
 
     // Create a new parser using the preprocessed (expanded) tokens and the file content.
     let mut parser = Parser::new(ppd, session);
@@ -73,9 +73,6 @@ pub fn assemble_file<'sess, 'sess_ref>(
         }
         return Err(());
     }
-
-    // process line info
-    // this was completely obsoleted and must be replaced with spans generated during expansion.
 
     // Return the assembler state.
     Ok(assembler)

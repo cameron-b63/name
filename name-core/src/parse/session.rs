@@ -117,6 +117,11 @@ impl<'a> Session<'a> {
         Ok(file)
     }
 
+    /// Get the parent file of the parser session (presumably first in files directory).
+    pub fn get_parent_file(&self) -> PathBuf {
+        return self.src.files[0].path.clone();
+    }
+
     /// Get the original source content associated with a SrcSpan
     pub fn get_src_str(&self, src_span: &SrcSpan) -> &'a str {
         self.src.get_str(src_span)

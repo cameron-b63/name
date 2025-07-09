@@ -521,7 +521,7 @@ pub enum Section {
 }
 
 /// The definition for section .line
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct LineInfo {
     pub file_table_index: u32,
     pub line_number: u32,
@@ -552,6 +552,7 @@ impl LineInfo {
             return String::new();
         }
         let target_filename = filenames[self.file_table_index as usize].clone();
+        dbg!(&target_filename);
 
         // Attempt to open the target file
         let mut target_file = match File::open(target_filename) {

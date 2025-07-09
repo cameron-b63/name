@@ -4,10 +4,11 @@ use crate::instruction::helpers::is_standard_instruction;
 use crate::instruction::pseudo_instruction_set::PSEUDO_INSTRUCTION_SET;
 use crate::parse::lexer::Lexer;
 use crate::parse::session::Session;
-use crate::parse::span::{Span, SrcSpan};
+use crate::parse::span::Span;
 use crate::parse::token::{Token, TokenCursor, TokenKind};
 use crate::structs::LineInfo;
 use std::collections::{HashMap, VecDeque};
+use std::path::PathBuf;
 use std::process::exit;
 
 /// The preprocessor struct is pretty much an extension of a parser session.
@@ -20,7 +21,10 @@ pub struct Preprocessor<'sess, 'sess_ref> {
     sess: &'sess_ref mut Session<'sess>,
     eqvs: HashMap<&'sess str, Vec<Token>>,
     _expandable_sizes: HashMap<&'sess str, usize>,
-    pub serialized_line_information: Vec<u8>,
+    pub line_information: Vec<LineInfo>,
+    pub filenames: Vec<PathBuf>,
+    pub current_file_index: usize,
+    pub current_file_name: Option<PathBuf>,
 }
 
 impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
@@ -29,7 +33,10 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
             sess,
             eqvs: HashMap::new(),
             _expandable_sizes: HashMap::new(),
-            serialized_line_information: Vec::new(),
+            line_information: Vec::new(),
+            filenames: Vec::new(),
+            current_file_index: 0,
+            current_file_name: None,
         }
     }
 
@@ -118,19 +125,13 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
         let mut last_text: u32 = 0; // Used for proper switching back and forth between .text and .data
         let mut increment_pc_by: u32 = 0; // Tracker for each line to see how much to add to dummy PC (0 if no instruction)
 
-        // Initialize the line information with the current file we were given
-        let file_name = match lineinfo_cursor.peek() {
-            Some(found) => self.sess.src.get_span_details(&found.src_span).0,
-            None => {
-                self.sess.report_error(
-                    "[*] Line info builder found nothing to work with.",
-                    &SrcSpan::default(),
-                );
-                exit(0);
-            }
+        // Initialize the line information with the parent file we were given
+        let file_name = match &self.current_file_name {
+            Some(f) => f,
+            None => &self.sess.get_parent_file(),
         };
 
-        let mut line_information: Vec<LineInfo> = Vec::new();
+        self.filenames.push(file_name.clone());
 
         // Gather the line information
         while let Some(tok) = lineinfo_cursor.next() {
@@ -140,17 +141,14 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
                     // First, make the common case fast and see if token is a normal instruction.
                     if is_standard_instruction(self.sess.get_src_str(&tok.src_span)) {
                         increment_pc_by = 4;
-                        continue;
                     }
-
                     // If it wasn't a standard instruction, it's probably a pesudo instruction.
-                    if let Some(pseudo_instruction_information) = PSEUDO_INSTRUCTION_SET
+                    else if let Some(pseudo_instruction_information) = PSEUDO_INSTRUCTION_SET
                         .iter()
                         .find(|info| info.mnemonic == self.sess.get_src_str(&tok.src_span))
                     {
                         increment_pc_by =
                             4 * pseudo_instruction_information.lines_expanded_to as u32;
-                        continue;
                     }
                 }
                 TokenKind::Directive => {
@@ -173,8 +171,8 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
                 // If the token is a newline, we must update the line number and maybe the dummy program counter too.
                 TokenKind::Newline => {
                     // Add line information to vector
-                    line_information.push(LineInfo {
-                        file_table_index: 1,
+                    self.line_information.push(LineInfo {
+                        file_table_index: self.current_file_index as u32,
                         start_address: dummy_pc,
                         end_address: dummy_pc + increment_pc_by,
                         line_number,
@@ -194,10 +192,6 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
                 }
             }
         }
-
-        // Create serialized line information from collected information
-        self.serialized_line_information =
-            create_serialized_line_information(line_information, vec![file_name.to_path_buf()]);
     }
 
     /// Third pass:
@@ -254,6 +248,8 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
 
                         // Start a new preprocessor on the included file
                         // WARNING: Recursion possible! Please account for this if plausible.
+                        self.current_file_index += 1;
+                        self.current_file_name = Some(PathBuf::from(file_name));
                         let pre = self.preprocess(cursor);
 
                         // This is the part where the lexed content from the included file gets handled.
@@ -276,5 +272,9 @@ impl<'sess, 'sess_ref> Preprocessor<'sess, 'sess_ref> {
         }
 
         tokens
+    }
+
+    pub fn get_serialized_line_information(&mut self) -> Vec<u8> {
+        create_serialized_line_information(&self.line_information, &self.filenames)
     }
 }
