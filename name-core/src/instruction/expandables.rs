@@ -11,6 +11,7 @@ Any errors will clearly have code ID10T on the part of the user attempting to us
 
 pub(crate) type ExpansionFn = fn(Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String>;
 
+// b label
 pub(crate) fn expand_b(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     let target = args[0].clone();
 
@@ -18,10 +19,23 @@ pub(crate) fn expand_b(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstK
 
     Ok(vec![
         // beq $zero, $zero, target
-        ("beq", vec![zero.clone(), zero, target]),
+        ("beq", vec![zero.clone(), zero.clone(), target]),
     ])
 }
 
+// bal label
+pub(crate) fn expand_bal(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
+    let target = args[0].clone();
+
+    let zero = AstKind::Register(Register::Zero);
+
+    Ok(vec![
+        // bgezal $0, offset
+        ("bgezal", vec![zero.clone(), zero.clone(), target])
+    ])
+}
+
+// bnez $rs, label
 pub(crate) fn expand_bnez(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     if args.len() < 2 {
         return Err(format!(" - `bnez` expected 1 argument, got {}", args.len()));
@@ -37,6 +51,7 @@ pub(crate) fn expand_bnez(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<A
     ])
 }
 
+// li $rd, imm
 pub(crate) fn expand_li(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     if args.len() < 2 {
         return Err(format!(" - `li` expected 2 arguments, got {}", args.len()));
@@ -52,6 +67,7 @@ pub(crate) fn expand_li(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<Ast
     ])
 }
 
+// la $rd, label
 pub(crate) fn expand_la(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     if args.len() < 2 {
         return Err(format!(" - `la` expected 2 arguments, got {}", args.len()));
@@ -60,7 +76,6 @@ pub(crate) fn expand_la(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<Ast
     let rd = args[0].clone();
     let label = args[1].clone();
 
-    // Prepare for assembly.
     Ok(vec![
         // lui  $rd, 0
         ("lui", vec![rd.clone(), label.clone()]),
@@ -69,6 +84,8 @@ pub(crate) fn expand_la(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<Ast
     ])
 }
 
+// mv $rd, $rs
+// move $rd, $rs
 pub(crate) fn expand_move(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     if args.len() < 2 {
         return Err(format!(" - `mv` expected 2 arguments, got {}", args.len()));

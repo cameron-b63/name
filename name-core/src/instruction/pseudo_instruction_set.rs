@@ -17,6 +17,11 @@ pub const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
         lines_expanded_to: 1,
     },
     PseudoInstruction {
+        mnemonic: "bal",
+        expand: expand_bal,
+        lines_expanded_to: 1,
+    },
+    PseudoInstruction {
         mnemonic: "bnez",
         expand: expand_bnez,
         lines_expanded_to: 1,
@@ -30,6 +35,11 @@ pub const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
         mnemonic: "la",
         expand: expand_la,
         lines_expanded_to: 2,
+    },
+    PseudoInstruction {
+        mnemonic: "move",
+        expand: expand_move,
+        lines_expanded_to: 1,
     },
     PseudoInstruction {
         mnemonic: "move",

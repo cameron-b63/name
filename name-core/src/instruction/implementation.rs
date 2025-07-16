@@ -1,5 +1,5 @@
 use crate::exception::definitions::ExceptionType;
-use crate::instruction::{IArgs, JArgs, RArgs};
+use crate::instruction::{IArgs, JArgs, RArgs, RegImmIArgs};
 use crate::structs::{
     ProgramState,
     Register::{At, Ra},
@@ -295,6 +295,21 @@ pub fn lui(program_state: &mut ProgramState, args: IArgs) -> () {
     program_state.cpu.general_purpose_registers[args.rt as usize] = (args.imm as u32) << 16;
 }
 
+// 0x14 - beql
+pub fn beql(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("beql");
+}
+
+// 0x16 - blezl
+pub fn blezl(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("blezl")
+}
+
+// 0x17 - bgtl
+pub fn bgtzl(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("bgtzl")
+}
+
 // 0x20 - lb
 pub fn lb(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp: u32 = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
@@ -546,4 +561,61 @@ pub fn sdc1(program_state: &mut ProgramState, args: IArgs) -> () {
         }
         i += 1;
     }
+}
+
+/*
+
+
+  _____  ______ _____ _____ __  __ __  __ 
+ |  __ \|  ____/ ____|_   _|  \/  |  \/  |
+ | |__) | |__ | |  __  | | | \  / | \  / |
+ |  _  /|  __|| | |_ | | | | |\/| | |\/| |
+ | | \ \| |___| |__| |_| |_| |  | | |  | |
+ |_|  \_\______\_____|_____|_|  |_|_|  |_|
+                                          
+                                          
+
+
+*/
+
+// 0x00 - bltz
+pub fn bltz(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
+    todo!("bltz");
+}
+
+// 0x01 - bgez
+pub fn bgez(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
+    todo!("bgez");
+}
+
+// 0x02 - bltzl
+pub fn bltzl(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
+    todo!("bltzl");
+}
+
+// 0x03 - bgezl
+pub fn bgezl(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
+    todo!("bgezl");
+}
+
+// 0x10 - bltzal
+pub fn bltzal(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
+    todo!("bltzal");
+}
+
+
+// 0x11 - bgezal
+pub fn bgezal(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
+    todo!("bgezal");
+}
+
+// 0x12 - bltzall
+pub fn bltzall(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
+    todo!("bltzall");
+}
+
+
+// 0x13 - bgezall
+pub fn bgezall(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
+    todo!("bgezall");
 }

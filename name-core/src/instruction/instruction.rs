@@ -648,3 +648,51 @@ impl From<RawInstruction> for FpRArgs {
         }
     }
 }
+
+// RegImmIArgs
+pub struct RegImmIArgs {
+    pub op_code: u32,
+    pub rs: u32,
+    pub regimm_funct_code: u32,
+    pub imm: u32,
+}
+
+impl RegImmIArgs {
+    pub fn assign_regimm_i_arguments(
+        arguments: Vec<AstKind>,
+        args_to_use: &[ArgumentType],
+    ) -> AssembleResult<Self> {
+        let mut rs = 0;
+        let mut imm = 0;
+
+        for (i, passed) in arguments.into_iter().enumerate() {
+            match args_to_use[i] {
+                ArgumentType::Rs => {
+                    rs = passed.get_register_as_u32().ok_or(ErrorKind::InvalidArgument)? as u32
+                },
+                ArgumentType::Immediate => {
+                    imm = passed.get_immediate().unwrap_or(0);
+                },
+                _ => unreachable!(),
+            }
+        }
+
+        return Ok(Self {
+            op_code: 0, // Will be filled in by caller
+            rs,
+            regimm_funct_code: 0, // Will be filled in by caller
+            imm,
+        });
+    }
+}
+
+impl From<RawInstruction> for RegImmIArgs {
+    fn from(raw: RawInstruction) -> Self {
+        RegImmIArgs {
+            op_code: raw.get_opcode(),
+            rs: raw.get_rs(),
+            regimm_funct_code: raw.get_rt(),
+            imm: raw.get_immediate() as u32,
+        }
+    }
+}

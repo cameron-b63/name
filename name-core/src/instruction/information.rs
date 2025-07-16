@@ -124,6 +124,7 @@ pub enum InstructionType {
     FpCCType,
     FpBranchType,
     FpRType,
+    RegImmIType,
 }
 
 #[derive(Debug, PartialEq)]

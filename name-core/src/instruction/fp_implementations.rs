@@ -20,6 +20,18 @@ use super::{
 
 */
 
+// 0x00 - add.fmt
+
+// 0x00.d - add.d
+pub fn add_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+    todo!("add.d");
+}
+
+// 0x00.s - add.s
+pub fn add_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+    todo!("add.s");
+}
+
 // 0x03 - div.fmt
 
 // 0x03.d - div.d
