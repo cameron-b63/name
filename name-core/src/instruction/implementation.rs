@@ -7,6 +7,20 @@ use crate::structs::{
 
 use super::implementation_helpers::{extract_u64, is_register_aligned, pack_up_u64};
 
+// Special (not sure where to organize):
+// EJTAG exceptions:
+// 0x10/0x1f
+pub fn deret(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("deret");
+}
+
+// Other MIPS cop0 instructions:
+// 0x10/0x18
+// eretnc is in here
+pub fn eret(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("eret");
+}
+
 /*
 
   ______ _    _ _   _  _____ _______
@@ -74,6 +88,16 @@ pub fn syscall(program_state: &mut ProgramState, _args: RArgs) -> () {
 // 0x0D - break
 pub fn break_instr(program_state: &mut ProgramState, _args: RArgs) -> () {
     program_state.set_exception(ExceptionType::Breakpoint);
+}
+
+// 0x1A - div
+pub fn div(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("div");
+}
+
+// 0x1B - divu
+pub fn divu(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("divu");
 }
 
 // 0x20 - add
@@ -300,6 +324,11 @@ pub fn beql(_program_state: &mut ProgramState, _args: IArgs) -> () {
     todo!("beql");
 }
 
+// 0x15 - bnel
+pub fn bnel(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("bnel");
+}
+
 // 0x16 - blezl
 pub fn blezl(_program_state: &mut ProgramState, _args: IArgs) -> () {
     todo!("blezl")
@@ -415,6 +444,10 @@ pub fn sw(program_state: &mut ProgramState, args: IArgs) -> () {
         }
         i += 1;
     }
+}
+
+pub fn cache(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("cache implementation");
 }
 
 // 0x31 - lwc1
@@ -566,14 +599,14 @@ pub fn sdc1(program_state: &mut ProgramState, args: IArgs) -> () {
 /*
 
 
-  _____  ______ _____ _____ __  __ __  __ 
+  _____  ______ _____ _____ __  __ __  __
  |  __ \|  ____/ ____|_   _|  \/  |  \/  |
  | |__) | |__ | |  __  | | | \  / | \  / |
  |  _  /|  __|| | |_ | | | | |\/| | |\/| |
  | | \ \| |___| |__| |_| |_| |  | | |  | |
  |_|  \_\______\_____|_____|_|  |_|_|  |_|
-                                          
-                                          
+
+
 
 
 */
@@ -603,7 +636,6 @@ pub fn bltzal(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
     todo!("bltzal");
 }
 
-
 // 0x11 - bgezal
 pub fn bgezal(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
     todo!("bgezal");
@@ -614,8 +646,57 @@ pub fn bltzall(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
     todo!("bltzall");
 }
 
-
 // 0x13 - bgezall
 pub fn bgezall(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
     todo!("bgezall");
+}
+
+/*
+
+
+   _____ _____  ______ _____ _____          _      ___  
+  / ____|  __ \|  ____/ ____|_   _|   /\   | |    |__ \ 
+ | (___ | |__) | |__ | |      | |    /  \  | |       ) |
+  \___ \|  ___/|  __|| |      | |   / /\ \ | |      / / 
+  ____) | |    | |___| |____ _| |_ / ____ \| |____ / /_ 
+ |_____/|_|    |______\_____|_____/_/    \_\______|____|
+                                                        
+                                                        
+
+
+*/
+
+// 0x20 - clz
+pub fn clz(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("clz");
+}
+
+// 0x21 - clo
+pub fn clo(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("clo");
+}
+
+/*
+
+
+   _____ _____  ______ _____ _____          _      ____  
+  / ____|  __ \|  ____/ ____|_   _|   /\   | |    |___ \ 
+ | (___ | |__) | |__ | |      | |    /  \  | |      __) |
+  \___ \|  ___/|  __|| |      | |   / /\ \ | |     |__ < 
+  ____) | |    | |___| |____ _| |_ / ____ \| |____ ___) |
+ |_____/|_|    |______\_____|_____/_/    \_\______|____/ 
+                                                         
+                                                         
+
+
+*/
+
+// 0x00 - ext (extract bit fields)
+pub fn ext(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("ext");
+}
+
+// 0x04 - ins (insert bit fields)
+pub fn ins(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("ins");
 }

@@ -86,9 +86,10 @@ pub fn assemble_instruction(
                     fp_r.funct = info.funct_code.ok_or(ErrorKind::MissingFunct)?;
                     Ok(RawInstruction::from(fp_r))
                 }
-                InstructionType::RType | InstructionType::IType | InstructionType::JType => {
-                    Err(ErrorKind::WrongInstructionType)?
-                }
+                InstructionType::RType
+                | InstructionType::IType
+                | InstructionType::JType
+                | InstructionType::RegImmIType => Err(ErrorKind::WrongInstructionType)?,
             }
         }
     }

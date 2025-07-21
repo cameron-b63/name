@@ -31,7 +31,7 @@ pub(crate) fn expand_bal(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<As
 
     Ok(vec![
         // bgezal $0, offset
-        ("bgezal", vec![zero.clone(), zero.clone(), target])
+        ("bgezal", vec![zero.clone(), zero.clone(), target]),
     ])
 }
 
@@ -48,6 +48,15 @@ pub(crate) fn expand_bnez(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<A
     Ok(vec![
         // bne $rs, $zero, label
         ("bne", vec![rs, rt, label]),
+    ])
+}
+
+// ehb
+pub(crate) fn expand_ehb(_args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
+    let zero = AstKind::Register(Register::Zero);
+    Ok(vec![
+        // sll $0, $0, 3
+        ("sll", vec![zero.clone(), zero.clone(), AstKind::Immediate(3)]),
     ])
 }
 

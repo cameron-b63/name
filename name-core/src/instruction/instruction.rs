@@ -621,6 +621,11 @@ impl FpRArgs {
                         .get_register_as_u32()
                         .ok_or(ErrorKind::InvalidArgument)? as u32
                 }
+                ArgumentType::Rt => {
+                    fd = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)? as u32
+                }
                 _ => unreachable!(),
             }
         }
@@ -668,11 +673,13 @@ impl RegImmIArgs {
         for (i, passed) in arguments.into_iter().enumerate() {
             match args_to_use[i] {
                 ArgumentType::Rs => {
-                    rs = passed.get_register_as_u32().ok_or(ErrorKind::InvalidArgument)? as u32
-                },
+                    rs = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)? as u32
+                }
                 ArgumentType::Immediate => {
                     imm = passed.get_immediate().unwrap_or(0);
-                },
+                }
                 _ => unreachable!(),
             }
         }

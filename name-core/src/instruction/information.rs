@@ -143,6 +143,8 @@ pub enum ArgumentType {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FpFmt {
     Reserved,
+    ReservedFunctCodeCF,
+    ReservedFunctCodeCT,
     ReservedFunctCodeBC,
     Single,
     Double,
@@ -154,6 +156,8 @@ impl From<FpFmt> for u32 {
     fn from(fmt: FpFmt) -> Self {
         match fmt {
             FpFmt::Reserved => 0,
+            FpFmt::ReservedFunctCodeCF => 2,
+            FpFmt::ReservedFunctCodeCT => 6,
             FpFmt::ReservedFunctCodeBC => 8,
             FpFmt::Single => 16,
             FpFmt::Double => 17,
