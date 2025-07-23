@@ -56,7 +56,10 @@ pub(crate) fn expand_ehb(_args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<A
     let zero = AstKind::Register(Register::Zero);
     Ok(vec![
         // sll $0, $0, 3
-        ("sll", vec![zero.clone(), zero.clone(), AstKind::Immediate(3)]),
+        (
+            "sll",
+            vec![zero.clone(), zero.clone(), AstKind::Immediate(3)],
+        ),
     ])
 }
 

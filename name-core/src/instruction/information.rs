@@ -124,7 +124,9 @@ pub enum InstructionType {
     FpCCType,
     FpBranchType,
     FpRType,
+    FpFourRegister,
     RegImmIType,
+    CopMovRType,
 }
 
 #[derive(Debug, PartialEq)]
@@ -135,6 +137,7 @@ pub enum ArgumentType {
     Fd,
     Fs,
     Ft,
+    Fr,
     Immediate,
     Identifier,
     BranchLabel,
@@ -148,6 +151,16 @@ pub enum FpFmt {
     ReservedFunctCodeBC,
     Single,
     Double,
+}
+
+impl FpFmt {
+    pub fn to_fmt3(&self) -> u32 {
+        match self {
+            FpFmt::Single => 0,
+            FpFmt::Double => 1,
+            _ => 2,
+        }
+    }
 }
 
 // Cast FpFmt to its proper u32 rep, page 115

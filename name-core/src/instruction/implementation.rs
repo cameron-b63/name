@@ -1,5 +1,5 @@
 use crate::exception::definitions::ExceptionType;
-use crate::instruction::{IArgs, JArgs, RArgs, RegImmIArgs};
+use crate::instruction::{CopMovRArgs, IArgs, JArgs, RArgs, RegImmIArgs};
 use crate::structs::{
     ProgramState,
     Register::{At, Ra},
@@ -19,6 +19,11 @@ pub fn deret(_program_state: &mut ProgramState, _args: RArgs) -> () {
 // eretnc is in here
 pub fn eret(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("eret");
+}
+
+// 0x10/mfc0
+pub fn mfc0(_program_state: &mut ProgramState, _args: CopMovRArgs) -> () {
+    todo!("mfc0");
 }
 
 /*
@@ -355,7 +360,18 @@ pub fn lb(program_state: &mut ProgramState, args: IArgs) -> () {
             return;
         }
     };
-    program_state.cpu.general_purpose_registers[args.rt as usize] = return_byte as u32;
+    program_state.cpu.general_purpose_registers[args.rt as usize] = return_byte as i8 as i32 as u32;
+    // explicit sign-extension
+}
+
+// 0x21 - lh
+pub fn lh(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("lh");
+}
+
+// 0x22 - lwl
+pub fn lwl(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("lwl");
 }
 
 // 0x23 - lw
@@ -387,6 +403,36 @@ pub fn lw(program_state: &mut ProgramState, args: IArgs) -> () {
     }
 
     program_state.cpu.general_purpose_registers[args.rt as usize] = result_word;
+}
+
+// 0x24 - lbu
+pub fn lbu(program_state: &mut ProgramState, args: IArgs) -> () {
+    let temp: u32 = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+        + args.imm as i32) as u32;
+
+    if !program_state.memory.allows_read_from(temp) {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+    let return_byte: u8 = match program_state.memory.read_byte(temp) {
+        Ok(b) => b,
+        Err(_) => {
+            program_state.set_exception(ExceptionType::AddressExceptionLoad);
+            return;
+        }
+    };
+    program_state.cpu.general_purpose_registers[args.rt as usize] = (return_byte as u32) & 0xFF;
+    // Clear any sign-extension
+}
+
+// 0x25 - lhu
+pub fn lhu(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("lhu");
+}
+
+// 0x26 - lwr
+pub fn lwr(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("lwr");
 }
 
 // 0x28 - sb
@@ -446,8 +492,14 @@ pub fn sw(program_state: &mut ProgramState, args: IArgs) -> () {
     }
 }
 
+// 0x2f - cache
 pub fn cache(_program_state: &mut ProgramState, _args: IArgs) -> () {
     todo!("cache implementation");
+}
+
+// 0x30 - ll
+pub fn ll(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("ll");
 }
 
 // 0x31 - lwc1
@@ -654,17 +706,57 @@ pub fn bgezall(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
 /*
 
 
-   _____ _____  ______ _____ _____          _      ___  
-  / ____|  __ \|  ____/ ____|_   _|   /\   | |    |__ \ 
- | (___ | |__) | |__ | |      | |    /  \  | |       ) |
-  \___ \|  ___/|  __|| |      | |   / /\ \ | |      / / 
-  ____) | |    | |___| |____ _| |_ / ____ \| |____ / /_ 
- |_____/|_|    |______\_____|_____/_/    \_\______|____|
-                                                        
-                                                        
+   ____  _____   _____ ____  _____  ________   __
+  / __ \|  __ \ / ____/ __ \|  __ \|  ____\ \ / /
+ | |  | | |__) | |   | |  | | |  | | |__   \ V / 
+ | |  | |  ___/| |   | |  | | |  | |  __|   > <  
+ | |__| | |    | |___| |__| | |__| | |____ / . \ 
+  \____/|_|     \_____\____/|_____/|______/_/ \_\
+                                                 
+                                                 
 
 
 */
+
+// 0x00 - lwxc1
+pub fn lwxc1(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("lwxc1");
+}
+
+// 0x01 - ldxc1
+pub fn ldxc1(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("ldxc1");
+}
+
+// 0x05 - luxc1
+pub fn luxc1(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("luxc1");
+}
+
+/*
+
+
+   _____ _____  ______ _____ _____          _      ___
+  / ____|  __ \|  ____/ ____|_   _|   /\   | |    |__ \
+ | (___ | |__) | |__ | |      | |    /  \  | |       ) |
+  \___ \|  ___/|  __|| |      | |   / /\ \ | |      / /
+  ____) | |    | |___| |____ _| |_ / ____ \| |____ / /_
+ |_____/|_|    |______\_____|_____/_/    \_\______|____|
+
+
+
+
+*/
+
+// 0x00 - madd
+pub fn madd(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("madd");
+}
+
+// 0x01 - maddu
+pub fn maddu(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("maddu");
+}
 
 // 0x20 - clz
 pub fn clz(_program_state: &mut ProgramState, _args: RArgs) -> () {
@@ -679,14 +771,14 @@ pub fn clo(_program_state: &mut ProgramState, _args: RArgs) -> () {
 /*
 
 
-   _____ _____  ______ _____ _____          _      ____  
-  / ____|  __ \|  ____/ ____|_   _|   /\   | |    |___ \ 
+   _____ _____  ______ _____ _____          _      ____
+  / ____|  __ \|  ____/ ____|_   _|   /\   | |    |___ \
  | (___ | |__) | |__ | |      | |    /  \  | |      __) |
-  \___ \|  ___/|  __|| |      | |   / /\ \ | |     |__ < 
+  \___ \|  ___/|  __|| |      | |   / /\ \ | |     |__ <
   ____) | |    | |___| |____ _| |_ / ____ \| |____ ___) |
- |_____/|_|    |______\_____|_____/_/    \_\______|____/ 
-                                                         
-                                                         
+ |_____/|_|    |______\_____|_____/_/    \_\______|____/
+
+
 
 
 */

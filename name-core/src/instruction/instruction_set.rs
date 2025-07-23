@@ -292,7 +292,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             alt_args: None,
             relocation_type: None,
         },
-        // I'm ignoring the DI (disable interrupts) instruction 
+        // I'm ignoring the DI (disable interrupts) instruction
         // since I don't even know where to really start.
         // I know for sure that it doesn't really apply to us.
         InstructionInformation {
@@ -344,7 +344,12 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             funct_code: Some(0x00),
             implementation: wrap_imp(implementation::ext),
             instruction_type: InstructionType::RType,
-            args: &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate, ArgumentType::Immediate],
+            args: &[
+                ArgumentType::Rt,
+                ArgumentType::Rs,
+                ArgumentType::Immediate,
+                ArgumentType::Immediate,
+            ],
             alt_args: None,
             relocation_type: None,
         },
@@ -354,7 +359,12 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             funct_code: Some(0x04),
             implementation: wrap_imp(implementation::ins),
             instruction_type: InstructionType::RType,
-            args: &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate, ArgumentType::Immediate],
+            args: &[
+                ArgumentType::Rt,
+                ArgumentType::Rs,
+                ArgumentType::Immediate,
+                ArgumentType::Immediate,
+            ],
             alt_args: None,
             relocation_type: None,
         },
@@ -388,6 +398,9 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             alt_args: Some(&[&[ArgumentType::Rs]]),
             relocation_type: None,
         },
+        // I'm going to purposefully ignore *.HB because
+        // that's some hardware business I won't get to for a long time.
+        // JALX also doesn't apply since we're not including micro MIPS.
         InstructionInformation {
             mnemonic: "jr",
             op_code: 0x00,
@@ -398,6 +411,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             alt_args: None,
             relocation_type: None,
         },
+        // JR.HB is ignored, as stated above.
         InstructionInformation {
             mnemonic: "lb",
             op_code: 0x20,
@@ -411,6 +425,21 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             ]),
             relocation_type: None,
         },
+        // LBE (load byte EVA) doesn't apply to us since we don't have priv. arch.
+        InstructionInformation {
+            mnemonic: "lbu",
+            op_code: 0x24,
+            funct_code: None,
+            implementation: wrap_imp(implementation::lbu),
+            instruction_type: InstructionType::IType,
+            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
+            alt_args: Some(&[
+                &[ArgumentType::Rt, ArgumentType::Rs],
+                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
+            ]),
+            relocation_type: None,
+        },
+        // LBUE (load byte unsigned EVA) doesn't apply.
         InstructionInformation {
             mnemonic: "ldc1",
             op_code: 0x35,
@@ -427,6 +456,58 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             relocation_type: None,
         },
         InstructionInformation {
+            mnemonic: "ldxc1",
+            op_code: 0x13,
+            funct_code: Some(0x01),
+            implementation: wrap_imp(implementation::ldxc1),
+            instruction_type: InstructionType::RType,
+            args: &[ArgumentType::Fd, ArgumentType::Immediate, ArgumentType::Rs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "lh",
+            op_code: 0x21,
+            funct_code: None,
+            implementation: wrap_imp(implementation::lh),
+            instruction_type: InstructionType::IType,
+            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
+            alt_args: Some(&[
+                &[ArgumentType::Rt, ArgumentType::Rs],
+                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
+            ]),
+            relocation_type: None,
+        },
+        // lhe (load half EVA) ignored
+        InstructionInformation {
+            mnemonic: "lhu",
+            op_code: 0x25,
+            funct_code: None,
+            implementation: wrap_imp(implementation::lhu),
+            instruction_type: InstructionType::IType,
+            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
+            alt_args: Some(&[
+                &[ArgumentType::Rt, ArgumentType::Rs],
+                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
+            ]),
+            relocation_type: None,
+        },
+        // lhue (load half unsigned EVA) ignored
+        InstructionInformation {
+            mnemonic: "ll",
+            op_code: 0x30,
+            funct_code: None,
+            implementation: wrap_imp(implementation::ll),
+            instruction_type: InstructionType::IType,
+            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
+            alt_args: Some(&[
+                &[ArgumentType::Rt, ArgumentType::Rs],
+                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
+            ]),
+            relocation_type: None,
+        },
+        // lle (load linked EVA) ignored
+        InstructionInformation {
             mnemonic: "lui",
             op_code: 0x0F,
             funct_code: None,
@@ -435,6 +516,16 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: &[ArgumentType::Rt, ArgumentType::Immediate],
             alt_args: Some(&[&[ArgumentType::Rt, ArgumentType::Identifier]]),
             relocation_type: Some(RelocationEntryType::Hi16),
+        },
+        InstructionInformation {
+            mnemonic: "luxc1",
+            op_code: 0x13,
+            funct_code: Some(0x05),
+            implementation: wrap_imp(implementation::luxc1),
+            instruction_type: InstructionType::RType,
+            args: &[ArgumentType::Fd, ArgumentType::Immediate, ArgumentType::Rs],
+            alt_args: None,
+            relocation_type: None,
         },
         InstructionInformation {
             mnemonic: "lw",
@@ -463,6 +554,77 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 &[ArgumentType::Ft, ArgumentType::Immediate],
             ]),
             relocation_type: Some(RelocationEntryType::Lo16),
+        },
+        // lwe (load word EVA) ignored
+        InstructionInformation {
+            mnemonic: "lwl",
+            op_code: 0x22,
+            funct_code: None,
+            implementation: wrap_imp(implementation::lwl),
+            instruction_type: InstructionType::IType,
+            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
+            alt_args: Some(&[
+                &[ArgumentType::Rt, ArgumentType::Rs],
+                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
+            ]),
+            relocation_type: None,
+        },
+        // lwle (load word left EVA) ignored
+        InstructionInformation {
+            mnemonic: "lwr",
+            op_code: 0x26,
+            funct_code: None,
+            implementation: wrap_imp(implementation::lwr),
+            instruction_type: InstructionType::IType,
+            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
+            alt_args: Some(&[
+                &[ArgumentType::Rt, ArgumentType::Rs],
+                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
+            ]),
+            relocation_type: None,
+        },
+        // lwre (load word right EVA) ignored
+        InstructionInformation {
+            mnemonic: "lwxc1",
+            op_code: 0x13,
+            funct_code: Some(0),
+            implementation: wrap_imp(implementation::lwxc1),
+            instruction_type: InstructionType::RType,
+            args: &[ArgumentType::Fd, ArgumentType::Rs, ArgumentType::Rt],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "madd",
+            op_code: 0x1c,
+            funct_code: Some(0x00),
+            implementation: wrap_imp(implementation::madd),
+            instruction_type: InstructionType::RType,
+            args: &[ArgumentType::Rs, ArgumentType::Rt],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "maddu",
+            op_code: 0x1c,
+            funct_code: Some(0x01),
+            implementation: wrap_imp(implementation::maddu),
+            instruction_type: InstructionType::RType,
+            args: &[ArgumentType::Rs, ArgumentType::Rt],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "mfc0",
+            op_code: 0x10,
+            funct_code: Some(0x00),
+            implementation: wrap_imp(implementation::mfc0),
+            instruction_type: InstructionType::CopMovRType,
+            args: &[ArgumentType::Rt, ArgumentType::Rd],
+            alt_args: Some(&[
+                &[ArgumentType::Rt, ArgumentType::Rd, ArgumentType::Immediate],
+            ]),
+            relocation_type: None,
         },
         InstructionInformation {
             mnemonic: "nor",

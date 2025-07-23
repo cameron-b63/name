@@ -391,7 +391,7 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
             relocation_type: None,
         },
         // Conversion from format to format.
-        // Formats, for reference: 
+        // Formats, for reference:
         // - Double
         // - Long
         // - Single
@@ -480,6 +480,18 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
             additional_code: None,
             implementation: wrap_imp(fp_implementations::floor_w_s),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        FpInstructionInformation {
+            mnemonic: "madd.d",
+            instruction_type: InstructionType::FpFourRegister,
+            op_code: 0x13,
+            funct_code: Some(0b100_000+(FpFmt::Double).to_fmt3()),    // | op4 | fmt |
+            fmt: None,
+            additional_code: None,
+            implementation: wrap_imp(fp_implementations::madd_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fr, ArgumentType::Fs, ArgumentType::Ft],
             alt_args: None,
             relocation_type: None,
         },

@@ -1,4 +1,4 @@
-use crate::{exception::definitions::ExceptionType, structs::ProgramState};
+use crate::{exception::definitions::ExceptionType, instruction::FpFourRegArgs, structs::ProgramState};
 
 use super::{
     implementation_helpers::{
@@ -10,14 +10,14 @@ use super::{
 /*
 
 
-  ______ __  __ _______ 
+  ______ __  __ _______
  |  ____|  \/  |__   __|
- | |__  | \  / |  | |   
- |  __| | |\/| |  | |   
- | |    | |  | |  | |   
- |_|    |_|  |_|  |_|   
-                        
-                        
+ | |__  | \  / |  | |
+ |  __| | |\/| |  | |
+ | |    | |  | |  | |
+ |_|    |_|  |_|  |_|
+
+
 
 
 */
@@ -353,4 +353,25 @@ pub fn c_ngt_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
 // 0x3f.s - c.ngt.s
 pub fn c_ngt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
     todo!("c.ngt.s");
+}
+
+
+/*
+
+
+   ____  _____  _  _   
+  / __ \|  __ \| || |  
+ | |  | | |__) | || |_ 
+ | |  | |  ___/|__   _|
+ | |__| | |       | |  
+  \____/|_|       |_|  
+                       
+                       
+
+
+*/
+
+// 0x13/0x2_
+pub fn madd_d(_program_state: &mut ProgramState, _args: FpFourRegArgs) -> () {
+    todo!("madd.d");
 }
