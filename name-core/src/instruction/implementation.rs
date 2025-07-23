@@ -1,5 +1,9 @@
 use crate::exception::definitions::ExceptionType;
-use crate::instruction::{CopMovRArgs, IArgs, JArgs, RArgs, RegImmIArgs};
+use crate::instruction::formats::cop_mov_r_type::CopMovRArgs;
+use crate::instruction::formats::i_type::IArgs;
+use crate::instruction::formats::j_type::JArgs;
+use crate::instruction::formats::r_type::RArgs;
+use crate::instruction::formats::regimm_i_type::RegImmIArgs;
 use crate::structs::{
     ProgramState,
     Register::{At, Ra},

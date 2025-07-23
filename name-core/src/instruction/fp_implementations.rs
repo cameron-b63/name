@@ -1,10 +1,9 @@
-use crate::{exception::definitions::ExceptionType, instruction::FpFourRegArgs, structs::ProgramState};
+use crate::{exception::definitions::ExceptionType, instruction::formats::{fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs, fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs}, structs::ProgramState};
 
 use super::{
     implementation_helpers::{
         extract_u64, is_register_aligned, pack_up_u64, perform_op_with_flush,
-    },
-    FpCCBranchArgs, FpRArgs,
+    }
 };
 
 /*
@@ -192,166 +191,166 @@ pub fn cvt_d_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
 }
 
 // 0x30.d - c.f.d
-pub fn c_f_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    program_state.cp1.set_condition_code(args.fd >> 2, false);
+pub fn c_f_d(program_state: &mut ProgramState, args: FpCCArgs) -> () {
+    program_state.cp1.set_condition_code(args.cc, false);
 }
 
 // 0x30.d - c.f.s
-pub fn c_f_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    program_state.cp1.set_condition_code(args.fd >> 2, false);
+pub fn c_f_s(program_state: &mut ProgramState, args: FpCCArgs) -> () {
+    program_state.cp1.set_condition_code(args.cc, false);
 }
 
 // 0x31.d - c.un.d
-pub fn c_un_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_un_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.un.d");
 }
 
 // 0x31.s - c.un.s
-pub fn c_un_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_un_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.un.s");
 }
 
 // 0x32.d - c.eq.d
-pub fn c_eq_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_eq_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.eq.d");
 }
 
 // 0x32.s - c.eq.s
-pub fn c_eq_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+pub fn c_eq_s(program_state: &mut ProgramState, args: FpCCArgs) -> () {
     program_state.cp1.set_condition_code(
-        args.fd >> 2,
+        args.cc,
         program_state.cp1.registers[args.ft as usize]
             == program_state.cp1.registers[args.fs as usize],
     );
 }
 
 // 0x33.d - c.ueq.d
-pub fn c_ueq_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ueq_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ueq.d");
 }
 
 // 0x33.s - c.ueq.s
-pub fn c_ueq_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ueq_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ueq.s");
 }
 
 // 0x34.d - c.olt.d
-pub fn c_olt_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_olt_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.olt.d");
 }
 
 // 0x34.s - c.olt.s
-pub fn c_olt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_olt_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.olt.s");
 }
 
 // 0x35.d - c.ult.d
-pub fn c_ult_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ult_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ult.d");
 }
 
 // 0x35.s - c.ult.s
-pub fn c_ult_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ult_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ult.s");
 }
 
 // 0x36.d - c.ole.d
-pub fn c_ole_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ole_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ole.d");
 }
 
 // 0x36.s - c.ole.s
-pub fn c_ole_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ole_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ole.s");
 }
 
 // 0x37.d - c.ule.d
-pub fn c_ule_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ule_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ule.d");
 }
 
 // 0x37.s - c.ule.s
-pub fn c_ule_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ule_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ule.s");
 }
 
 // 0x38.d - c.sf.d
-pub fn c_sf_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_sf_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.sf.d");
 }
 
 // 0x38.s - c.sf.s
-pub fn c_sf_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_sf_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.sf.s");
 }
 
 // 0x39.d - c.ngle.d
-pub fn c_ngle_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ngle_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ngle.d");
 }
 
 // 0x39.s - c.ngle.s
-pub fn c_ngle_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ngle_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ngle.s");
 }
 
 // 0x3a.d - c.seq.d
-pub fn c_seq_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_seq_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.seq.d");
 }
 
 // 0x3a.s - c.seq.s
-pub fn c_seq_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_seq_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.seq.s");
 }
 
 // 0x3b.d - c.ngl.d
-pub fn c_ngl_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ngl_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ngl.d");
 }
 
 // 0x3b.s - c.ngl.s
-pub fn c_ngl_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ngl_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ngl.s");
 }
 
 // 0x3c.d - c.lt.d
-pub fn c_lt_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_lt_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.lt.d");
 }
 
 // 0x3c.s - c.lt.s
-pub fn c_lt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_lt_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.lt.s");
 }
 
 // 0x3d.d - c.nge.d
-pub fn c_nge_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_nge_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.nge.d");
 }
 
 // 0x3d.s - c.nge.s
-pub fn c_nge_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_nge_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.nge.s");
 }
 
 // 0x3e.d - c.le.d
-pub fn c_le_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_le_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.le.d");
 }
 
 // 0x3e.s - c.le.s
-pub fn c_le_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_le_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.le.s");
 }
 
 // 0x3f.d - c.ngt.d
-pub fn c_ngt_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ngt_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ngt.d");
 }
 
 // 0x3f.s - c.ngt.s
-pub fn c_ngt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
+pub fn c_ngt_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ngt.s");
 }
 

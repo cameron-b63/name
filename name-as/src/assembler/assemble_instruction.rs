@@ -1,9 +1,14 @@
 use crate::assembler::assembly_helpers::arg_configuration_is_ok;
+use name_core::instruction::formats::cop_mov_r_type::CopMovRArgs;
+use name_core::instruction::formats::fp_cc_branch_type::FpCCBranchArgs;
+use name_core::instruction::formats::fp_cc_type::FpCCArgs;
+use name_core::instruction::formats::fp_four_reg_type::FpFourRegArgs;
+use name_core::instruction::formats::fp_r_type::FpRArgs;
+use name_core::instruction::formats::i_type::IArgs;
+use name_core::instruction::formats::j_type::JArgs;
+use name_core::instruction::formats::r_type::RArgs;
 use name_core::instruction::information::InstructionType;
-use name_core::instruction::{
-    AssembleResult, ErrorKind, FpCCArgs, FpCCBranchArgs, FpRArgs, IArgs, InstructionMeta, JArgs,
-    RArgs, RawInstruction,
-};
+use name_core::instruction::{AssembleResult, ErrorKind, InstructionMeta, RawInstruction};
 use name_core::parse::parse::AstKind;
 
 pub fn assemble_instruction(
@@ -26,6 +31,12 @@ pub fn assemble_instruction(
 
             // Dispatch on integer instruction types
             match info.instruction_type {
+                InstructionType::CopMovRType => {
+                    let mut cop_mov = CopMovRArgs::assign_cop_mov_arguments(arguments, config)?;
+                    cop_mov.op_code = info.op_code;
+                    cop_mov.funct_code = info.funct_code.ok_or(ErrorKind::MissingFunct)? as u32;
+                    Ok(RawInstruction::from(cop_mov))
+                }
                 InstructionType::RType => {
                     let mut r_args = RArgs::assign_r_type_arguments(arguments, config)?;
                     r_args.funct = info.funct_code.ok_or(ErrorKind::MissingFunct)? as u32;
@@ -86,10 +97,18 @@ pub fn assemble_instruction(
                     fp_r.funct = info.funct_code.ok_or(ErrorKind::MissingFunct)?;
                     Ok(RawInstruction::from(fp_r))
                 }
+                InstructionType::FpFourRegister => {
+                    let mut fp_four = FpFourRegArgs::assign_fp_four_reg_arguments(arguments, config)?;
+                    fp_four.op_code = info.op_code;
+                    fp_four.op4 = u32::from(info.funct_code.ok_or(ErrorKind::MissingFunct)? >> 3);
+                    fp_four.fmt3 = u32::from(info.funct_code.ok_or(ErrorKind::MissingFmt)? & 0b111);
+                    Ok(RawInstruction::from(fp_four))
+                }
                 InstructionType::RType
                 | InstructionType::IType
                 | InstructionType::JType
-                | InstructionType::RegImmIType => Err(ErrorKind::WrongInstructionType)?,
+                | InstructionType::RegImmIType
+                | InstructionType::CopMovRType => Err(ErrorKind::WrongInstructionType)?,
             }
         }
     }
