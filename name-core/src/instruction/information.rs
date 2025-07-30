@@ -17,8 +17,7 @@ pub struct InstructionInformation {
     pub mnemonic: &'static str,
     pub basis: InstructionType,
     pub implementation: Box<dyn Fn(&mut ProgramState, RawInstruction) -> () + Sync + Send>,
-    pub args: &'static [ArgumentType],
-    pub alt_args: Option<&'static [&'static [ArgumentType]]>,
+    pub args: &'static [&'static [ArgumentType]],
     pub relocation_type: Option<RelocationEntryType>,
 }
 
@@ -35,10 +34,9 @@ impl Debug for InstructionInformation {
             "InstructionInformation {{
                 mnemonic: {:?},
                 args: {:?},
-                alt_args: {:?}
                 relocation_type: {:?}
             }}",
-            self.mnemonic, self.args, self.alt_args, self.relocation_type,
+            self.mnemonic, self.args, self.relocation_type,
         )
     }
 }

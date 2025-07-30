@@ -19,6 +19,44 @@ use std::sync::LazyLock;
 /// The emulator performs a lookup based on instruction basis, and then uses the associated implementation.
 /// The implementation below is based on the following [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00086-2B-MIPS32BIS-AFP-6.06.pdf).
 
+/// CONSTANTS:
+
+/// Used for instructions like `j label`
+pub const BRANCH_LABEL_ARGS: &'static [&'static [ArgumentType]] = &[
+    &[ArgumentType::Identifier],
+    &[ArgumentType::Immediate, ArgumentType::Identifier],
+    &[ArgumentType::Immediate, ArgumentType::Immediate],
+    &[ArgumentType::Immediate],
+];
+
+/// Used for instructions like `beq reg, reg, label`
+pub const SIMPLE_COMPARISON_ARGS: &'static [&'static [ArgumentType]] = &[
+    &[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Immediate],
+    &[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Identifier],
+];
+
+/// Used for instructions like `lb reg, address`
+pub const DIRECT_MEMORY_ARGS: &'static [&'static [ArgumentType]] = &[
+    &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
+    &[ArgumentType::Rt, ArgumentType::Rs],
+    &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
+];
+
+/*
+
+
+  __  __          _____ _____   ____   _____
+ |  \/  |   /\   / ____|  __ \ / __ \ / ____|
+ | \  / |  /  \ | |    | |__) | |  | | (___
+ | |\/| | / /\ \| |    |  _  /| |  | |\___ \
+ | |  | |/ ____ \ |____| | \ \| |__| |____) |
+ |_|  |_/_/    \_\_____|_|  \_\\____/|_____/
+
+
+
+
+*/
+
 /// This macro exists to make the definitions of all floating-point comparisons a bit more automated.
 /// It saved me some typing.
 ///
@@ -43,8 +81,10 @@ macro_rules! defcomp {
             }),
             implementation: wrap_imp($implementation),  // does not assume implementation is provided in implementation
             // below fields same for all comparisons
-            args: &[ArgumentType::Fs, ArgumentType::Ft],
-            alt_args: Some(&[&[ArgumentType::Immediate, ArgumentType::Fs, ArgumentType::Ft]]),
+            args: &[
+                &[ArgumentType::Fs, ArgumentType::Ft],
+                &[ArgumentType::Immediate, ArgumentType::Fs, ArgumentType::Ft],
+                ],
             relocation_type: None,
         }
     };
@@ -79,8 +119,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x05,
             }),
             implementation: wrap_imp(implementation::abs_d),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -94,8 +133,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x05,
             }),
             implementation: wrap_imp(implementation::abs_s),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -109,8 +147,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x20,
             }),
             implementation: wrap_imp(implementation::add),
-            args: &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -124,8 +161,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x00,
             }),
             implementation: wrap_imp(implementation::add_d),
-            args: &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -139,8 +175,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x00,
             }),
             implementation: wrap_imp(implementation::add_s),
-            args: &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -152,8 +187,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::addi),
-            args: &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate],
-            alt_args: None,
+            args: &[&[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -165,8 +199,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::addiu),
-            args: &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate],
-            alt_args: None,
+            args: &[&[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -180,8 +213,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x21,
             }),
             implementation: wrap_imp(implementation::addu),
-            args: &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         // ALNV.PS does not apply to our FPU.
@@ -196,8 +228,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x24,
             }),
             implementation: wrap_imp(implementation::and),
-            args: &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -209,8 +240,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::andi),
-            args: &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate],
-            alt_args: None,
+            args: &[&[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -224,12 +254,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 offset: 0,
             }),
             implementation: wrap_imp(implementation::bc1),
-            args: &[ArgumentType::Identifier],
-            alt_args: Some(&[
-                &[ArgumentType::Immediate, ArgumentType::Identifier],
-                &[ArgumentType::Immediate, ArgumentType::Immediate],
-                &[ArgumentType::Immediate],
-            ]),
+            args: BRANCH_LABEL_ARGS,
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -243,12 +268,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 offset: 0,
             }),
             implementation: wrap_imp(implementation::bc1),
-            args: &[ArgumentType::Identifier],
-            alt_args: Some(&[
-                &[ArgumentType::Immediate, ArgumentType::Identifier],
-                &[ArgumentType::Immediate, ArgumentType::Immediate],
-                &[ArgumentType::Immediate],
-            ]),
+            args: BRANCH_LABEL_ARGS,
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -262,12 +282,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 offset: 0,
             }),
             implementation: wrap_imp(implementation::bc1),
-            args: &[ArgumentType::Identifier],
-            alt_args: Some(&[
-                &[ArgumentType::Immediate, ArgumentType::Identifier],
-                &[ArgumentType::Immediate, ArgumentType::Immediate],
-                &[ArgumentType::Immediate],
-            ]),
+            args: BRANCH_LABEL_ARGS,
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -281,12 +296,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 offset: 0,
             }),
             implementation: wrap_imp(implementation::bc1),
-            args: &[ArgumentType::Identifier],
-            alt_args: Some(&[
-                &[ArgumentType::Immediate, ArgumentType::Identifier],
-                &[ArgumentType::Immediate, ArgumentType::Immediate],
-                &[ArgumentType::Immediate],
-            ]),
+            args: BRANCH_LABEL_ARGS,
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -298,8 +308,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::beq),
-            args: &[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Immediate],
-            alt_args: Some(&[&[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Identifier]]),
+            args: SIMPLE_COMPARISON_ARGS,
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -311,8 +320,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::beql),
-            args: &[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Immediate],
-            alt_args: Some(&[&[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Identifier]]),
+            args: SIMPLE_COMPARISON_ARGS,
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -324,8 +332,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bgez),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -337,8 +344,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bgezal),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -350,8 +356,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bgezall),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -363,8 +368,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bgezl),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -376,8 +380,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bgtz),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -389,8 +392,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bgtzl),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -402,8 +404,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::blez),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -415,8 +416,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::blezl),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -428,8 +428,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bltz),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -441,8 +440,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bltzal),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -454,8 +452,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bltzall),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -467,8 +464,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bltzl),
-            args: &[ArgumentType::Rs, ArgumentType::Identifier],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Identifier]],
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -480,8 +476,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bne),
-            args: &[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Immediate],
-            alt_args: Some(&[&[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Identifier]]),
+            args: SIMPLE_COMPARISON_ARGS,
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -493,8 +488,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::bnel),
-            args: &[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Immediate],
-            alt_args: Some(&[&[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Identifier]]),
+            args: SIMPLE_COMPARISON_ARGS,
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
@@ -508,8 +502,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x0d,
             }),
             implementation: wrap_imp(implementation::break_instr),
-            args: &[],
-            alt_args: None,
+            args: &[&[]],
             relocation_type: None,
         },
         // What follows is a whole, whole lot of comparison instruction definitions.
@@ -553,7 +546,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
         // 0b1000; SIGNALING FALSE predicate
         defcomp!("c.sf.d", implementation::c_sf_d, 0b1000, FpFmt::Double),
         defcomp!("c.sf.s", implementation::c_sf_s, 0b1000, FpFmt::Single),
-        // 0b1001; NOT GREATER THAN OR LESS THAN OR EQUAL TO predicate 
+        // 0b1001; NOT GREATER THAN OR LESS THAN OR EQUAL TO predicate
         // (note that this is essentially SIGNALING UNORDERED)
         defcomp!("c.ngle.d", implementation::c_ngle_d, 0b1001, FpFmt::Double),
         defcomp!("c.ngle.s", implementation::c_ngle_s, 0b1001, FpFmt::Single),
@@ -585,12 +578,11 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 offset: 0,
             }),
             implementation: wrap_imp(implementation::cache),
-            args: &[
+            args: &[&[
                 ArgumentType::Immediate,
                 ArgumentType::Immediate,
                 ArgumentType::Rs,
-            ],
-            alt_args: None,
+            ]],
             relocation_type: None,
         },
         // I'm going to purposefully ignore CACHEE since we don't have an acutal priviliged resource setup.
@@ -605,8 +597,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x0a,
             }),
             implementation: wrap_imp(implementation::ceil_l_d),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -620,8 +611,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x0a,
             }),
             implementation: wrap_imp(implementation::ceil_l_s),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -635,8 +625,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x09,
             }),
             implementation: wrap_imp(implementation::ceil_w_d),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -650,8 +639,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x09,
             }),
             implementation: wrap_imp(implementation::ceil_w_s),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -664,8 +652,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 sel: 0,
             }),
             implementation: wrap_imp(implementation::cfc1),
-            args: &[ArgumentType::Rt, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Rt, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -679,8 +666,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x21,
             }),
             implementation: wrap_imp(implementation::clo),
-            args: &[ArgumentType::Rd, ArgumentType::Rs],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -694,8 +680,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x20,
             }),
             implementation: wrap_imp(implementation::clz),
-            args: &[ArgumentType::Rd, ArgumentType::Rs],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -708,8 +693,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 sel: 0,
             }),
             implementation: wrap_imp(implementation::ctc1),
-            args: &[ArgumentType::Rt, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Rt, ArgumentType::Fs]],
             relocation_type: None,
         },
         // Conversion from format to format.
@@ -731,8 +715,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x21,
             }),
             implementation: wrap_imp(implementation::cvt_d_s),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         // SINGLE
@@ -747,8 +730,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x20,
             }),
             implementation: wrap_imp(implementation::cvt_s_d),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         // I'm ignoring DERET as it doesn't apply to use yet.
@@ -766,8 +748,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x1a,
             }),
             implementation: wrap_imp(implementation::div),
-            args: &[ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -781,8 +762,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x03,
             }),
             implementation: wrap_imp(implementation::div_d),
-            args: &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -796,8 +776,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x1b,
             }),
             implementation: wrap_imp(implementation::divu),
-            args: &[ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         // Similarly ignoring EI (enable interrupts).
@@ -814,13 +793,12 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x00,
             }),
             implementation: wrap_imp(implementation::ext),
-            args: &[
+            args: &[&[
                 ArgumentType::Rt,
                 ArgumentType::Rs,
                 ArgumentType::Immediate,
                 ArgumentType::Immediate,
-            ],
-            alt_args: None,
+            ]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -834,8 +812,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x0b,
             }),
             implementation: wrap_imp(implementation::floor_l_d),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -849,8 +826,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x0b,
             }),
             implementation: wrap_imp(implementation::floor_l_s),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -864,8 +840,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x0f,
             }),
             implementation: wrap_imp(implementation::floor_w_d),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -879,8 +854,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x0f,
             }),
             implementation: wrap_imp(implementation::floor_w_s),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -894,13 +868,12 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x04,
             }),
             implementation: wrap_imp(implementation::ins),
-            args: &[
+            args: &[&[
                 ArgumentType::Rt,
                 ArgumentType::Rs,
                 ArgumentType::Immediate,
                 ArgumentType::Immediate,
-            ],
-            alt_args: None,
+            ]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -910,8 +883,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 address: 0,
             }),
             implementation: wrap_imp(implementation::j),
-            args: &[ArgumentType::Identifier],
-            alt_args: None,
+            args: BRANCH_LABEL_ARGS,
             relocation_type: Some(RelocationEntryType::R26),
         },
         InstructionInformation {
@@ -921,8 +893,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 address: 0,
             }),
             implementation: wrap_imp(implementation::jal),
-            args: &[ArgumentType::Identifier],
-            alt_args: None,
+            args: BRANCH_LABEL_ARGS,
             relocation_type: Some(RelocationEntryType::R26),
         },
         InstructionInformation {
@@ -936,8 +907,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x09,
             }),
             implementation: wrap_imp(implementation::jalr),
-            args: &[ArgumentType::Rd, ArgumentType::Rs],
-            alt_args: Some(&[&[ArgumentType::Rs]]),
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs], &[ArgumentType::Rs]],
             relocation_type: None,
         },
         // I'm going to purposefully ignore *.HB because
@@ -954,8 +924,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x08,
             }),
             implementation: wrap_imp(implementation::jr),
-            args: &[ArgumentType::Rs],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs]],
             relocation_type: None,
         },
         // JR.HB is ignored, as stated above.
@@ -968,11 +937,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::lb),
-            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
-                &[ArgumentType::Rt, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
-            ]),
+            args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
         // LBE (load byte EVA) doesn't apply to us since we don't have priv. arch.
@@ -985,11 +950,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::lbu),
-            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
-                &[ArgumentType::Rt, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
-            ]),
+            args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
         // LBUE (load byte unsigned EVA) doesn't apply.
@@ -1002,13 +963,13 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::ldc1),
-            args: &[ArgumentType::Ft, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
+            args: &[
+                &[ArgumentType::Ft, ArgumentType::Immediate, ArgumentType::Rs],
                 &[ArgumentType::Ft, ArgumentType::Rs],
                 &[ArgumentType::Ft, ArgumentType::Identifier, ArgumentType::Rs],
                 &[ArgumentType::Ft, ArgumentType::Identifier],
                 &[ArgumentType::Ft, ArgumentType::Immediate],
-            ]),
+            ],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1022,8 +983,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x01,
             }),
             implementation: wrap_imp(implementation::ldxc1),
-            args: &[ArgumentType::Fd, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Immediate, ArgumentType::Rs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1035,11 +995,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::lh),
-            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
-                &[ArgumentType::Rt, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
-            ]),
+            args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
         // lhe (load half EVA) ignored
@@ -1052,11 +1008,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::lhu),
-            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
-                &[ArgumentType::Rt, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
-            ]),
+            args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
         // lhue (load half unsigned EVA) ignored
@@ -1069,11 +1021,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::ll),
-            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
-                &[ArgumentType::Rt, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
-            ]),
+            args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
         // lle (load linked EVA) ignored
@@ -1086,8 +1034,10 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::lui),
-            args: &[ArgumentType::Rt, ArgumentType::Immediate],
-            alt_args: Some(&[&[ArgumentType::Rt, ArgumentType::Identifier]]),
+            args: &[
+                &[ArgumentType::Rt, ArgumentType::Immediate],
+                &[ArgumentType::Rt, ArgumentType::Identifier],
+            ],
             relocation_type: Some(RelocationEntryType::Hi16),
         },
         InstructionInformation {
@@ -1101,8 +1051,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x05,
             }),
             implementation: wrap_imp(implementation::luxc1),
-            args: &[ArgumentType::Fd, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Immediate, ArgumentType::Rs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1114,11 +1063,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::lw),
-            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
-                &[ArgumentType::Rt, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
-            ]),
+            args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
         InstructionInformation {
@@ -1130,13 +1075,13 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::lwc1),
-            args: &[ArgumentType::Ft, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
+            args: &[
+                &[ArgumentType::Ft, ArgumentType::Immediate, ArgumentType::Rs],
                 &[ArgumentType::Ft, ArgumentType::Rs],
                 &[ArgumentType::Ft, ArgumentType::Identifier, ArgumentType::Rs],
                 &[ArgumentType::Ft, ArgumentType::Identifier],
                 &[ArgumentType::Ft, ArgumentType::Immediate],
-            ]),
+            ],
             relocation_type: Some(RelocationEntryType::Lo16),
         },
         // lwe (load word EVA) ignored
@@ -1149,11 +1094,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::lwl),
-            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
-                &[ArgumentType::Rt, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
-            ]),
+            args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
         // lwle (load word left EVA) ignored
@@ -1166,11 +1107,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::lwr),
-            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
-                &[ArgumentType::Rt, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
-            ]),
+            args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
         // lwre (load word right EVA) ignored
@@ -1185,8 +1122,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x00,
             }),
             implementation: wrap_imp(implementation::lwxc1),
-            args: &[ArgumentType::Fd, ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1200,8 +1136,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x00,
             }),
             implementation: wrap_imp(implementation::madd),
-            args: &[ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1216,13 +1151,12 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 fmt3: FpFmt::Double.to_fmt3(),
             }),
             implementation: wrap_imp(implementation::madd_d),
-            args: &[
+            args: &[&[
                 ArgumentType::Fd,
                 ArgumentType::Fr,
                 ArgumentType::Fs,
                 ArgumentType::Ft,
-            ],
-            alt_args: None,
+            ]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1236,8 +1170,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x01,
             }),
             implementation: wrap_imp(implementation::maddu),
-            args: &[ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1250,8 +1183,10 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 sel: 0,
             }),
             implementation: wrap_imp(implementation::mfc0),
-            args: &[ArgumentType::Rt, ArgumentType::Rd],
-            alt_args: Some(&[&[ArgumentType::Rt, ArgumentType::Rd, ArgumentType::Immediate]]),
+            args: &[
+                &[ArgumentType::Rt, ArgumentType::Rd],
+                &[ArgumentType::Rt, ArgumentType::Rd, ArgumentType::Immediate],
+            ],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1265,8 +1200,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x06,
             }),
             implementation: wrap_imp(implementation::mov_d),
-            args: &[ArgumentType::Fd, ArgumentType::Fs],
-            alt_args: None,
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1281,8 +1215,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             }),
 
             implementation: wrap_imp(implementation::nor),
-            args: &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1296,8 +1229,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x25,
             }),
             implementation: wrap_imp(implementation::or),
-            args: &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1309,8 +1241,10 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::ori),
-            args: &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate],
-            alt_args: Some(&[&[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Identifier]]),
+            args: &[
+                &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate],
+                &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Identifier],
+            ],
             relocation_type: Some(RelocationEntryType::Lo16),
         },
         InstructionInformation {
@@ -1322,12 +1256,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::sb),
-            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
-                &[ArgumentType::Rt, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier],
-            ]),
+            args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
         InstructionInformation {
@@ -1339,13 +1268,13 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::sdc1),
-            args: &[ArgumentType::Ft, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
+            args: &[
+                &[ArgumentType::Ft, ArgumentType::Immediate, ArgumentType::Rs],
                 &[ArgumentType::Ft, ArgumentType::Rs],
                 &[ArgumentType::Ft, ArgumentType::Identifier, ArgumentType::Rs],
                 &[ArgumentType::Ft, ArgumentType::Identifier],
                 &[ArgumentType::Ft, ArgumentType::Immediate],
-            ]),
+            ],
             relocation_type: Some(RelocationEntryType::Lo16),
         },
         InstructionInformation {
@@ -1359,8 +1288,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x00,
             }),
             implementation: wrap_imp(implementation::sll),
-            args: &[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Immediate],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Immediate]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1374,8 +1302,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x2a,
             }),
             implementation: wrap_imp(implementation::slt),
-            args: &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1387,8 +1314,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::slti),
-            args: &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate],
-            alt_args: None,
+            args: &[&[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1400,8 +1326,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::sltiu),
-            args: &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate],
-            alt_args: None,
+            args: &[&[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1415,8 +1340,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x2b,
             }),
             implementation: wrap_imp(implementation::sltu),
-            args: &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1430,8 +1354,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x02,
             }),
             implementation: wrap_imp(implementation::srl),
-            args: &[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Immediate],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Immediate]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1445,8 +1368,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x22,
             }),
             implementation: wrap_imp(implementation::sub),
-            args: &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1460,8 +1382,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x23,
             }),
             implementation: wrap_imp(implementation::subu),
-            args: &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1473,12 +1394,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::sw),
-            args: &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
-            alt_args: Some(&[
-                &[ArgumentType::Rt, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier, ArgumentType::Rs],
-                &[ArgumentType::Rt, ArgumentType::Identifier],
-            ]),
+            args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
         InstructionInformation {
@@ -1492,8 +1408,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x0c,
             }),
             implementation: wrap_imp(implementation::syscall),
-            args: &[],
-            alt_args: None,
+            args: &[&[]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1507,8 +1422,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 funct: 0x26,
             }),
             implementation: wrap_imp(implementation::xor),
-            args: &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
-            alt_args: None,
+            args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1520,8 +1434,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 imm: 0,
             }),
             implementation: wrap_imp(implementation::xori),
-            args: &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate],
-            alt_args: None,
+            args: &[&[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate]],
             relocation_type: None,
         },
     ]

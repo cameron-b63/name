@@ -18,17 +18,12 @@ pub fn assemble_instruction(
     info: &InstructionInformation,
     arguments: Vec<AstKind>,
 ) -> AssembleResult<RawInstruction> {
-    // Determine which arg‐config fits
-    let config = if arg_configuration_is_ok(&arguments, info.args) {
-        info.args
-    } else {
-        info.alt_args
-            .and_then(|alts| {
-                alts.iter()
-                    .find(|alt| arg_configuration_is_ok(&arguments, alt))
-            })
-            .ok_or(ErrorKind::BadArguments)?
-    };
+    // Determine which arg configuration fits
+    let config = info
+        .args
+        .iter()
+        .find(|config| arg_configuration_is_ok(&arguments, config))
+        .ok_or(ErrorKind::BadArguments)?;
 
     // Dispatch on instruction types
     match info.basis {
