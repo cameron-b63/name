@@ -1,11 +1,6 @@
 use std::{fmt, io, path::PathBuf};
 
-use super::information::{FpInstructionInformation, InstructionInformation};
-use crate::{
-    instruction::information::FpFmt,
-    parse::span::Span,
-    structs::ProgramState,
-};
+use crate::{exception::definitions::ExceptionType, parse::span::Span};
 
 /// Possible assemble error codes
 #[derive(Debug)]
@@ -77,40 +72,6 @@ impl fmt::Display for ErrorKind {
 pub type AssembleResult<T> = Result<T, ErrorKind>;
 pub type AssembleError = Span<ErrorKind>;
 
-// Wrapper type to keep InstructionInformation and FpInstructionInformation together.
-pub enum InstructionMeta {
-    Int(&'static InstructionInformation),
-    Fp(&'static FpInstructionInformation),
-}
-
-impl InstructionMeta {
-    /// Get the mnemonic of the instruction inside the InstructionMeta wrapper.
-    pub fn get_mnemonic(&self) -> String {
-        match self {
-            Self::Fp(info) => String::from(info.mnemonic),
-            Self::Int(info) => String::from(info.mnemonic),
-        }
-    }
-
-    /// Get a reference to the implementation function inside the InstructionMeta wrapper.
-    pub fn get_implementation(
-        &self,
-    ) -> &Box<dyn Fn(&mut ProgramState, RawInstruction) -> () + Sync + Send> {
-        match self {
-            Self::Fp(info) => &info.implementation,
-            Self::Int(info) => &info.implementation,
-        }
-    }
-
-    /// Get the lookup code of the underlying information
-    pub fn get_lookup(&self) -> u32 {
-        match self {
-            Self::Fp(i) => i.lookup_code(),
-            Self::Int(i) => i.lookup_code(),
-        }
-    }
-}
-
 #[derive(Debug, Copy, Clone)]
 pub struct RawInstruction {
     pub raw: u32,
@@ -126,117 +87,97 @@ impl RawInstruction {
         self.raw >> 26
     }
 
-    pub fn get_funct(self) -> u32 {
-        self.raw & 0x3F
-    }
+    /// Uses a bitmask to obtain the key bits (opcode, funct code, fmt, etc.)
+    /// The bitmask can be determined by matching on the opcode.
+    /// Some opcodes specify instruction classes. These classes will all 
+    /// have the same method of multiplexing to select the correct instruction.
+    pub fn get_lookup(self) -> Result<u32, ExceptionType> {
+        let bitmask: u32 = match self.get_opcode() {
+            0x00 => {
+                // SPECIAL opcode. Multiplex using funct code in bottom 6 bits.
+                // Instruction class provides another layer of indirection.
+                match self.raw & 0b11_1111 {
+                    // Most instructions will be uniquely identified by the opcode and funct code.
+                    // However, there are some instruction classes.
+                    // MOVCI instruction class:
+                    0x01 => 0b1111_1100_0000_0001_0000_0000_0011_1111,
+                    // SRL instruction class:
+                    0x02 => 0b1111_1100_0010_0000_0000_0000_0011_1111,
+                    // SRLV instruction class:
+                    0x06 => 0b1111_1100_0000_0000_0000_0000_0111_1111,
+                    // Default case (no additional indirection)
+                    _ => 0b1111_1100_0000_0000_0000_0000_0011_1111,
+                } 
+            },
+            0x01 => {
+                // REGIMM opcode. Multiplex using funct code in 20..16
+                // no additional indirection.
+                0b1111_1100_0001_1111_0000_0000_0000_0000
+            },
+            0x10 => {
+                // COP0 opcode. Multiplex using funct code in 25..21
+                match (self.raw >> 21) & 0b1_1111 {
+                    // MFMC0 instruction class:
+                    0x0b => 0b1111_1111_1110_0000_0000_0000_0010_0000,
+                    // rs = C0 instruction class:
+                    0x10..=0x1f => 0b1111_1111_1110_0000_0000_0011_1111,
+                    _ => 0b1111_1111_1110_0000_0000_0000_0000_0000,
+                }
+            },
+            0x11 => {
+                // COP1 opcode. Multiplex using funct code in bottom 6 as well as fmt in 25..21
+                // There exist multiple layers of indirection for this instruction.
+                match (self.raw >> 21) & 0b1_1111 {
+                    // BC1 instruction class:
+                    0x04 => 0b1111_1111_1110_0011_0000_0000_0000_0000,
+                    // BC1ANY2 instruction class:
+                    // Formatted instructions:
+                    0x10 | 0x11 | 0x16 => {
+                        // Select using funct code in bottom 6 bits
+                        match self.raw & 0b11_1111 {
+                            // MOVCF instruction class:
+                            0x11 => 0b1111_1111_1110_0001_0000_0000_0011_1111,
+                            _ => 0b1111_1111_1110_0000_0000_0000_0011_1111,
+                        }
+                    }
+                    _ => 0b1111_1111_1110_0000_0000_0000_0011_1111,
+                }
+            },
+            0x13 => {
+                // COP1X opcode. Multiplex using funct code in bottom 6 bits.
+                // No additional indirection.
+                0b1111_1100_0000_0000_0000_0000_0011_1111
+            },
+            0x1c => {
+                // SPECIAL2 opcode. Multiplex using funct code in bottom 6 bits.
+                // No additional indirection.
+                0b1111_1100_0000_0000_0000_0000_0011_1111
+            },
+            0x1f => {
+                // SPECIAL3 opcode. Multiplex using funct code in bottom 6 bits.
+                match self.raw & 0b11_1111 {
+                    // There is exactly one instruction class defined: BSHFL.
+                    0x20 => 0b1111_1100_0000_0000_0000_0111_1111_1111,
+                    _ => 0b1111_1100_0000_0000_0000_0000_0011_1111,
+                }
+            },
+            0x12 | 0x32 | 0x36 | 0x3a | 0x3e => {
+                // These opcodes represent pieces of functionality that are
+                // attached to coprocessor 2 and therefore
+                // out of scope for NAME.
+                return Err(ExceptionType::CoprocessorUnusable);
+            },
+            _ => {
+                // For any other opcode, no multiplexing takes place.
+                0b1111_1100_0000_0000_0000_0000_0000_0000
+            },
+        };
 
-    pub fn is_rtype(self) -> bool {
-        let op = self.get_opcode();
-        op == 0x00 || op == 0x1C
-    }
-
-    pub fn is_jtype(self) -> bool {
-        let op = self.get_opcode();
-        op == 0x02 || op == 0x03
-    }
-
-    pub fn is_itype(self) -> bool {
-        !self.is_rtype() && !self.is_jtype()
-    }
-
-    pub fn is_regimm(self) -> bool {
-        self.get_opcode() == 0x01
-    }
-
-    pub fn is_floating(self) -> bool {
-        self.get_opcode() == 0x11
-    }
-
-    pub fn get_rs(self) -> u32 {
-        self.raw >> 21 & 0x1F
-    }
-
-    pub fn get_rt(self) -> u32 {
-        self.raw >> 16 & 0x1F
-    }
-
-    pub fn get_rd(self) -> u32 {
-        self.raw >> 11 & 0x1F
-    }
-
-    pub fn get_shamt(self) -> u32 {
-        self.raw >> 6 & 0x1F
-    }
-
-    pub fn get_fmt(self) -> u32 {
-        self.raw >> 21 & 0x1F
-    }
-
-    pub fn get_ft(self) -> u32 {
-        self.raw >> 16 & 0x1F
-    }
-
-    pub fn get_fs(self) -> u32 {
-        self.raw >> 11 & 0x1F
-    }
-
-    pub fn get_fd(self) -> u32 {
-        self.raw >> 6 & 0x1F
-    }
-
-    pub fn get_immediate(self) -> u16 {
-        (self.raw & 0xFFFF) as u16
-    }
-
-    pub fn get_jump(self) -> u32 {
-        self.raw & 0x3FFFFFF
-    }
-
-    pub fn get_lookup(self) -> u32 {
-        // Normal instructions follow this form:
-        // | opcode | multiplexer |
-        // Where "multiplexer" might be a funct code or some other secondary identifier.
-        let base = self.get_opcode() << 6;
-        if self.is_rtype() {
-            base | self.get_funct()
-        } else if self.is_regimm() {
-            base | self.get_rt()
-        } else if self.is_floating() {
-            // Floating-point instructions have a special format that deviates from standard base.
-            // | opcode | funct | fmt | add'l |
-            if self.get_fmt() == u32::from(FpFmt::ReservedFunctCodeBC) {
-                // If the instruction is a comparison branch, there exists a special case.
-                (self.get_opcode() << 13) | (self.get_fmt() << 2) | self.get_ft() & 0b11
-            } else {
-                // Most floating-point instructions follow this pattern.
-                (self.get_opcode() << 13) | (self.get_funct() << 7) | (self.get_fmt() << 2)
-            }
-        } else {
-            base
-        }
+        // Mask out any of the operands for the purposes of lookup
+        return Ok(self.raw & bitmask);
     }
 
     pub fn to_be_bytes(self) -> [u8; 4] {
         self.raw.to_be_bytes()
     }
 }
-
-// RawInstruction to XArgs conversion
-
-// IArgs
-
-// JArgs
-
-// RArgs
-
-// FpCCArgs
-
-// FpCCBranchArgs
-
-// FpRArgs
-
-// FpFourRegArgs
-
-// RegImmIArgs
-
-// CopMovRArgs

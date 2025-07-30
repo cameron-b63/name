@@ -114,6 +114,17 @@ pub(crate) fn expand_move(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<A
     ])
 }
 
+/// This shouldn't really be a pseudoinstruction, but it makes the most sense given how nop is defined.
+pub(crate) fn expand_nop(_args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
+    let zero = AstKind::Register(Register::Zero);
+    let imm_zero = AstKind::Immediate(0);
+
+    Ok(vec![
+        // sll $0, $0, $0
+        ("sll", vec![zero.clone(), zero, imm_zero]),
+    ])
+}
+
 /// Expanded instruction, which is kind of like a pseudoinstruction but easier.
 pub(crate) fn expand_s_d(args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     Ok(vec![

@@ -1,3 +1,5 @@
+pub mod bit_field_type;
+pub mod cache_type;
 pub mod cop_mov_r_type;
 pub mod fp_cc_branch_type;
 pub mod fp_cc_type;

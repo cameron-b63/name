@@ -1,5 +1,4 @@
 /// This file contains the definition of the $instruction instruction.
-
 /*
     The FpCC format is defined as:
     | opcode | BCC1 | cc | nd | tf | offset |
@@ -10,19 +9,21 @@
     nd, tf as 1-bit immediates to dictate type of branch;
     offset as a 16-bit signed immediate pc-relative offset.
 */
-
-use crate::{instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction}, parse::parse::AstKind};
+use crate::{
+    instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction},
+    parse::parse::AstKind,
+};
 
 /// The FpCCBranchArgs is for instructions like bc1t and bc1fl.
 /// The fields tf and nd are another layer of indirection to get the right instruction.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FpCCBranchArgs {
     pub opcode: u32,
     pub funky_funct: u32, // The funct code is in a different place for this format. Little odd.
     pub cc: u32,
     pub tf: u32, // True/False
     pub nd: u32, // Nullify delay slot ("likely" will set this bit to 1)
-    pub offset: u16,
+    pub offset: u32,
 }
 
 // Define how to pack to raw
@@ -44,11 +45,11 @@ impl From<RawInstruction> for FpCCBranchArgs {
     fn from(raw: RawInstruction) -> Self {
         Self {
             opcode: raw.get_opcode(),
-            funky_funct: raw.get_fmt(),
-            cc: raw.get_ft() >> 2,
-            tf: raw.get_ft() & 1,
-            nd: (raw.get_ft() >> 1) & 1,
-            offset: raw.get_immediate(),
+            funky_funct: (raw.raw >> 21) & 0b1_1111,
+            cc: (raw.raw >> 18) & 0b111,
+            nd: (raw.raw >> 17) & 1,
+            tf: (raw.raw >> 16) & 1,
+            offset: raw.raw & 0b1111_1111_1111_1111,
         }
     }
 }

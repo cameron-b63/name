@@ -1,5 +1,4 @@
 /// This file contains the definition of the J-Type instruction.
-
 /*
     The J-Type (jump) format is defined as:
     | opcode | instruction_index |
@@ -8,12 +7,14 @@
     instruction_index as a 26-bit unsigned immediate instruction address
         (shifted right by 2 because of the necessary MIPS32 4-bit alignment)
 */
-
-use crate::{instruction::{information::ArgumentType, AssembleResult, RawInstruction}, parse::parse::AstKind};
+use crate::{
+    instruction::{information::ArgumentType, AssembleResult, RawInstruction},
+    parse::parse::AstKind,
+};
 
 /// The J-Type instruction is used to facilitate jumps where the target PC exceeds the branch range
 /// offered by the 16-bit signed offset in I-Type instructions.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct JArgs {
     pub opcode: u32,
     pub address: u32,
@@ -31,7 +32,7 @@ impl From<RawInstruction> for JArgs {
     fn from(raw: RawInstruction) -> JArgs {
         JArgs {
             opcode: raw.get_opcode(),
-            address: raw.get_jump(),
+            address: raw.raw & 0b0000_0011_1111_1111_1111_1111_1111_1111,
         }
     }
 }

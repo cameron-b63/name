@@ -1,5 +1,4 @@
 /// This file contains the definition of the FpR (Floating-point Register) Type instruction.
-
 /*
     The FpR format is defined as:
     | opcode | fmt | ft | fs | fd | function |
@@ -9,11 +8,13 @@
     ft, fs, fd as floating-point registers;
     function as a multiplex;
 */
-
-use crate::{instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction}, parse::parse::AstKind};
+use crate::{
+    instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction},
+    parse::parse::AstKind,
+};
 
 /// FpR-Type instructions are very common and used to perform arithmetic on floating-point registers.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FpRArgs {
     pub opcode: u32,
     pub fmt: u32,
@@ -42,11 +43,11 @@ impl From<RawInstruction> for FpRArgs {
     fn from(raw: RawInstruction) -> Self {
         Self {
             opcode: raw.get_opcode(),
-            fmt: raw.get_fmt(),
-            fs: raw.get_fs(),
-            ft: raw.get_ft(),
-            fd: raw.get_fd(),
-            funct: raw.get_funct(),
+            fmt: (raw.raw >> 21) & 0b1_1111,
+            ft: (raw.raw >> 16) & 0b1_1111,
+            fs: (raw.raw >> 11) & 0b1_1111,
+            fd: (raw.raw >> 6) & 0b1_1111,
+            funct: raw.raw & 0b11_1111,
         }
     }
 }

@@ -7,18 +7,20 @@
     rs, rt as general-purpose registers;
     immediate as a 16-bit signed immediate;
 */
-
-use crate::{instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction}, parse::parse::AstKind};
+use crate::{
+    instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction},
+    parse::parse::AstKind,
+};
 
 /// The I-Type instruction is most commonly used for
 /// performing arithmetic operations with immediates
 /// and branching.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct IArgs {
     pub opcode: u32,
     pub rs: u32,
     pub rt: u32,
-    pub imm: u16,
+    pub imm: u32,
 }
 
 // Define how to pack to raw
@@ -35,9 +37,9 @@ impl From<RawInstruction> for IArgs {
     fn from(raw: RawInstruction) -> IArgs {
         IArgs {
             opcode: raw.get_opcode(),
-            rs: raw.get_rs(),
-            rt: raw.get_rt(),
-            imm: raw.get_immediate(),
+            rs: (raw.raw >> 21) & 0b1_1111,
+            rt: (raw.raw >> 16) & 0b1_1111,
+            imm: raw.raw & 0b1111_1111_1111_1111,
         }
     }
 }
@@ -79,7 +81,7 @@ impl IArgs {
             opcode: 0,
             rs,
             rt,
-            imm: imm as u16,
+            imm: imm as i32 as i16 as u16 as u32,
         });
     }
 }

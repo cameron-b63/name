@@ -21,7 +21,7 @@ impl SourceContext {
 }
 
 // This enum contains all the exceptions we could generate.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ExceptionType {
     // Interrupt,
     // TlbMod,

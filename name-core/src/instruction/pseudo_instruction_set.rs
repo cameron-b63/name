@@ -57,6 +57,11 @@ pub const PSEUDO_INSTRUCTION_SET: &[PseudoInstruction] = &[
         lines_expanded_to: 1,
     },
     PseudoInstruction {
+        mnemonic: "nop",
+        expand: expand_nop,
+        lines_expanded_to: 1,
+    },
+    PseudoInstruction {
         mnemonic: "s.d",
         expand: expand_s_d,
         lines_expanded_to: 1,

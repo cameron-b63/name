@@ -3,23 +3,30 @@ use std::sync::LazyLock;
 use crate::{
     elf_def::RelocationEntryType,
     instruction::{
+        formats::{
+            cop_mov_r_type::CopMovRArgs, fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs,
+            fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs,
+        },
         fp_implementations,
-        information::{wrap_imp, ArgumentType, FpFmt, InstructionType},
+        information::{wrap_imp, ArgumentType, FpFmt, InstructionInformation, InstructionType},
     },
 };
 
-use super::information::FpInstructionInformation;
-
+/// This macro exists to make the definitions of all floating-point comparisons a bit more automated.
+/// It saved me some typing.
 #[macro_export]
 macro_rules! defcomp {
     ($mnemonic: expr, $implementation: expr, $multiplexer: expr, $format: expr) => {
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: $mnemonic, // Use passed mnemonic
-            instruction_type: InstructionType::FpCCType,    // Same for all comparisons
-            op_code: 0x11,  // Coprocessor 1 default
-            funct_code: Some(0b110000+$multiplexer),    // The multiplexer is appended to 0x3
-            fmt: Some($format), // The format depends on what's given
-            additional_code: None,  // No additional code for comparisons
+            basis: InstructionType::FpCCType(FpCCArgs {
+                opcode: 0x11,
+                fmt: $format as u32,
+                ft: 0,
+                fs: 0,
+                cc: 0,
+                funct: 0b11_0000 + $multiplexer,
+            }),
             implementation: wrap_imp($implementation),  // does not assume implementation is provided in fp_implementations
             // below fields same for all comparisons
             args: &[ArgumentType::Fs, ArgumentType::Ft],
@@ -29,74 +36,85 @@ macro_rules! defcomp {
     };
 }
 
-/// The floating point instructions are stored separately from normal CPU instructions
-/// since they have a different needed field for assembly - fmt.
-/// This table is still based on the [MIPS specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00086-2B-MIPS32BIS-AFP-6.06.pdf).
 /// A note about condition codes for comparisons:
 /// there exist three bits of specificity for condition codes, for 8 possible condition codes.
 /// When making a comparison, the implied condition code to store the result in is 0.
 /// However, you may reference whichever condition code you like.
 /// For paired-single operations, the condition code must be even.
 /// For all condition code usage, it must be 0..=7; This is because there are only 3 bits.
-/// The condition code is stored in FpRType instructions where the fd field typically would be.
-pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLock::new(|| {
+pub static FP_INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::new(|| {
     vec![
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "abs.d",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x05),
-            fmt: Some(FpFmt::Double),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x05,
+            }),
             implementation: wrap_imp(fp_implementations::abs_d),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "abs.s",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x05),
-            fmt: Some(FpFmt::Single),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x05,
+            }),
             implementation: wrap_imp(fp_implementations::abs_s),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "add.d",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0),
-            fmt: Some(FpFmt::Double),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x00,
+            }),
             implementation: wrap_imp(fp_implementations::add_d),
             args: &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "add.s",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0),
-            fmt: Some(FpFmt::Single),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x00,
+            }),
             implementation: wrap_imp(fp_implementations::add_s),
             args: &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
             alt_args: None,
             relocation_type: None,
         },
         // ALNV.PS does not apply to our FPU.
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "bc1f",
-            instruction_type: InstructionType::FpBranchType,
-            op_code: 0x11,
-            funct_code: None,
-            fmt: Some(FpFmt::ReservedFunctCodeBC),
-            additional_code: Some(0b00), // Not "likely", branch on condition code false
+            basis: InstructionType::FpBranchType(FpCCBranchArgs {
+                opcode: 0x11,
+                funky_funct: 0x08,
+                cc: 0,
+                tf: 0,
+                nd: 0,
+                offset: 0,
+            }),
             implementation: wrap_imp(fp_implementations::bc1),
             args: &[ArgumentType::Identifier],
             alt_args: Some(&[
@@ -106,13 +124,16 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
             ]),
             relocation_type: Some(RelocationEntryType::Pc16),
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "bc1fl",
-            instruction_type: InstructionType::FpBranchType,
-            op_code: 0x11,
-            funct_code: None,
-            fmt: Some(FpFmt::ReservedFunctCodeBC),
-            additional_code: Some(0b10), // "likely", branch on condition code false
+            basis: InstructionType::FpBranchType(FpCCBranchArgs {
+                opcode: 0x11,
+                funky_funct: 0x08,
+                cc: 0,
+                tf: 0,
+                nd: 1,
+                offset: 0,
+            }),
             implementation: wrap_imp(fp_implementations::bc1),
             args: &[ArgumentType::Identifier],
             alt_args: Some(&[
@@ -122,13 +143,16 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
             ]),
             relocation_type: Some(RelocationEntryType::Pc16),
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "bc1t",
-            instruction_type: InstructionType::FpBranchType,
-            op_code: 0x11,
-            funct_code: None,
-            fmt: Some(FpFmt::ReservedFunctCodeBC),
-            additional_code: Some(0b01), // Not "likely", branch on condition code true
+            basis: InstructionType::FpBranchType(FpCCBranchArgs {
+                opcode: 0x11,
+                funky_funct: 0x08,
+                cc: 0,
+                tf: 1,
+                nd: 0,
+                offset: 0,
+            }),
             implementation: wrap_imp(fp_implementations::bc1),
             args: &[ArgumentType::Identifier],
             alt_args: Some(&[
@@ -138,13 +162,16 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
             ]),
             relocation_type: Some(RelocationEntryType::Pc16),
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "bc1tl",
-            instruction_type: InstructionType::FpBranchType,
-            op_code: 0x11,
-            funct_code: None,
-            fmt: Some(FpFmt::ReservedFunctCodeBC),
-            additional_code: Some(0b11), // "likely", branch on condition code true
+            basis: InstructionType::FpBranchType(FpCCBranchArgs {
+                opcode: 0x11,
+                funky_funct: 0x08,
+                cc: 0,
+                tf: 1,
+                nd: 1,
+                offset: 0,
+            }),
             implementation: wrap_imp(fp_implementations::bc1),
             args: &[ArgumentType::Identifier],
             alt_args: Some(&[
@@ -155,7 +182,7 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
             relocation_type: Some(RelocationEntryType::Pc16),
         },
         // What follows is a whole, whole lot of comparison instruction definitions.
-        // The workaround for parsing was to define an FpInstructionInformation
+        // The workaround for parsing was to define an InstructionInformation
         // For every type of comparison in every format.
         // There are a lot of those!
         // To minimize typing, I wrote a macro at the top of the file.
@@ -318,73 +345,89 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
         ),
         // End of comparison definitions.
         //
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "ceil.l.d",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x0a),
-            fmt: Some(FpFmt::Double),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0a,
+            }),
             implementation: wrap_imp(fp_implementations::ceil_l_d),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "ceil.l.s",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x0a),
-            fmt: Some(FpFmt::Single),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0a,
+            }),
             implementation: wrap_imp(fp_implementations::ceil_l_s),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "ceil.w.d",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x09),
-            fmt: Some(FpFmt::Double),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x09,
+            }),
             implementation: wrap_imp(fp_implementations::ceil_w_d),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "ceil.w.s",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x09),
-            fmt: Some(FpFmt::Single),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x09,
+            }),
             implementation: wrap_imp(fp_implementations::ceil_w_s),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "cfc1",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: None,
-            fmt: Some(FpFmt::ReservedFunctCodeCF),
-            additional_code: None,
+            basis: InstructionType::CopMovRType(CopMovRArgs {
+                opcode: 0x11,
+                funct_code: 0x02,
+                rt: 0,
+                rd: 0,
+                sel: 0,
+            }),
             implementation: wrap_imp(fp_implementations::cfc1),
             args: &[ArgumentType::Rt, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "ctc1",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: None,
-            fmt: Some(FpFmt::ReservedFunctCodeCT),
-            additional_code: None,
+            basis: InstructionType::CopMovRType(CopMovRArgs {
+                opcode: 0x11,
+                funct_code: 0x06,
+                rt: 0,
+                rd: 0,
+                sel: 0,
+            }),
             implementation: wrap_imp(fp_implementations::ctc1),
             args: &[ArgumentType::Rt, ArgumentType::Fs],
             alt_args: None,
@@ -398,110 +441,143 @@ pub static FP_INSTRUCTION_SET: LazyLock<Vec<FpInstructionInformation>> = LazyLoc
         // - Word
         //
         // DOUBLE
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "cvt.d.s",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x21),
-            fmt: Some(FpFmt::Single),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x21,
+            }),
             implementation: wrap_imp(fp_implementations::cvt_d_s),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
         // SINGLE
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "cvt.s.d",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x20),
-            fmt: Some(FpFmt::Double),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x20,
+            }),
             implementation: wrap_imp(fp_implementations::cvt_s_d),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "div.d",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x03),
-            fmt: Some(FpFmt::Double),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x03,
+            }),
             implementation: wrap_imp(fp_implementations::div_d),
             args: &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "floor.l.d",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x0b),
-            fmt: Some(FpFmt::Double),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0b,
+            }),
             implementation: wrap_imp(fp_implementations::floor_l_d),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "floor.l.s",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x0b),
-            fmt: Some(FpFmt::Single),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0b,
+            }),
             implementation: wrap_imp(fp_implementations::floor_l_s),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "floor.w.d",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x0f),
-            fmt: Some(FpFmt::Double),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0f,
+            }),
             implementation: wrap_imp(fp_implementations::floor_w_d),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "floor.w.s",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x0f),
-            fmt: Some(FpFmt::Single),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0f,
+            }),
             implementation: wrap_imp(fp_implementations::floor_w_s),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "madd.d",
-            instruction_type: InstructionType::FpFourRegister,
-            op_code: 0x13,
-            funct_code: Some(0b100_000+(FpFmt::Double).to_fmt3()),    // | op4 | fmt |
-            fmt: None,
-            additional_code: None,
+            basis: InstructionType::FpFourRegister(FpFourRegArgs {
+                opcode: 0x13,
+                fr: 0,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                op4: 0x04,
+                fmt3: FpFmt::Double.to_fmt3(),
+            }),
             implementation: wrap_imp(fp_implementations::madd_d),
-            args: &[ArgumentType::Fd, ArgumentType::Fr, ArgumentType::Fs, ArgumentType::Ft],
+            args: &[
+                ArgumentType::Fd,
+                ArgumentType::Fr,
+                ArgumentType::Fs,
+                ArgumentType::Ft,
+            ],
             alt_args: None,
             relocation_type: None,
         },
-        FpInstructionInformation {
+        InstructionInformation {
             mnemonic: "mov.d",
-            instruction_type: InstructionType::FpRType,
-            op_code: 0x11,
-            funct_code: Some(0x06),
-            fmt: Some(FpFmt::Double),
-            additional_code: None,
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x06,
+            }),
             implementation: wrap_imp(fp_implementations::mov_d),
             args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,

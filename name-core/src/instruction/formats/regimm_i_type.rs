@@ -1,6 +1,5 @@
 /// This file contains the definition of the RegImm (Register-Immediate I-Type) instruction.
 /// RegImm is an idiomatic instruction type, and is an alias of I-Type.
-
 /*
     The RegImm format is defined as:
     | opcode | rs | function | offset |
@@ -10,13 +9,15 @@
     function as a multiplex;
     offset as a 16-bit signed immediate;
 */
-
-use crate::{instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction}, parse::parse::AstKind};
+use crate::{
+    instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction},
+    parse::parse::AstKind,
+};
 
 /// Register-Immediate instructions are used for instructions like bltz (which just test a single register)
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RegImmIArgs {
-    pub op_code: u32,
+    pub opcode: u32,
     pub rs: u32,
     pub regimm_funct_code: u32,
     pub imm: u32,
@@ -26,10 +27,10 @@ pub struct RegImmIArgs {
 impl From<RegImmIArgs> for RawInstruction {
     fn from(reg_imm_args: RegImmIArgs) -> Self {
         RawInstruction::new(
-            (reg_imm_args.op_code << 26)
+            (reg_imm_args.opcode << 26)
                 | (reg_imm_args.rs << 21)
                 | (reg_imm_args.regimm_funct_code << 16)
-                | reg_imm_args.imm
+                | reg_imm_args.imm,
         )
     }
 }
@@ -38,10 +39,10 @@ impl From<RegImmIArgs> for RawInstruction {
 impl From<RawInstruction> for RegImmIArgs {
     fn from(raw: RawInstruction) -> Self {
         RegImmIArgs {
-            op_code: raw.get_opcode(),
-            rs: raw.get_rs(),
-            regimm_funct_code: raw.get_rt(),
-            imm: raw.get_immediate() as u32,
+            opcode: raw.get_opcode(),
+            rs: (raw.raw >> 21) & 0b1_1111,
+            regimm_funct_code: (raw.raw >> 16) & 0b11_1111,
+            imm: raw.raw & 0b1111_1111_1111_1111,
         }
     }
 }
@@ -70,7 +71,7 @@ impl RegImmIArgs {
         }
 
         return Ok(Self {
-            op_code: 0, // Will be filled in by caller
+            opcode: 0, // Will be filled in by caller
             rs,
             regimm_funct_code: 0, // Will be filled in by caller
             imm,

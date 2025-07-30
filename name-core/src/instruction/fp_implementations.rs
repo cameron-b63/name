@@ -1,9 +1,14 @@
-use crate::{exception::definitions::ExceptionType, instruction::formats::{fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs, fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs}, structs::ProgramState};
+use crate::{
+    exception::definitions::ExceptionType,
+    instruction::formats::{
+        fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs, fp_four_reg_type::FpFourRegArgs,
+        fp_r_type::FpRArgs,
+    },
+    structs::ProgramState,
+};
 
-use super::{
-    implementation_helpers::{
-        extract_u64, is_register_aligned, pack_up_u64, perform_op_with_flush,
-    }
+use super::implementation_helpers::{
+    extract_u64, is_register_aligned, pack_up_u64, perform_op_with_flush,
 };
 
 /*
@@ -354,18 +359,17 @@ pub fn c_ngt_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
     todo!("c.ngt.s");
 }
 
-
 /*
 
 
-   ____  _____  _  _   
-  / __ \|  __ \| || |  
- | |  | | |__) | || |_ 
+   ____  _____  _  _
+  / __ \|  __ \| || |
+ | |  | | |__) | || |_
  | |  | |  ___/|__   _|
- | |__| | |       | |  
-  \____/|_|       |_|  
-                       
-                       
+ | |__| | |       | |
+  \____/|_|       |_|
+
+
 
 
 */

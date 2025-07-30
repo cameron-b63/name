@@ -1,5 +1,4 @@
 /// This file contains the definition of the CopMovR (Coprocessor Move R-Type) instruction.
-
 /*
     The CopMovR format is defined as:
     | opcode | function | rt | rd | 0 | sel |
@@ -10,13 +9,15 @@
     rd as a coprocessor register;
     sel as a 3-bit immediate;
 */
-
-use crate::{instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction}, parse::parse::AstKind};
+use crate::{
+    instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction},
+    parse::parse::AstKind,
+};
 
 /// CopMovR-Type instructions support operations like mfc0 and mtc1.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CopMovRArgs {
-    pub op_code: u32,
+    pub opcode: u32,
     pub funct_code: u32,
     pub rt: u32,
     pub rd: u32,
@@ -27,11 +28,11 @@ pub struct CopMovRArgs {
 impl From<CopMovRArgs> for RawInstruction {
     fn from(cop_mov_r_args: CopMovRArgs) -> Self {
         RawInstruction::new(
-            (cop_mov_r_args.op_code << 26)
-                | ((cop_mov_r_args.funct_code << 21))
-                | ((cop_mov_r_args.rt << 16))
-                | ((cop_mov_r_args.rd << 11))
-                | (cop_mov_r_args.sel)
+            (cop_mov_r_args.opcode << 26)
+                | (cop_mov_r_args.funct_code << 21)
+                | (cop_mov_r_args.rt << 16)
+                | (cop_mov_r_args.rd << 11)
+                | (cop_mov_r_args.sel),
         )
     }
 }
@@ -40,11 +41,11 @@ impl From<CopMovRArgs> for RawInstruction {
 impl From<RawInstruction> for CopMovRArgs {
     fn from(raw: RawInstruction) -> Self {
         Self {
-            op_code: (raw.raw >> 26) & 0b11_1111,
+            opcode: raw.get_opcode(),
             funct_code: (raw.raw >> 21) & 0b1_1111,
             rt: (raw.raw >> 16) & 0b1_1111,
             rd: (raw.raw >> 11) & 0b1_1111,
-            sel: raw.raw & 0b111
+            sel: raw.raw & 0b111,
         }
     }
 }
@@ -53,7 +54,7 @@ impl From<RawInstruction> for CopMovRArgs {
 impl CopMovRArgs {
     pub fn assign_cop_mov_arguments(
         arguments: Vec<AstKind>,
-        args_to_use: &[ArgumentType]
+        args_to_use: &[ArgumentType],
     ) -> AssembleResult<Self> {
         let mut rt = 0;
         let mut rd = 0;
@@ -61,8 +62,16 @@ impl CopMovRArgs {
 
         for (i, passed) in arguments.into_iter().enumerate() {
             match args_to_use[i] {
-                ArgumentType::Rt => rt = passed.get_register_as_u32().ok_or(ErrorKind::InvalidArgument)? as u32,
-                ArgumentType::Rd => rd = passed.get_register_as_u32().ok_or(ErrorKind::InvalidArgument)? as u32,
+                ArgumentType::Rt => {
+                    rt = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)? as u32
+                }
+                ArgumentType::Rd => {
+                    rd = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)? as u32
+                }
                 ArgumentType::Immediate => {
                     let imm = passed.get_immediate().unwrap_or(0);
                     if imm < 8 {
@@ -70,17 +79,17 @@ impl CopMovRArgs {
                     } else {
                         return Err(ErrorKind::InvalidArgument);
                     }
-                },
+                }
                 _ => unreachable!(),
             }
         }
 
         Ok(Self {
-            op_code: 0, // Will be filled in by caller
-            funct_code: 0,  // Will be filled in by caller
+            opcode: 0,    // Will be filled in by caller
+            funct_code: 0, // Will be filled in by caller
             rt,
             rd,
-            sel
+            sel,
         })
     }
 }

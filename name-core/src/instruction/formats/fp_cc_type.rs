@@ -1,5 +1,4 @@
 /// This file contains the definition of the FpCC (Floating-point Condition Code) instruction.
-
 /*
     The FpCC format is defined as:
     | opcode | fmt | ft | fs | cc | 0 | function |
@@ -10,11 +9,13 @@
     cc as a 3-bit immediate;
     function as a multiplex;
 */
-
-use crate::{instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction}, parse::parse::AstKind};
+use crate::{
+    instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction},
+    parse::parse::AstKind,
+};
 
 /// FpCC instructions are used to perform comparisons.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FpCCArgs {
     pub opcode: u32,
     pub fmt: u32,
@@ -43,11 +44,11 @@ impl From<RawInstruction> for FpCCArgs {
     fn from(raw: RawInstruction) -> Self {
         Self {
             opcode: raw.get_opcode(),
-            fmt: raw.get_fmt(),
-            ft: raw.get_ft(),
-            fs: raw.get_fs(),
-            cc: raw.get_fd() >> 2,
-            funct: raw.get_funct(),
+            fmt: (raw.raw >> 21) & 0b1_1111,
+            ft: (raw.raw >> 16) & 0b1_1111,
+            fs: (raw.raw >> 11) & 0b1_1111,
+            cc: (raw.raw >> 8) & 0b111,
+            funct: raw.raw & 0b11_1111,
         }
     }
 }

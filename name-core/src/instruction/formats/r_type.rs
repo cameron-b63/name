@@ -8,11 +8,13 @@
     shamt as a 5-bit unsigned immediate;
     funct as a multiplex;
 */
-
-use crate::{instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction}, parse::parse::AstKind};
+use crate::{
+    instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction},
+    parse::parse::AstKind,
+};
 
 /// The R-Type instruction is used for most register = register (op) register operations.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RArgs {
     pub opcode: u32,
     pub rs: u32,
@@ -41,11 +43,11 @@ impl From<RawInstruction> for RArgs {
     fn from(raw: RawInstruction) -> RArgs {
         RArgs {
             opcode: raw.get_opcode(),
-            rs: raw.get_rs(),
-            rt: raw.get_rt(),
-            rd: raw.get_rd(),
-            shamt: raw.get_shamt(),
-            funct: raw.get_funct(),
+            rs: (raw.raw >> 21) & 0b1_1111,
+            rt: (raw.raw >> 16) & 0b1_1111,
+            rd: (raw.raw >> 11) & 0b1_1111,
+            shamt: (raw.raw >> 6) & 0b1_1111,
+            funct: raw.raw & 0b11_1111,
         }
     }
 }

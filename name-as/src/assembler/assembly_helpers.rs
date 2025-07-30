@@ -4,7 +4,6 @@ use name_core::{
         information::{ArgumentType, InstructionInformation},
         instruction_table::INSTRUCTION_TABLE,
         pseudo_instruction_set::{PseudoInstruction, PSEUDO_INSTRUCTION_SET},
-        InstructionMeta,
     },
     parse::parse::AstKind,
     structs::Symbol,
@@ -137,14 +136,14 @@ pub fn _search_mnemonic(
     mnemonic: String,
     environment: &mut Assembler,
 ) -> (
-    Option<&'static InstructionMeta>,
+    Option<&'static InstructionInformation>,
     Option<&'static PseudoInstruction>,
 ) {
     // There are fewer pseudoinstruction mnemonics, and instructions like `li` and `la` are used incredibly often.
     // Therefore, search should happen for them first.
     // This is kind of an over-optimization but low-hanging fruit is low-hanging fruit.
 
-    let mut instruction_information: Option<&'static InstructionMeta> = None;
+    let mut instruction_information: Option<&'static InstructionInformation> = None;
     let mut pseudo_instruction_information: Option<&'static PseudoInstruction> = None;
 
     let retrieved_pseudo_instruction_option: Option<&'static PseudoInstruction> = environment
@@ -166,8 +165,8 @@ pub fn _search_mnemonic(
         return (instruction_information, pseudo_instruction_information);
     }
 
-    let retrieved_instruction_option: Option<&InstructionMeta> =
-        INSTRUCTION_TABLE.get(mnemonic.as_str()).map(|x| x);
+    let retrieved_instruction_option: Option<&InstructionInformation> =
+        INSTRUCTION_TABLE.get(mnemonic.as_str()).map(|x| *x);
 
     match retrieved_instruction_option {
         Some(retrieved_instruction_information) => {

@@ -5,10 +5,7 @@ use name_core::{
     elf_def::{RelocationEntry, STT_FUNC, STT_OBJECT},
     instruction::{
         pseudo_instruction_set::PseudoInstruction,
-        {
-            instruction_table::INSTRUCTION_TABLE, AssembleResult, ErrorKind, InstructionMeta,
-            RawInstruction,
-        },
+        {instruction_table::INSTRUCTION_TABLE, AssembleResult, ErrorKind, RawInstruction},
     },
     parse::{
         parse::{Ast, AstKind},
@@ -114,10 +111,7 @@ impl Assembler {
             .ok_or(ErrorKind::UnknownInstruction(instr.to_string()))?;
 
         // pull out relocation info from whichever variant we have
-        let relocation = match meta {
-            InstructionMeta::Int(info) => info.relocation_type,
-            InstructionMeta::Fp(info) => info.relocation_type,
-        };
+        let relocation = meta.relocation_type;
 
         // if this instruction needs a relocation entry, build it
         if let Some(r_type) = relocation {
