@@ -94,7 +94,7 @@ pub fn db_step(
                 Err(e) => {
                     program_state.set_exception(e.clone());
                     return Err(format!("Coprocessor unusable or reserved instruction"));
-                },
+                }
             };
 
             instr_info = match INSTRUCTION_LOOKUP.get(&lookup_code) {

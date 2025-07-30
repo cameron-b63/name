@@ -11,7 +11,7 @@ use crate::instruction::information::InstructionInformation;
 use crate::instruction::instruction_table::INSTRUCTION_TABLE;
 use crate::structs::{LineInfo, ProgramState};
 
-const LOOKUP_CHECK: &'static str = ""; 
+const LOOKUP_CHECK: &'static str = "";
 
 /// Hashmap to lookup instructions based on their lookup code. Used in the "decode"
 /// portion of the Von Neumann fetch-decode-execute cycle.
@@ -19,7 +19,12 @@ pub static INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static InstructionInforma
     LazyLock::new(|| {
         INSTRUCTION_TABLE
             .iter()
-            .map(|(mnemonic, info)| { if mnemonic == &LOOKUP_CHECK {dbg!(info.lookup_code());} (info.lookup_code(), *info)})
+            .map(|(mnemonic, info)| {
+                if mnemonic == &LOOKUP_CHECK {
+                    dbg!(info.lookup_code());
+                }
+                (info.lookup_code(), *info)
+            })
             .collect()
     });
 
@@ -66,7 +71,12 @@ pub fn single_step(_source_context: &SourceContext, program_state: &mut ProgramS
     }
     /* Allowing for some later verbose mode */
     {
-        eprintln!("Executing {}: 0x{:08x} @ 0x{:08x}", instr_info.mnemonic, raw_instruction.raw, program_state.cpu.pc-4);
+        eprintln!(
+            "Executing {}: 0x{:08x} @ 0x{:08x}",
+            instr_info.mnemonic,
+            raw_instruction.raw,
+            program_state.cpu.pc - 4
+        );
     }
     let _ = (instr_info.implementation)(program_state, raw_instruction);
 

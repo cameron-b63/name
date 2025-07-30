@@ -85,7 +85,7 @@ impl CopMovRArgs {
         }
 
         Ok(Self {
-            opcode: 0,    // Will be filled in by caller
+            opcode: 0,     // Will be filled in by caller
             funct_code: 0, // Will be filled in by caller
             rt,
             rd,

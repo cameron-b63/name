@@ -3,10 +3,12 @@ use crate::{
     instruction::{
         formats::{
             bit_field_type::BitFieldArgs, cache_type::CacheArgs, cop_mov_r_type::CopMovRArgs,
-            i_type::IArgs, j_type::JArgs, r_type::RArgs, regimm_i_type::RegImmIArgs,
+            fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs,
+            fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs, i_type::IArgs, j_type::JArgs,
+            r_type::RArgs, regimm_i_type::RegImmIArgs,
         },
         implementation,
-        information::{wrap_imp, ArgumentType, InstructionInformation, InstructionType},
+        information::{wrap_imp, ArgumentType, FpFmt, InstructionInformation, InstructionType},
     },
 };
 
@@ -14,12 +16,88 @@ use std::sync::LazyLock;
 
 /// This is the entire implemented instruction set (regular CPU instructions) for NAME.
 /// The assembler searches through this table using the mnemonic field.
-/// The emulator performs a lookup based on opcode and funct_code, and then uses the associated implementation.
+/// The emulator performs a lookup based on instruction basis, and then uses the associated implementation.
 /// The implementation below is based on the following [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00086-2B-MIPS32BIS-AFP-6.06.pdf).
+
+/// This macro exists to make the definitions of all floating-point comparisons a bit more automated.
+/// It saved me some typing.
+///
+/// A note about condition codes for comparisons:
+/// there exist three bits of specificity for condition codes, for 8 possible condition codes.
+/// When making a comparison, the implied condition code to store the result in is 0.
+/// However, you may reference whichever condition code you like.
+/// For paired-single operations, the condition code must be even.
+/// For all condition code usage, it must be 0..=7; This is because there are only 3 bits.
+#[macro_export]
+macro_rules! defcomp {
+    ($mnemonic: expr, $implementation: expr, $multiplexer: expr, $format: expr) => {
+        InstructionInformation {
+            mnemonic: $mnemonic, // Use passed mnemonic
+            basis: InstructionType::FpCCType(FpCCArgs {
+                opcode: 0x11,
+                fmt: $format as u32,
+                ft: 0,
+                fs: 0,
+                cc: 0,
+                funct: 0b11_0000 + $multiplexer,
+            }),
+            implementation: wrap_imp($implementation),  // does not assume implementation is provided in implementation
+            // below fields same for all comparisons
+            args: &[ArgumentType::Fs, ArgumentType::Ft],
+            alt_args: Some(&[&[ArgumentType::Immediate, ArgumentType::Fs, ArgumentType::Ft]]),
+            relocation_type: None,
+        }
+    };
+}
+
+/*
+
+
+  _____ _   _  _____ _______ _____  _    _  _____ _______ _____ ____  _   _  _____
+ |_   _| \ | |/ ____|__   __|  __ \| |  | |/ ____|__   __|_   _/ __ \| \ | |/ ____|
+   | | |  \| | (___    | |  | |__) | |  | | |       | |    | || |  | |  \| | (___
+   | | | . ` |\___ \   | |  |  _  /| |  | | |       | |    | || |  | | . ` |\___ \
+  _| |_| |\  |____) |  | |  | | \ \| |__| | |____   | |   _| || |__| | |\  |____) |
+ |_____|_| \_|_____/   |_|  |_|  \_\\____/ \_____|  |_|  |_____\____/|_| \_|_____/
+
+
+
+
+*/
 
 // The definition for this struct is very descriptive - I encourage you to go read it.
 pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::new(|| {
     vec![
+        InstructionInformation {
+            mnemonic: "abs.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x05,
+            }),
+            implementation: wrap_imp(implementation::abs_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "abs.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x05,
+            }),
+            implementation: wrap_imp(implementation::abs_s),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
         InstructionInformation {
             mnemonic: "add",
             basis: InstructionType::RType(RArgs {
@@ -32,6 +110,36 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             }),
             implementation: wrap_imp(implementation::add),
             args: &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "add.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x00,
+            }),
+            implementation: wrap_imp(implementation::add_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "add.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x00,
+            }),
+            implementation: wrap_imp(implementation::add_s),
+            args: &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
             alt_args: None,
             relocation_type: None,
         },
@@ -76,6 +184,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             alt_args: None,
             relocation_type: None,
         },
+        // ALNV.PS does not apply to our FPU.
         InstructionInformation {
             mnemonic: "and",
             basis: InstructionType::RType(RArgs {
@@ -103,6 +212,82 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: &[ArgumentType::Rt, ArgumentType::Rs, ArgumentType::Immediate],
             alt_args: None,
             relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "bc1f",
+            basis: InstructionType::FpBranchType(FpCCBranchArgs {
+                opcode: 0x11,
+                funky_funct: 0x08,
+                cc: 0,
+                tf: 0,
+                nd: 0,
+                offset: 0,
+            }),
+            implementation: wrap_imp(implementation::bc1),
+            args: &[ArgumentType::Identifier],
+            alt_args: Some(&[
+                &[ArgumentType::Immediate, ArgumentType::Identifier],
+                &[ArgumentType::Immediate, ArgumentType::Immediate],
+                &[ArgumentType::Immediate],
+            ]),
+            relocation_type: Some(RelocationEntryType::Pc16),
+        },
+        InstructionInformation {
+            mnemonic: "bc1fl",
+            basis: InstructionType::FpBranchType(FpCCBranchArgs {
+                opcode: 0x11,
+                funky_funct: 0x08,
+                cc: 0,
+                tf: 0,
+                nd: 1,
+                offset: 0,
+            }),
+            implementation: wrap_imp(implementation::bc1),
+            args: &[ArgumentType::Identifier],
+            alt_args: Some(&[
+                &[ArgumentType::Immediate, ArgumentType::Identifier],
+                &[ArgumentType::Immediate, ArgumentType::Immediate],
+                &[ArgumentType::Immediate],
+            ]),
+            relocation_type: Some(RelocationEntryType::Pc16),
+        },
+        InstructionInformation {
+            mnemonic: "bc1t",
+            basis: InstructionType::FpBranchType(FpCCBranchArgs {
+                opcode: 0x11,
+                funky_funct: 0x08,
+                cc: 0,
+                tf: 1,
+                nd: 0,
+                offset: 0,
+            }),
+            implementation: wrap_imp(implementation::bc1),
+            args: &[ArgumentType::Identifier],
+            alt_args: Some(&[
+                &[ArgumentType::Immediate, ArgumentType::Identifier],
+                &[ArgumentType::Immediate, ArgumentType::Immediate],
+                &[ArgumentType::Immediate],
+            ]),
+            relocation_type: Some(RelocationEntryType::Pc16),
+        },
+        InstructionInformation {
+            mnemonic: "bc1tl",
+            basis: InstructionType::FpBranchType(FpCCBranchArgs {
+                opcode: 0x11,
+                funky_funct: 0x08,
+                cc: 0,
+                tf: 1,
+                nd: 1,
+                offset: 0,
+            }),
+            implementation: wrap_imp(implementation::bc1),
+            args: &[ArgumentType::Identifier],
+            alt_args: Some(&[
+                &[ArgumentType::Immediate, ArgumentType::Identifier],
+                &[ArgumentType::Immediate, ArgumentType::Immediate],
+                &[ArgumentType::Immediate],
+            ]),
+            relocation_type: Some(RelocationEntryType::Pc16),
         },
         InstructionInformation {
             mnemonic: "beq",
@@ -327,6 +512,70 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             alt_args: None,
             relocation_type: None,
         },
+        // What follows is a whole, whole lot of comparison instruction definitions.
+        // The workaround for parsing was to define an InstructionInformation
+        // For every type of comparison in every format.
+        // There are a lot of those!
+        // To minimize typing, I wrote a macro at the top of the file.
+        // These will be in order of their multiplexers (instead of alphabetical).
+        //
+        // Signaling predicates will raise an Invalid Operation exception
+        // if at least one operand is NaN (even QNaN).
+        //
+        // All this information came from MIPS Volume II-A pages 91-92.
+        //
+        // Non-signaling comparisons:
+        // 0b0000; FALSE predicate
+        defcomp!("c.f.d", implementation::c_f_d, 0b0000, FpFmt::Double),
+        defcomp!("c.f.s", implementation::c_f_s, 0b0000, FpFmt::Single),
+        // 0b0001; UNORDERED predicate
+        defcomp!("c.un.d", implementation::c_un_d, 0b0001, FpFmt::Double),
+        defcomp!("c.un.s", implementation::c_un_s, 0b0001, FpFmt::Single),
+        // 0b0010; EQUAL predicate
+        defcomp!("c.eq.d", implementation::c_eq_d, 0b0010, FpFmt::Double),
+        defcomp!("c.eq.s", implementation::c_eq_s, 0b0010, FpFmt::Single),
+        // 0b0011; UNORDERED OR EQUAL predicate
+        defcomp!("c.ueq.d", implementation::c_ueq_d, 0b0011, FpFmt::Double),
+        defcomp!("c.ueq.s", implementation::c_ueq_s, 0b0011, FpFmt::Single),
+        // 0b0100; ORDERED OR LESS THAN predicate
+        defcomp!("c.olt.d", implementation::c_olt_d, 0b0100, FpFmt::Double),
+        defcomp!("c.olt.s", implementation::c_olt_s, 0b0100, FpFmt::Single),
+        // 0b0101; UNORDERED OR LESS THAN predicate
+        defcomp!("c.ult.d", implementation::c_ult_d, 0b0101, FpFmt::Double),
+        defcomp!("c.ult.s", implementation::c_ult_s, 0b0101, FpFmt::Single),
+        // 0b0110; ORDERED OR LESS THAN OR EQUAL TO predicate
+        defcomp!("c.ole.d", implementation::c_ole_d, 0b0110, FpFmt::Double),
+        defcomp!("c.ole.s", implementation::c_ole_s, 0b0110, FpFmt::Single),
+        // 0b0111; UNORDERED OR LESS THAN OR EQUAL TO predicate
+        defcomp!("c.ule.d", implementation::c_ule_d, 0b0111, FpFmt::Double),
+        defcomp!("c.ule.s", implementation::c_ule_s, 0b0111, FpFmt::Single),
+        // Signaling comparisons:
+        // 0b1000; SIGNALING FALSE predicate
+        defcomp!("c.sf.d", implementation::c_sf_d, 0b1000, FpFmt::Double),
+        defcomp!("c.sf.s", implementation::c_sf_s, 0b1000, FpFmt::Single),
+        // 0b1001; NOT GREATER THAN OR LESS THAN OR EQUAL TO predicate 
+        // (note that this is essentially SIGNALING UNORDERED)
+        defcomp!("c.ngle.d", implementation::c_ngle_d, 0b1001, FpFmt::Double),
+        defcomp!("c.ngle.s", implementation::c_ngle_s, 0b1001, FpFmt::Single),
+        // 0b1010; SIGNALING EQUAL predicate
+        defcomp!("c.seq.d", implementation::c_seq_d, 0b1010, FpFmt::Double),
+        defcomp!("c.seq.s", implementation::c_seq_s, 0b1010, FpFmt::Single),
+        // 0b1011; NOT GREATER THAN OR LESS THAN predicate
+        defcomp!("c.ngl.d", implementation::c_ngl_d, 0b1011, FpFmt::Double),
+        defcomp!("c.ngl.s", implementation::c_ngl_s, 0b1011, FpFmt::Single),
+        // 0b1100; LESS THAN predicate
+        defcomp!("c.lt.d", implementation::c_lt_d, 0b1100, FpFmt::Double),
+        defcomp!("c.lt.s", implementation::c_lt_s, 0b1100, FpFmt::Single),
+        // 0b1101; NOT GREATER THAN OR EQUAL predicate
+        defcomp!("c.nge.d", implementation::c_nge_d, 0b1101, FpFmt::Double),
+        defcomp!("c.nge.s", implementation::c_nge_s, 0b1101, FpFmt::Single),
+        // 0b1110; LESS THAN OR EQUAL predicate
+        defcomp!("c.le.d", implementation::c_le_d, 0b1110, FpFmt::Double),
+        defcomp!("c.le.s", implementation::c_le_s, 0b1110, FpFmt::Single),
+        // 0b1111; NOT GREATER THAN predicate
+        defcomp!("c.ngt.d", implementation::c_ngt_d, 0b1111, FpFmt::Double),
+        defcomp!("c.ngt.s", implementation::c_ngt_s, 0b1111, FpFmt::Single),
+        // End of comparison definitions.
         InstructionInformation {
             mnemonic: "cache",
             basis: InstructionType::CacheType(CacheArgs {
@@ -345,6 +594,80 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             relocation_type: None,
         },
         // I'm going to purposefully ignore CACHEE since we don't have an acutal priviliged resource setup.
+        InstructionInformation {
+            mnemonic: "ceil.l.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0a,
+            }),
+            implementation: wrap_imp(implementation::ceil_l_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "ceil.l.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0a,
+            }),
+            implementation: wrap_imp(implementation::ceil_l_s),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "ceil.w.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x09,
+            }),
+            implementation: wrap_imp(implementation::ceil_w_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "ceil.w.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x09,
+            }),
+            implementation: wrap_imp(implementation::ceil_w_s),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "cfc1",
+            basis: InstructionType::CopMovRType(CopMovRArgs {
+                opcode: 0x11,
+                funct_code: 0x02,
+                rt: 0,
+                rd: 0,
+                sel: 0,
+            }),
+            implementation: wrap_imp(implementation::cfc1),
+            args: &[ArgumentType::Rt, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
         InstructionInformation {
             mnemonic: "clo",
             basis: InstructionType::RType(RArgs {
@@ -375,6 +698,59 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             alt_args: None,
             relocation_type: None,
         },
+        InstructionInformation {
+            mnemonic: "ctc1",
+            basis: InstructionType::CopMovRType(CopMovRArgs {
+                opcode: 0x11,
+                funct_code: 0x06,
+                rt: 0,
+                rd: 0,
+                sel: 0,
+            }),
+            implementation: wrap_imp(implementation::ctc1),
+            args: &[ArgumentType::Rt, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        // Conversion from format to format.
+        // Formats, for reference:
+        // - Double
+        // - Long
+        // - Single
+        // - Word
+        //
+        // DOUBLE
+        InstructionInformation {
+            mnemonic: "cvt.d.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x21,
+            }),
+            implementation: wrap_imp(implementation::cvt_d_s),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        // SINGLE
+        InstructionInformation {
+            mnemonic: "cvt.s.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x20,
+            }),
+            implementation: wrap_imp(implementation::cvt_s_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
         // I'm ignoring DERET as it doesn't apply to use yet.
         // I'm ignoring the DI (disable interrupts) instruction
         // since I don't even know where to really start.
@@ -391,6 +767,21 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             }),
             implementation: wrap_imp(implementation::div),
             args: &[ArgumentType::Rs, ArgumentType::Rt],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "div.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x03,
+            }),
+            implementation: wrap_imp(implementation::div_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
             alt_args: None,
             relocation_type: None,
         },
@@ -429,6 +820,66 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
                 ArgumentType::Immediate,
                 ArgumentType::Immediate,
             ],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "floor.l.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0b,
+            }),
+            implementation: wrap_imp(implementation::floor_l_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "floor.l.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0b,
+            }),
+            implementation: wrap_imp(implementation::floor_l_s),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "floor.w.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0f,
+            }),
+            implementation: wrap_imp(implementation::floor_w_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "floor.w.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0f,
+            }),
+            implementation: wrap_imp(implementation::floor_w_s),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
             alt_args: None,
             relocation_type: None,
         },
@@ -754,6 +1205,27 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             relocation_type: None,
         },
         InstructionInformation {
+            mnemonic: "madd.d",
+            basis: InstructionType::FpFourRegister(FpFourRegArgs {
+                opcode: 0x13,
+                fr: 0,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                op4: 0x04,
+                fmt3: FpFmt::Double.to_fmt3(),
+            }),
+            implementation: wrap_imp(implementation::madd_d),
+            args: &[
+                ArgumentType::Fd,
+                ArgumentType::Fr,
+                ArgumentType::Fs,
+                ArgumentType::Ft,
+            ],
+            alt_args: None,
+            relocation_type: None,
+        },
+        InstructionInformation {
             mnemonic: "maddu",
             basis: InstructionType::RType(RArgs {
                 opcode: 0x1c,
@@ -780,6 +1252,21 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             implementation: wrap_imp(implementation::mfc0),
             args: &[ArgumentType::Rt, ArgumentType::Rd],
             alt_args: Some(&[&[ArgumentType::Rt, ArgumentType::Rd, ArgumentType::Immediate]]),
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "mov.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x06,
+            }),
+            implementation: wrap_imp(implementation::mov_d),
+            args: &[ArgumentType::Fd, ArgumentType::Fs],
+            alt_args: None,
             relocation_type: None,
         },
         InstructionInformation {

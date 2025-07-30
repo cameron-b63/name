@@ -89,7 +89,7 @@ impl RawInstruction {
 
     /// Uses a bitmask to obtain the key bits (opcode, funct code, fmt, etc.)
     /// The bitmask can be determined by matching on the opcode.
-    /// Some opcodes specify instruction classes. These classes will all 
+    /// Some opcodes specify instruction classes. These classes will all
     /// have the same method of multiplexing to select the correct instruction.
     pub fn get_lookup(self) -> Result<u32, ExceptionType> {
         let bitmask: u32 = match self.get_opcode() {
@@ -107,13 +107,13 @@ impl RawInstruction {
                     0x06 => 0b1111_1100_0000_0000_0000_0000_0111_1111,
                     // Default case (no additional indirection)
                     _ => 0b1111_1100_0000_0000_0000_0000_0011_1111,
-                } 
-            },
+                }
+            }
             0x01 => {
                 // REGIMM opcode. Multiplex using funct code in 20..16
                 // no additional indirection.
                 0b1111_1100_0001_1111_0000_0000_0000_0000
-            },
+            }
             0x10 => {
                 // COP0 opcode. Multiplex using funct code in 25..21
                 match (self.raw >> 21) & 0b1_1111 {
@@ -123,7 +123,7 @@ impl RawInstruction {
                     0x10..=0x1f => 0b1111_1111_1110_0000_0000_0011_1111,
                     _ => 0b1111_1111_1110_0000_0000_0000_0000_0000,
                 }
-            },
+            }
             0x11 => {
                 // COP1 opcode. Multiplex using funct code in bottom 6 as well as fmt in 25..21
                 // There exist multiple layers of indirection for this instruction.
@@ -142,17 +142,17 @@ impl RawInstruction {
                     }
                     _ => 0b1111_1111_1110_0000_0000_0000_0011_1111,
                 }
-            },
+            }
             0x13 => {
                 // COP1X opcode. Multiplex using funct code in bottom 6 bits.
                 // No additional indirection.
                 0b1111_1100_0000_0000_0000_0000_0011_1111
-            },
+            }
             0x1c => {
                 // SPECIAL2 opcode. Multiplex using funct code in bottom 6 bits.
                 // No additional indirection.
                 0b1111_1100_0000_0000_0000_0000_0011_1111
-            },
+            }
             0x1f => {
                 // SPECIAL3 opcode. Multiplex using funct code in bottom 6 bits.
                 match self.raw & 0b11_1111 {
@@ -160,17 +160,17 @@ impl RawInstruction {
                     0x20 => 0b1111_1100_0000_0000_0000_0111_1111_1111,
                     _ => 0b1111_1100_0000_0000_0000_0000_0011_1111,
                 }
-            },
+            }
             0x12 | 0x32 | 0x36 | 0x3a | 0x3e => {
                 // These opcodes represent pieces of functionality that are
                 // attached to coprocessor 2 and therefore
                 // out of scope for NAME.
                 return Err(ExceptionType::CoprocessorUnusable);
-            },
+            }
             _ => {
                 // For any other opcode, no multiplexing takes place.
                 0b1111_1100_0000_0000_0000_0000_0000_0000
-            },
+            }
         };
 
         // Mask out any of the operands for the purposes of lookup
