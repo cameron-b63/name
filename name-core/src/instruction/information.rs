@@ -2,10 +2,7 @@ use crate::{
     elf_def::RelocationEntryType,
     instruction::{
         formats::{
-            bit_field_type::BitFieldArgs, cache_type::CacheArgs, cop_mov_r_type::CopMovRArgs,
-            fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs,
-            fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs, i_type::IArgs, j_type::JArgs,
-            r_type::RArgs, regimm_i_type::RegImmIArgs,
+            bit_field_type::BitFieldArgs, cache_type::CacheArgs, cond_mov_cc_type::CondMovCCArgs, cop_mov_r_type::CopMovRArgs, fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs, fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs, i_type::IArgs, j_type::JArgs, r_type::RArgs, regimm_i_type::RegImmIArgs
         },
         instruction::RawInstruction,
     },
@@ -59,6 +56,7 @@ pub fn wrap_imp<Args: From<RawInstruction> + 'static>(
 pub enum InstructionType {
     BitFieldType(BitFieldArgs),
     CacheType(CacheArgs),
+    CondMovCCType(CondMovCCArgs),
     CopMovRType(CopMovRArgs),
     FpBranchType(FpCCBranchArgs),
     FpCCType(FpCCArgs),
@@ -75,6 +73,7 @@ impl From<&InstructionType> for RawInstruction {
         match instr_type {
             InstructionType::BitFieldType(args) => RawInstruction::from(*args),
             InstructionType::CacheType(args) => RawInstruction::from(*args),
+            InstructionType::CondMovCCType(args) => RawInstruction::from(*args),
             InstructionType::CopMovRType(args) => RawInstruction::from(*args),
             InstructionType::FpBranchType(args) => RawInstruction::from(*args),
             InstructionType::FpCCType(args) => RawInstruction::from(*args),

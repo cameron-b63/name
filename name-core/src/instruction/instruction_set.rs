@@ -2,10 +2,7 @@ use crate::{
     elf_def::RelocationEntryType,
     instruction::{
         formats::{
-            bit_field_type::BitFieldArgs, cache_type::CacheArgs, cop_mov_r_type::CopMovRArgs,
-            fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs,
-            fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs, i_type::IArgs, j_type::JArgs,
-            r_type::RArgs, regimm_i_type::RegImmIArgs,
+            bit_field_type::BitFieldArgs, cache_type::CacheArgs, cond_mov_cc_type::CondMovCCArgs, cop_mov_r_type::CopMovRArgs, fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs, fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs, i_type::IArgs, j_type::JArgs, r_type::RArgs, regimm_i_type::RegImmIArgs
         },
         implementation,
         information::{wrap_imp, ArgumentType, FpFmt, InstructionInformation, InstructionType},
@@ -1160,6 +1157,26 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             relocation_type: None,
         },
         InstructionInformation {
+            mnemonic: "madd.s",
+            basis: InstructionType::FpFourRegister(FpFourRegArgs {
+                opcode: 0x13,
+                fr: 0,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                op4: 0x04,
+                fmt3: FpFmt::Single.to_fmt3(),
+            }),
+            implementation: wrap_imp(implementation::madd_s),
+            args: &[&[
+                ArgumentType::Fd,
+                ArgumentType::Fr,
+                ArgumentType::Fs,
+                ArgumentType::Ft,
+            ]],
+            relocation_type: None,
+        },
+        InstructionInformation {
             mnemonic: "maddu",
             basis: InstructionType::RType(RArgs {
                 opcode: 0x1c,
@@ -1190,6 +1207,57 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             relocation_type: None,
         },
         InstructionInformation {
+            mnemonic: "mfc1",
+            basis: InstructionType::CopMovRType(CopMovRArgs {
+                opcode: 0x11,
+                funct_code: 0x00,
+                rt: 0,
+                rd: 0,
+                sel: 0,
+            }),
+            implementation: wrap_imp(implementation::mfc1),
+            args: &[
+                &[ArgumentType::Rt, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        // mfhc0 does not apply to our setup (XPA disabled).
+        // we don't have a 64-bit cp0.
+        // same story for mfhc1.
+        // we don't have a 64-bit FPU.
+        InstructionInformation {
+            mnemonic: "mfhi",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x10,
+            }),
+            implementation: wrap_imp(implementation::mfhi),
+            args: &[
+                &[ArgumentType::Rd],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "mflo",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x12,
+            }),
+            implementation: wrap_imp(implementation::mfhi),
+            args: &[
+                &[ArgumentType::Rd],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
             mnemonic: "mov.d",
             basis: InstructionType::FpRType(FpRArgs {
                 opcode: 0x11,
@@ -1201,6 +1269,524 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             }),
             implementation: wrap_imp(implementation::mov_d),
             args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "mov.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x06,
+            }),
+            implementation: wrap_imp(implementation::mov_s),
+            args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movf",
+            basis: InstructionType::CondMovCCType(CondMovCCArgs {
+                opcode: 0x00,
+                rs: 0,
+                cc: 0,
+                tf: 0x00,
+                rd: 0,
+                funct: 0x01,
+            }),
+            implementation: wrap_imp(implementation::mov_conditional),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movf.d",
+            basis: InstructionType::CondMovCCType(CondMovCCArgs {
+                opcode: 0x11,
+                rs: FpFmt::Double as u32,
+                cc: 0,
+                tf: 0x01,
+                rd: 0,
+                funct: 0x11,
+            }),
+            implementation: wrap_imp(implementation::mov_conditional_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movf.s",
+            basis: InstructionType::CondMovCCType(CondMovCCArgs {
+                opcode: 0x11,
+                rs: FpFmt::Single as u32,
+                cc: 0,
+                tf: 0x01,
+                rd: 0,
+                funct: 0x11,
+            }),
+            implementation: wrap_imp(implementation::mov_conditional_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movn",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x0b,
+            }),
+            implementation: wrap_imp(implementation::movn),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movn.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x13
+            }),
+            implementation: wrap_imp(implementation::movn_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movn.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x13
+            }),
+            implementation: wrap_imp(implementation::movn_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movt",
+            basis: InstructionType::CondMovCCType(CondMovCCArgs {
+                opcode: 0x00,
+                rs: 0,
+                cc: 0,
+                tf: 0x01,
+                rd: 0,
+                funct: 0x01
+            }),
+            implementation: wrap_imp(implementation::mov_conditional),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movt.d",
+            basis: InstructionType::CondMovCCType(CondMovCCArgs {
+                opcode: 0x11,
+                rs: FpFmt::Double as u32,
+                cc: 0,
+                tf: 0x01,
+                rd: 0,
+                funct: 0x11,
+            }),
+            implementation: wrap_imp(implementation::mov_conditional_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movt.s",
+            basis: InstructionType::CondMovCCType(CondMovCCArgs {
+                opcode: 0x11,
+                rs: FpFmt::Single as u32,
+                cc: 0,
+                tf: 0x01,
+                rd: 0,
+                funct: 0x11,
+            }),
+            implementation: wrap_imp(implementation::mov_conditional_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movz",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x0a,
+            }),
+            implementation: wrap_imp(implementation::movz),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movz.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x12,
+            }),
+            implementation: wrap_imp(implementation::movz_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "movz.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x12,
+            }),
+            implementation: wrap_imp(implementation::movz_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "msub",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x1c,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x04,
+            }),
+            implementation: wrap_imp(implementation::msub),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "msub.d",
+            basis: InstructionType::FpFourRegister(FpFourRegArgs {
+                opcode: 0x13,
+                fr: 0,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                op4: 0x05,
+                fmt3: FpFmt::Double.to_fmt3(),
+            }),
+            implementation: wrap_imp(implementation::msub_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fr, ArgumentType::Fs, ArgumentType::Ft],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "msub.s",
+            basis: InstructionType::FpFourRegister(FpFourRegArgs {
+                opcode: 0x13,
+                fr: 0,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                op4: 0x05,
+                fmt3: FpFmt::Single.to_fmt3(),
+            }),
+            implementation: wrap_imp(implementation::msub_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fr, ArgumentType::Fs, ArgumentType::Ft],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "msubu",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x1c,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x05,
+            }),
+            implementation: wrap_imp(implementation::msubu),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "mtc0",
+            basis: InstructionType::CopMovRType(CopMovRArgs {
+                opcode: 0x10,
+                funct_code: 0x04,
+                rt: 0,
+                rd: 0,
+                sel: 0, 
+            }), 
+            implementation: wrap_imp(implementation::mtc0),
+            args: &[
+                &[ArgumentType::Rt, ArgumentType::Rd],
+                &[ArgumentType::Rt, ArgumentType::Rd, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "mtc1",
+            basis: InstructionType::CopMovRType(CopMovRArgs {
+                opcode: 0x11,
+                funct_code: 0x04,
+                rt: 0,
+                rd: 0,
+                sel: 0,
+            }),
+            implementation: wrap_imp(implementation::mtc1),
+            args: &[
+                &[ArgumentType::Rt, ArgumentType::Fs,],
+            ],
+            relocation_type: None,
+        },
+        // ignoring mtc2 since we didn't implement cop2
+        // ignoring mthc0 because we aren't allowing XPA
+        // et cetera
+        InstructionInformation {
+            mnemonic: "mthi",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x11,
+            }),
+            implementation: wrap_imp(implementation::mthi),
+            args: &[
+                &[ArgumentType::Rs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "mtlo",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x13,
+            }),
+            implementation: wrap_imp(implementation::mtlo),
+            args: &[
+                &[ArgumentType::Rs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "mul",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x1c,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x02,
+            }),
+            implementation: wrap_imp(implementation::mul),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "mul.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x02,
+            }),
+            implementation: wrap_imp(implementation::mul_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "mul.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x02,
+            }),
+            implementation: wrap_imp(implementation::mul_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "mult",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x18,
+            }),
+            implementation: wrap_imp(implementation::mult),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Rt]
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "multu",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x19,
+            }),
+            implementation: wrap_imp(implementation::multu),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Rt]
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "neg.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x07,
+            }),
+            implementation: wrap_imp(implementation::neg_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "neg.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x07,
+            }),
+            implementation: wrap_imp(implementation::neg_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "nmadd.d",
+            basis: InstructionType::FpFourRegister(FpFourRegArgs {
+                opcode: 0x13,
+                ft: 0,
+                fr: 0,
+                fs: 0,
+                fd: 0,
+                op4: 0x06,
+                fmt3: FpFmt::Double.to_fmt3(),
+            }),
+            implementation: wrap_imp(implementation::nmadd_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fr, ArgumentType::Fs, ArgumentType::Ft],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "nmadd.s",
+            basis: InstructionType::FpFourRegister(FpFourRegArgs {
+                opcode: 0x13,
+                ft: 0,
+                fr: 0,
+                fs: 0,
+                fd: 0,
+                op4: 0x06,
+                fmt3: FpFmt::Single.to_fmt3(),
+            }),
+            implementation: wrap_imp(implementation::nmadd_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fr, ArgumentType::Fs, ArgumentType::Ft],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "nmsub.d",
+            basis: InstructionType::FpFourRegister(FpFourRegArgs {
+                opcode: 0x13,
+                ft: 0,
+                fr: 0,
+                fs: 0,
+                fd: 0,
+                op4: 0x07,
+                fmt3: FpFmt::Double.to_fmt3(),
+            }),
+            implementation: wrap_imp(implementation::nmsub_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fr, ArgumentType::Fs, ArgumentType::Ft],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "nmsub.s",
+            basis: InstructionType::FpFourRegister(FpFourRegArgs {
+                opcode: 0x13,
+                ft: 0,
+                fr: 0,
+                fs: 0,
+                fd: 0,
+                op4: 0x07,
+                fmt3: FpFmt::Single.to_fmt3(),
+            }),
+            implementation: wrap_imp(implementation::nmsub_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fr, ArgumentType::Fs, ArgumentType::Ft],
+            ],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1247,6 +1833,230 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             ],
             relocation_type: Some(RelocationEntryType::Lo16),
         },
+        // skipping paired single business because 32-bit FPU
+        InstructionInformation {
+            mnemonic: "pref",
+            basis: InstructionType::IType(IArgs {
+                opcode: 0x33,
+                rs: 0,
+                rt: 0,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::pref),
+            args: &[
+                &[ArgumentType::Immediate, ArgumentType::Immediate, ArgumentType::Rs],
+            ],
+            relocation_type: None,
+        },
+        // ignoring prefe because I am not planning on EVA arch
+        InstructionInformation {
+            mnemonic: "prefx",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x13,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x0f,
+            }),
+            implementation: wrap_imp(implementation::prefx),
+            args: &[
+                &[ArgumentType::Immediate, ArgumentType::Rt, ArgumentType::Rs]
+            ],
+            relocation_type: None,
+        },
+        // ignoring more PS instructions (paired single not supported)
+        InstructionInformation {
+            mnemonic: "rdhwr",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x1f,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x3b,
+            }),
+            implementation: wrap_imp(implementation::rdhwr),
+            args: &[
+                &[ArgumentType::Rt, ArgumentType::Rd]
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "rdpgpr",
+            basis: InstructionType::CopMovRType(CopMovRArgs {
+                opcode: 0x10,
+                funct_code: 0x0a,
+                rt: 0,
+                rd: 0,
+                sel: 0,
+            }),
+            implementation: wrap_imp(implementation::rdpgpr),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "recip.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x15,
+            }),
+            implementation: wrap_imp(implementation::recip_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "recip.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x15,
+            }),
+            implementation: wrap_imp(implementation::recip_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "rotr",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x02,
+            }),
+            implementation: wrap_imp(implementation::srl),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "rotrv",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x06,
+            }),
+            implementation: wrap_imp(implementation::srlv),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "round.l.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x08,
+            }),
+            implementation: wrap_imp(implementation::round_l_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "round.l.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x08,
+            }),
+            implementation: wrap_imp(implementation::round_l_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+                InstructionInformation {
+            mnemonic: "round.w.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0c,
+            }),
+            implementation: wrap_imp(implementation::round_w_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "round.w.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0c,
+            }),
+            implementation: wrap_imp(implementation::round_w_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "rsqrt.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x16,
+            }),
+            implementation: wrap_imp(implementation::rsqrt_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "rsqrt.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x16,
+            }),
+            implementation: wrap_imp(implementation::rsqrt_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
         InstructionInformation {
             mnemonic: "sb",
             basis: InstructionType::IType(IArgs {
@@ -1257,6 +2067,38 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             }),
             implementation: wrap_imp(implementation::sb),
             args: DIRECT_MEMORY_ARGS,
+            relocation_type: None,
+        },
+        // ignoring sbe due to no EVA architecture implemented
+        InstructionInformation {
+            mnemonic: "sc",
+            basis: InstructionType::IType(IArgs {
+                opcode: 0x38,
+                rs: 0,
+                rt: 0,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::sc),
+            args: &[
+                &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
+            ],
+            relocation_type: None,
+        },
+        // sce ignored due to no EVA implementation
+        InstructionInformation {
+            mnemonic: "sdbbp",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x1c,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x3f,
+            }),
+            implementation: wrap_imp(implementation::sdbbp),
+            args: &[
+                &[ArgumentType::Immediate],
+            ],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1278,6 +2120,67 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             relocation_type: Some(RelocationEntryType::Lo16),
         },
         InstructionInformation {
+            mnemonic: "sdxc1",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x13,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x09,
+            }),
+            implementation: wrap_imp(implementation::sdxc1),
+            args: &[
+                &[ArgumentType::Fs, ArgumentType::Immediate, ArgumentType::Rs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "seb",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x1f,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x20,
+            }),
+            implementation: wrap_imp(implementation::bshfl),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "seh",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x1f,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x20,
+            }),
+            implementation: wrap_imp(implementation::bshfl),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "sh",
+            basis: InstructionType::IType(IArgs {
+                opcode: 0x19,
+                rs: 0,
+                rt: 0,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::sh),
+            args: DIRECT_MEMORY_ARGS,
+            relocation_type: None,
+        },
+        // sh eva ignored because i am not doing EVA
+        InstructionInformation {
             mnemonic: "sll",
             basis: InstructionType::RType(RArgs {
                 opcode: 0x00,
@@ -1289,6 +2192,22 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             }),
             implementation: wrap_imp(implementation::sll),
             args: &[&[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Immediate]],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "sllv",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x04,
+            }),
+            implementation: wrap_imp(implementation::sllv),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Rs],
+            ],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1344,6 +2263,70 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             relocation_type: None,
         },
         InstructionInformation {
+            mnemonic: "sqrt.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x04,
+            }),
+            implementation: wrap_imp(implementation::sqrt_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "sqrt.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x04,
+            }),
+            implementation: wrap_imp(implementation::sqrt_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "sra",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x03,
+            }),
+            implementation: wrap_imp(implementation::sra),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "srav",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x07,
+            }),
+            implementation: wrap_imp(implementation::srav),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Rs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
             mnemonic: "srl",
             basis: InstructionType::RType(RArgs {
                 opcode: 0x00,
@@ -1355,6 +2338,22 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             }),
             implementation: wrap_imp(implementation::srl),
             args: &[&[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Immediate]],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "srlv",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x06,
+            }),
+            implementation: wrap_imp(implementation::srlv),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rt, ArgumentType::Rs],
+            ],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1372,6 +2371,38 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             relocation_type: None,
         },
         InstructionInformation {
+            mnemonic: "sub.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x01,
+            }),
+            implementation: wrap_imp(implementation::sub_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "sub.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x01,
+            }),
+            implementation: wrap_imp(implementation::sub_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs, ArgumentType::Ft],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
             mnemonic: "subu",
             basis: InstructionType::RType(RArgs {
                 opcode: 0x00,
@@ -1385,6 +2416,7 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
+        // SUXC1 doesn't apply to our setup with a 32-bit FPU.
         InstructionInformation {
             mnemonic: "sw",
             basis: InstructionType::IType(IArgs {
@@ -1395,6 +2427,91 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             }),
             implementation: wrap_imp(implementation::sw),
             args: DIRECT_MEMORY_ARGS,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "swc1",
+            basis: InstructionType::IType(IArgs {
+                opcode: 0x39,
+                rs: 0,
+                rt: 0,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::swc1),
+            args: &[
+                &[ArgumentType::Ft, ArgumentType::Immediate, ArgumentType::Rs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "swl",
+            basis: InstructionType::IType(IArgs {
+                opcode: 0x1a,
+                rs: 0,
+                rt: 0,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::swl),
+            args: DIRECT_MEMORY_ARGS,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "swr",
+            basis: InstructionType::IType(IArgs {
+                opcode: 0x1e,
+                rs: 0,
+                rt: 0,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::swr),
+            args: DIRECT_MEMORY_ARGS,
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "swxc1",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x13,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x08,
+            }),
+            implementation: wrap_imp(implementation::swxc1),
+            args: &[
+                &[ArgumentType::Fs, ArgumentType::Rt, ArgumentType::Rs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "sync",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x0f,
+            }),
+            implementation: wrap_imp(implementation::sync),
+            args: &[
+                &[],
+                &[ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "synci",
+            basis: InstructionType::RegImmIType(RegImmIArgs {
+                opcode: 0x01,
+                rs: 0,
+                regimm_funct_code: 0x1f,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::synci),
+            args: &[
+                &[ArgumentType::Immediate, ArgumentType::Rs],
+            ],
             relocation_type: None,
         },
         InstructionInformation {
@@ -1409,6 +2526,362 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             }),
             implementation: wrap_imp(implementation::syscall),
             args: &[&[]],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "teq",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x34,
+            }),
+            implementation: wrap_imp(implementation::teq),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "teqi",
+            basis: InstructionType::RegImmIType(RegImmIArgs {
+                opcode: 0x01,
+                rs: 0,
+                regimm_funct_code: 0x0c,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::teqi),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tge",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x30,
+            }),
+            implementation: wrap_imp(implementation::tge),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tgei",
+            basis: InstructionType::RegImmIType(RegImmIArgs {
+                opcode: 0x01,
+                rs: 0,
+                regimm_funct_code: 0x08,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::tgei),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tgeiu",
+            basis: InstructionType::RegImmIType(RegImmIArgs {
+                opcode: 0x01,
+                rs: 0,
+                regimm_funct_code: 0x09,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::tgeiu),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tgeu",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x31,
+            }),
+            implementation: wrap_imp(implementation::tgeu),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        // not implementing TLBINV or TLBINVF
+        InstructionInformation {
+            mnemonic: "tlbp",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x10,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x08,
+            }),
+            implementation: wrap_imp(implementation::tlbp),
+            args: &[
+                &[],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tlbr",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x10,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x01,
+            }),
+            implementation: wrap_imp(implementation::tlbr),
+            args: &[
+                &[],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tlbwi",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x10,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x02,
+            }),
+            implementation: wrap_imp(implementation::tlbwi),
+            args: &[
+                &[],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tlbwi",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x10,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x06,
+            }),
+            implementation: wrap_imp(implementation::tlbwr),
+            args: &[
+                &[],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tlt",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x32,
+            }),
+            implementation: wrap_imp(implementation::tlt),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tlti",
+            basis: InstructionType::RegImmIType(RegImmIArgs {
+                opcode: 0x01,
+                rs: 0,
+                regimm_funct_code: 0x0a,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::tlti),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tltiu",
+            basis: InstructionType::RegImmIType(RegImmIArgs {
+                opcode: 0x01,
+                rs: 0,
+                regimm_funct_code: 0x0b,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::tltiu),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tltu",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x33,
+            }),
+            implementation: wrap_imp(implementation::tltu),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tne",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x00,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x36,
+            }),
+            implementation: wrap_imp(implementation::tne),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "tnei",
+            basis: InstructionType::RegImmIType(RegImmIArgs {
+                opcode: 0x01,
+                rs: 0,
+                regimm_funct_code: 0x0e,
+                imm: 0,
+            }),
+            implementation: wrap_imp(implementation::tnei),
+            args: &[
+                &[ArgumentType::Rs, ArgumentType::Immediate],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "trunc.l.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x09,
+            }),
+            implementation: wrap_imp(implementation::trunc_l_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "trunc.l.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x09,
+            }),
+            implementation: wrap_imp(implementation::trunc_l_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "trunc.w.d",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Double as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0d,
+            }),
+            implementation: wrap_imp(implementation::trunc_w_d),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "trunc.w.s",
+            basis: InstructionType::FpRType(FpRArgs {
+                opcode: 0x11,
+                fmt: FpFmt::Single as u32,
+                ft: 0,
+                fs: 0,
+                fd: 0,
+                funct: 0x0d,
+            }),
+            implementation: wrap_imp(implementation::trunc_w_s),
+            args: &[
+                &[ArgumentType::Fd, ArgumentType::Fs],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "wait",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x10,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x20,
+            }),
+            implementation: wrap_imp(implementation::wait),
+            args: &[
+                &[]
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "wrpgpr",
+            basis: InstructionType::CopMovRType(CopMovRArgs {
+                opcode: 0x10,
+                funct_code: 0x0e,
+                rt: 0,
+                rd: 0,
+                sel: 0,
+            }),
+            implementation: wrap_imp(implementation::wrpgpr),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rt],
+            ],
+            relocation_type: None,
+        },
+        InstructionInformation {
+            mnemonic: "wsbh",
+            basis: InstructionType::RType(RArgs {
+                opcode: 0x1f,
+                rs: 0,
+                rt: 0,
+                rd: 0,
+                shamt: 0,
+                funct: 0x20,
+            }),
+            implementation: wrap_imp(implementation::bshfl),
+            args: &[
+                &[ArgumentType::Rd, ArgumentType::Rt],
+            ],
             relocation_type: None,
         },
         InstructionInformation {
