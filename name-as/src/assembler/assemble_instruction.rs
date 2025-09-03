@@ -1,6 +1,6 @@
 use crate::assembler::assembly_helpers::arg_configuration_is_ok;
 use name_core::instruction::formats::bit_field_type::BitFieldArgs;
-use name_core::instruction::formats::cache_type::CacheArgs;
+use name_core::instruction::formats::cond_mov_cc_type::CondMovCCArgs;
 use name_core::instruction::formats::cop_mov_r_type::CopMovRArgs;
 use name_core::instruction::formats::fp_cc_branch_type::FpCCBranchArgs;
 use name_core::instruction::formats::fp_cc_type::FpCCArgs;
@@ -33,10 +33,11 @@ pub fn assemble_instruction(
             bit_field.funct = basis.funct;
             Ok(RawInstruction::from(bit_field))
         }
-        InstructionType::CacheType(basis) => {
-            let mut cache = CacheArgs::assign_cache_type_arguments(arguments, config)?;
-            cache.opcode = basis.opcode;
-            Ok(RawInstruction::from(cache))
+        InstructionType::CondMovCCType(basis) => {
+            let mut cond_mov = CondMovCCArgs::assign_cond_mov_cc_args(arguments, config)?;
+            cond_mov.opcode = basis.opcode;
+            cond_mov.funct = basis.funct;
+            Ok(RawInstruction::from(cond_mov))
         }
         InstructionType::CopMovRType(basis) => {
             let mut cop_mov = CopMovRArgs::assign_cop_mov_arguments(arguments, config)?;

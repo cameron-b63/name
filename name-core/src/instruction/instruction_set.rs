@@ -2,7 +2,7 @@ use crate::{
     elf_def::RelocationEntryType,
     instruction::{
         formats::{
-            bit_field_type::BitFieldArgs, cache_type::CacheArgs, cond_mov_cc_type::CondMovCCArgs, cop_mov_r_type::CopMovRArgs, fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs, fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs, i_type::IArgs, j_type::JArgs, r_type::RArgs, regimm_i_type::RegImmIArgs
+            bit_field_type::BitFieldArgs, cond_mov_cc_type::CondMovCCArgs, cop_mov_r_type::CopMovRArgs, fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs, fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs, i_type::IArgs, j_type::JArgs, r_type::RArgs, regimm_i_type::RegImmIArgs
         },
         implementation,
         information::{wrap_imp, ArgumentType, FpFmt, InstructionInformation, InstructionType},
@@ -15,10 +15,85 @@ use std::sync::LazyLock;
 /// The assembler searches through this table using the mnemonic field.
 /// The emulator performs a lookup based on instruction basis, and then uses the associated implementation.
 /// The implementation below is based on the following [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00086-2B-MIPS32BIS-AFP-6.06.pdf).
+/// It should be noted that the provided instruction set is NOT COMPLIANT with any release of MIPS,
+/// and is an amalgamation of various release standards.
+/// Deviations from standard are based on the MARS MIPS simulator 
+/// (as one of the major goals of this project is to superset the functionality of MARS).
+
+/*
+The following instructions have been INTENTIONALLY EXCLUDED from the instruction set.
+These instructions are intended to trigger a Reserved Instruction exception when used.
+We are taking advantage of the default behavior assigned to unrecognized instructions.
+
+These instructions were excluded for one of the following reasons:
+ - (1) Uses privileged resource architecture which will not be simulated (typically EVA instructions)
+ - (2) Expects 64-bit coprocessors when, in our simulator, coprocessors are 32-bit.
+
+The reason for exclusion is included as an annotation after the mnemonic,
+corresponding to the above. If there are plans to include an instruction later,
+but implementation rests on a significant bit of uncompleted work,
+the instruction may be marked with an asterisk.
+
+Note: while our simulator does not include a coprocessor 2, it is more correct to simulate 
+a Coprocessor Unusable exception rather than Reserved Instruction. This logic is elsewhere.
+
+Intentionally excluded instructions:
+ - ALNV.PS(2)   (Align Variable Paired Single)
+ - CACHE*       (Perform Cache Operation)
+ - CACHEE(1)    (Cache EVA)
+ - DERET(1)     (Debug Exception Return)
+ - DI(1)        (Disable Interrupts)
+ - EI(1)        (Enable Interrupts)
+ - ERET(1)      (Exception Return)
+ - JALR.HB(1)   (Jump and Link Register with Hazard Barrier)
+ - JALX(1)      (Jump and Link Exchange)
+ - JR.HB(1)     (Jump Register with Hazard Barrier)
+ - LBE(1)       (Load Byte EVA)
+ - LBUE(1)      (Load Byte Unsigned EVA)
+ - LHE(1)       (Load Half EVA)
+ - LHUE(1)      (Load Half Unsigned EVA)
+ - LL*          (Load Linked)
+ - LLE(1)       (Load Linked EVA)
+ - LWE(1)       (Load Word EVA)
+ - LWLE(1)      (Load Word Left EVA)
+ - LWRE(1)      (Load Word Right EVA)
+ - MFHC0(2)     (Move from High Coprocessor 0)
+ - MFHC1(2)     (Move from High Coprocessor 1)
+ - MTHC0(2)     (Move to High Coprocessor 0)
+ - MTHC1(2)     (Move to High Coprocessor 1)
+ - PAUSE(1)     (Wait for LL bit to clear)
+ - PLL.PS(2)    (Pair Lower Lower Paired Single)
+ - PLU.PS(2)    (Pair Lower Upper Paired Single)
+ - PREF*        (Prefetch)
+ - PREFE(1)     (Prefetch EVA)
+ - PREFX*       (Prefetch Indexed)
+ - PUL.PS(2)    (Pair Upper Lower Paired Single)
+ - PUU.PS(2)    (Pair Upper Upper Paired Single)
+ - RDHWR(1)     (Read Hardware Register)
+ - RDPGPR(1)    (Read Previous GPR Shadow Set)
+ - SBE(1)       (Store Byte EVA)
+ - SC*          (Store Conditional)
+ - SCE(1)       (Store Conditional EVA)
+ - SHE(1)       (Store Half EVA)
+ - SUXC1(1)     (Store Double Indexed Unaligned from Coprocessor 1)
+ - SWE(1)       (Store Word EVA)
+ - SWLE(1)      (Store Word Left EVA)
+ - SWRE(1)      (Store Word Right EVA)
+ - SYNC*        (Sync)
+ - SYNCI*       (Sync Caches)
+ - TLBINV(1)    (TLB Invalidate)
+ - TLBINVF(1)   (TLB Invalidate Flush)
+ - TLBP(1)      (TLB Probe)
+ - TLBR(1)      (TLB Read Indexed Entry)
+ - TLBWI(1)     (TLB Write Indexed Entry)
+ - TLBWR(1)     (TLB Write Random Entry)
+ - WAIT*        (Wait)
+ - WPGPR(1)     (Write Previous GPR Shadow Set)
+*/
 
 /// CONSTANTS:
 
-/// Used for instructions like `j label`
+/// Argument configuration used for instructions like `j label`
 pub const BRANCH_LABEL_ARGS: &'static [&'static [ArgumentType]] = &[
     &[ArgumentType::Identifier],
     &[ArgumentType::Immediate, ArgumentType::Identifier],
@@ -26,13 +101,13 @@ pub const BRANCH_LABEL_ARGS: &'static [&'static [ArgumentType]] = &[
     &[ArgumentType::Immediate],
 ];
 
-/// Used for instructions like `beq reg, reg, label`
+/// Arugment configuration used for instructions like `beq reg, reg, label`
 pub const SIMPLE_COMPARISON_ARGS: &'static [&'static [ArgumentType]] = &[
     &[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Immediate],
     &[ArgumentType::Rs, ArgumentType::Rt, ArgumentType::Identifier],
 ];
 
-/// Used for instructions like `lb reg, address`
+/// Argument configuration used for instructions like `lb reg, address`
 pub const DIRECT_MEMORY_ARGS: &'static [&'static [ArgumentType]] = &[
     &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
     &[ArgumentType::Rt, ArgumentType::Rs],
@@ -61,7 +136,6 @@ pub const DIRECT_MEMORY_ARGS: &'static [&'static [ArgumentType]] = &[
 /// there exist three bits of specificity for condition codes, for 8 possible condition codes.
 /// When making a comparison, the implied condition code to store the result in is 0.
 /// However, you may reference whichever condition code you like.
-/// For paired-single operations, the condition code must be even.
 /// For all condition code usage, it must be 0..=7; This is because there are only 3 bits.
 #[macro_export]
 macro_rules! defcomp {
@@ -213,7 +287,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
-        // ALNV.PS does not apply to our FPU.
         InstructionInformation {
             mnemonic: "and",
             basis: InstructionType::RType(RArgs {
@@ -567,23 +640,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
         defcomp!("c.ngt.s", implementation::c_ngt_s, 0b1111, FpFmt::Single),
         // End of comparison definitions.
         InstructionInformation {
-            mnemonic: "cache",
-            basis: InstructionType::CacheType(CacheArgs {
-                opcode: 0x2f,
-                base: 0,
-                op: 0,
-                offset: 0,
-            }),
-            implementation: wrap_imp(implementation::cache),
-            args: &[&[
-                ArgumentType::Immediate,
-                ArgumentType::Immediate,
-                ArgumentType::Rs,
-            ]],
-            relocation_type: None,
-        },
-        // I'm going to purposefully ignore CACHEE since we don't have an acutal priviliged resource setup.
-        InstructionInformation {
             mnemonic: "ceil.l.d",
             basis: InstructionType::FpRType(FpRArgs {
                 opcode: 0x11,
@@ -693,14 +749,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: &[&[ArgumentType::Rt, ArgumentType::Fs]],
             relocation_type: None,
         },
-        // Conversion from format to format.
-        // Formats, for reference:
-        // - Double
-        // - Long
-        // - Single
-        // - Word
-        //
-        // DOUBLE
         InstructionInformation {
             mnemonic: "cvt.d.s",
             basis: InstructionType::FpRType(FpRArgs {
@@ -715,7 +763,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
-        // SINGLE
         InstructionInformation {
             mnemonic: "cvt.s.d",
             basis: InstructionType::FpRType(FpRArgs {
@@ -730,10 +777,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: &[&[ArgumentType::Fd, ArgumentType::Fs]],
             relocation_type: None,
         },
-        // I'm ignoring DERET as it doesn't apply to use yet.
-        // I'm ignoring the DI (disable interrupts) instruction
-        // since I don't even know where to really start.
-        // I know for sure that it doesn't really apply to us.
         InstructionInformation {
             mnemonic: "div",
             basis: InstructionType::RType(RArgs {
@@ -776,9 +819,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: &[&[ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
-        // Similarly ignoring EI (enable interrupts).
-        // See DI.
-        // Ignoring ERET and ERETNC
         InstructionInformation {
             mnemonic: "ext",
             basis: InstructionType::BitFieldType(BitFieldArgs {
@@ -907,9 +947,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: &[&[ArgumentType::Rd, ArgumentType::Rs], &[ArgumentType::Rs]],
             relocation_type: None,
         },
-        // I'm going to purposefully ignore *.HB because
-        // that's some hardware business I won't get to for a long time.
-        // JALX also doesn't apply since we're not including micro MIPS.
         InstructionInformation {
             mnemonic: "jr",
             basis: InstructionType::RType(RArgs {
@@ -924,7 +961,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: &[&[ArgumentType::Rs]],
             relocation_type: None,
         },
-        // JR.HB is ignored, as stated above.
         InstructionInformation {
             mnemonic: "lb",
             basis: InstructionType::IType(IArgs {
@@ -937,7 +973,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
-        // LBE (load byte EVA) doesn't apply to us since we don't have priv. arch.
         InstructionInformation {
             mnemonic: "lbu",
             basis: InstructionType::IType(IArgs {
@@ -950,7 +985,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
-        // LBUE (load byte unsigned EVA) doesn't apply.
         InstructionInformation {
             mnemonic: "ldc1",
             basis: InstructionType::IType(IArgs {
@@ -995,7 +1029,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
-        // lhe (load half EVA) ignored
         InstructionInformation {
             mnemonic: "lhu",
             basis: InstructionType::IType(IArgs {
@@ -1008,20 +1041,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
-        // lhue (load half unsigned EVA) ignored
-        InstructionInformation {
-            mnemonic: "ll",
-            basis: InstructionType::IType(IArgs {
-                opcode: 0x30,
-                rs: 0,
-                rt: 0,
-                imm: 0,
-            }),
-            implementation: wrap_imp(implementation::ll),
-            args: DIRECT_MEMORY_ARGS,
-            relocation_type: None,
-        },
-        // lle (load linked EVA) ignored
         InstructionInformation {
             mnemonic: "lui",
             basis: InstructionType::IType(IArgs {
@@ -1081,7 +1100,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             ],
             relocation_type: Some(RelocationEntryType::Lo16),
         },
-        // lwe (load word EVA) ignored
         InstructionInformation {
             mnemonic: "lwl",
             basis: InstructionType::IType(IArgs {
@@ -1094,7 +1112,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
-        // lwle (load word left EVA) ignored
         InstructionInformation {
             mnemonic: "lwr",
             basis: InstructionType::IType(IArgs {
@@ -1107,7 +1124,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
-        // lwre (load word right EVA) ignored
         InstructionInformation {
             mnemonic: "lwxc1",
             basis: InstructionType::RType(RArgs {
@@ -1221,10 +1237,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             ],
             relocation_type: None,
         },
-        // mfhc0 does not apply to our setup (XPA disabled).
-        // we don't have a 64-bit cp0.
-        // same story for mfhc1.
-        // we don't have a 64-bit FPU.
         InstructionInformation {
             mnemonic: "mfhi",
             basis: InstructionType::RType(RArgs {
@@ -1574,9 +1586,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             ],
             relocation_type: None,
         },
-        // ignoring mtc2 since we didn't implement cop2
-        // ignoring mthc0 because we aren't allowing XPA
-        // et cetera
         InstructionInformation {
             mnemonic: "mthi",
             basis: InstructionType::RType(RArgs {
@@ -1833,70 +1842,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             ],
             relocation_type: Some(RelocationEntryType::Lo16),
         },
-        // skipping paired single business because 32-bit FPU
-        InstructionInformation {
-            mnemonic: "pref",
-            basis: InstructionType::IType(IArgs {
-                opcode: 0x33,
-                rs: 0,
-                rt: 0,
-                imm: 0,
-            }),
-            implementation: wrap_imp(implementation::pref),
-            args: &[
-                &[ArgumentType::Immediate, ArgumentType::Immediate, ArgumentType::Rs],
-            ],
-            relocation_type: None,
-        },
-        // ignoring prefe because I am not planning on EVA arch
-        InstructionInformation {
-            mnemonic: "prefx",
-            basis: InstructionType::RType(RArgs {
-                opcode: 0x13,
-                rs: 0,
-                rt: 0,
-                rd: 0,
-                shamt: 0,
-                funct: 0x0f,
-            }),
-            implementation: wrap_imp(implementation::prefx),
-            args: &[
-                &[ArgumentType::Immediate, ArgumentType::Rt, ArgumentType::Rs]
-            ],
-            relocation_type: None,
-        },
-        // ignoring more PS instructions (paired single not supported)
-        InstructionInformation {
-            mnemonic: "rdhwr",
-            basis: InstructionType::RType(RArgs {
-                opcode: 0x1f,
-                rs: 0,
-                rt: 0,
-                rd: 0,
-                shamt: 0,
-                funct: 0x3b,
-            }),
-            implementation: wrap_imp(implementation::rdhwr),
-            args: &[
-                &[ArgumentType::Rt, ArgumentType::Rd]
-            ],
-            relocation_type: None,
-        },
-        InstructionInformation {
-            mnemonic: "rdpgpr",
-            basis: InstructionType::CopMovRType(CopMovRArgs {
-                opcode: 0x10,
-                funct_code: 0x0a,
-                rt: 0,
-                rd: 0,
-                sel: 0,
-            }),
-            implementation: wrap_imp(implementation::rdpgpr),
-            args: &[
-                &[ArgumentType::Rd, ArgumentType::Rt],
-            ],
-            relocation_type: None,
-        },
         InstructionInformation {
             mnemonic: "recip.d",
             basis: InstructionType::FpRType(FpRArgs {
@@ -2069,22 +2014,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
-        // ignoring sbe due to no EVA architecture implemented
-        InstructionInformation {
-            mnemonic: "sc",
-            basis: InstructionType::IType(IArgs {
-                opcode: 0x38,
-                rs: 0,
-                rt: 0,
-                imm: 0,
-            }),
-            implementation: wrap_imp(implementation::sc),
-            args: &[
-                &[ArgumentType::Rt, ArgumentType::Immediate, ArgumentType::Rs],
-            ],
-            relocation_type: None,
-        },
-        // sce ignored due to no EVA implementation
         InstructionInformation {
             mnemonic: "sdbbp",
             basis: InstructionType::RType(RArgs {
@@ -2179,7 +2108,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: DIRECT_MEMORY_ARGS,
             relocation_type: None,
         },
-        // sh eva ignored because i am not doing EVA
         InstructionInformation {
             mnemonic: "sll",
             basis: InstructionType::RType(RArgs {
@@ -2416,7 +2344,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             args: &[&[ArgumentType::Rd, ArgumentType::Rs, ArgumentType::Rt]],
             relocation_type: None,
         },
-        // SUXC1 doesn't apply to our setup with a 32-bit FPU.
         InstructionInformation {
             mnemonic: "sw",
             basis: InstructionType::IType(IArgs {
@@ -2480,37 +2407,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             implementation: wrap_imp(implementation::swxc1),
             args: &[
                 &[ArgumentType::Fs, ArgumentType::Rt, ArgumentType::Rs],
-            ],
-            relocation_type: None,
-        },
-        InstructionInformation {
-            mnemonic: "sync",
-            basis: InstructionType::RType(RArgs {
-                opcode: 0x00,
-                rs: 0,
-                rt: 0,
-                rd: 0,
-                shamt: 0,
-                funct: 0x0f,
-            }),
-            implementation: wrap_imp(implementation::sync),
-            args: &[
-                &[],
-                &[ArgumentType::Immediate],
-            ],
-            relocation_type: None,
-        },
-        InstructionInformation {
-            mnemonic: "synci",
-            basis: InstructionType::RegImmIType(RegImmIArgs {
-                opcode: 0x01,
-                rs: 0,
-                regimm_funct_code: 0x1f,
-                imm: 0,
-            }),
-            implementation: wrap_imp(implementation::synci),
-            args: &[
-                &[ArgumentType::Immediate, ArgumentType::Rs],
             ],
             relocation_type: None,
         },
@@ -2615,71 +2511,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             implementation: wrap_imp(implementation::tgeu),
             args: &[
                 &[ArgumentType::Rs, ArgumentType::Rt],
-            ],
-            relocation_type: None,
-        },
-        // not implementing TLBINV or TLBINVF
-        InstructionInformation {
-            mnemonic: "tlbp",
-            basis: InstructionType::RType(RArgs {
-                opcode: 0x10,
-                rs: 0,
-                rt: 0,
-                rd: 0,
-                shamt: 0,
-                funct: 0x08,
-            }),
-            implementation: wrap_imp(implementation::tlbp),
-            args: &[
-                &[],
-            ],
-            relocation_type: None,
-        },
-        InstructionInformation {
-            mnemonic: "tlbr",
-            basis: InstructionType::RType(RArgs {
-                opcode: 0x10,
-                rs: 0,
-                rt: 0,
-                rd: 0,
-                shamt: 0,
-                funct: 0x01,
-            }),
-            implementation: wrap_imp(implementation::tlbr),
-            args: &[
-                &[],
-            ],
-            relocation_type: None,
-        },
-        InstructionInformation {
-            mnemonic: "tlbwi",
-            basis: InstructionType::RType(RArgs {
-                opcode: 0x10,
-                rs: 0,
-                rt: 0,
-                rd: 0,
-                shamt: 0,
-                funct: 0x02,
-            }),
-            implementation: wrap_imp(implementation::tlbwi),
-            args: &[
-                &[],
-            ],
-            relocation_type: None,
-        },
-        InstructionInformation {
-            mnemonic: "tlbwi",
-            basis: InstructionType::RType(RArgs {
-                opcode: 0x10,
-                rs: 0,
-                rt: 0,
-                rd: 0,
-                shamt: 0,
-                funct: 0x06,
-            }),
-            implementation: wrap_imp(implementation::tlbwr),
-            args: &[
-                &[],
             ],
             relocation_type: None,
         },
@@ -2834,37 +2665,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             implementation: wrap_imp(implementation::trunc_w_s),
             args: &[
                 &[ArgumentType::Fd, ArgumentType::Fs],
-            ],
-            relocation_type: None,
-        },
-        InstructionInformation {
-            mnemonic: "wait",
-            basis: InstructionType::RType(RArgs {
-                opcode: 0x10,
-                rs: 0,
-                rt: 0,
-                rd: 0,
-                shamt: 0,
-                funct: 0x20,
-            }),
-            implementation: wrap_imp(implementation::wait),
-            args: &[
-                &[]
-            ],
-            relocation_type: None,
-        },
-        InstructionInformation {
-            mnemonic: "wrpgpr",
-            basis: InstructionType::CopMovRType(CopMovRArgs {
-                opcode: 0x10,
-                funct_code: 0x0e,
-                rt: 0,
-                rd: 0,
-                sel: 0,
-            }),
-            implementation: wrap_imp(implementation::wrpgpr),
-            args: &[
-                &[ArgumentType::Rd, ArgumentType::Rt],
             ],
             relocation_type: None,
         },
