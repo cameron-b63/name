@@ -7,17 +7,24 @@ use crate::elf_utils::find_target_section_index;
 
 use crate::elf_def::Elf;
 use crate::exception::definitions::{ExceptionType, SourceContext};
+use crate::instruction::information::InstructionInformation;
 use crate::instruction::instruction_table::INSTRUCTION_TABLE;
-use crate::instruction::InstructionMeta;
 use crate::structs::{LineInfo, ProgramState};
+
+const LOOKUP_CHECK: &'static str = "";
 
 /// Hashmap to lookup instructions based on their lookup code. Used in the "decode"
 /// portion of the Von Neumann fetch-decode-execute cycle.
-pub static INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static InstructionMeta>> =
+pub static INSTRUCTION_LOOKUP: LazyLock<HashMap<u32, &'static InstructionInformation>> =
     LazyLock::new(|| {
         INSTRUCTION_TABLE
             .iter()
-            .map(|(_mnemonic, info)| (info.get_lookup(), info))
+            .map(|(mnemonic, info)| {
+                if mnemonic == &LOOKUP_CHECK {
+                    dbg!(info.lookup_code());
+                }
+                (info.lookup_code(), *info)
+            })
             .collect()
     });
 
@@ -37,11 +44,19 @@ pub fn single_step(_source_context: &SourceContext, program_state: &mut ProgramS
 
     // Fetch
     let raw_instruction = fetch(program_state);
-    let instr_info = match INSTRUCTION_LOOKUP.get(&raw_instruction.get_lookup()) {
+    let lookup_code = match raw_instruction.get_lookup() {
+        Ok(code) => code,
+        Err(e) => {
+            program_state.set_exception(e);
+            return;
+        }
+    };
+
+    let instr_info = match INSTRUCTION_LOOKUP.get(&lookup_code) {
         Some(info) => info,
         None => {
             program_state.cpu.pc += MIPS_ADDRESS_ALIGNMENT; // Bugfix since set_exception expects pre-incremented PC
-            dbg!(raw_instruction);
+            dbg!(&lookup_code);
             program_state.set_exception(ExceptionType::ReservedInstruction);
             return;
         }
@@ -50,12 +65,20 @@ pub fn single_step(_source_context: &SourceContext, program_state: &mut ProgramS
     program_state.cpu.pc += MIPS_ADDRESS_ALIGNMENT;
 
     // Execute the instruction; program_state is modified.
-    if false
+    if match option_env!("NAME_DEBUG") {
+        Some(value) => value != "0",
+        None => false,
+    }
     /* Allowing for some later verbose mode */
     {
-        eprintln!("Executing {}", instr_info.get_mnemonic());
+        eprintln!(
+            "Executing {}: 0x{:08x} @ 0x{:08x}",
+            instr_info.mnemonic,
+            raw_instruction.raw,
+            program_state.cpu.pc - 4
+        );
     }
-    let _ = (instr_info.get_implementation())(program_state, raw_instruction);
+    let _ = (instr_info.implementation)(program_state, raw_instruction);
 
     // The $0 register should never have been permanently changed. Don't let it remain changed.
 

@@ -422,7 +422,7 @@ impl FromStr for Register {
 
 /// Enumeration of FPU (floating-point) registers
 #[derive(Debug, Clone, Copy)]
-#[repr(usize)]
+#[repr(C)]
 pub enum FpRegister {
     F0,
     F1,
@@ -568,7 +568,7 @@ impl LineInfo {
 
         // Find the requested line to read
         let target_line_content =
-            contents.lines().collect::<Vec<&str>>()[(self.line_number-1) as usize];
+            contents.lines().collect::<Vec<&str>>()[(self.line_number - 1) as usize];
 
         return String::from(target_line_content);
     }

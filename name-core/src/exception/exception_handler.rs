@@ -86,7 +86,7 @@ pub fn handle_exception(
                 generate_err(
                     source_context,
                     epc,
-                    "Unrecognized bytes in ELF at program counter.",
+                    "Reserved instruction encountered; Unrecognized bytes in ELF at program counter.",
                 )
             );
             exit(0);
