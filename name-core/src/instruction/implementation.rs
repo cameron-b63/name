@@ -580,13 +580,17 @@ pub fn sra(_program_state: &mut ProgramState, _args: RArgs) -> () {
 }
 
 // 0x04 - sllv
-pub fn sllv(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("sllv");
+pub fn sllv(program_state: &mut ProgramState, args: RArgs) -> () {
+    program_state.cpu.general_purpose_registers[args.rd as usize] =
+        program_state.cpu.general_purpose_registers[args.rs as usize]
+            << (program_state.cpu.general_purpose_registers[args.rt as usize] & 0b0001_1111);
 }
 
 // 0x06 - srlv
-pub fn srlv(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("srlv");
+pub fn srlv(program_state: &mut ProgramState, args: RArgs) -> () {
+    program_state.cpu.general_purpose_registers[args.rd as usize] =
+        program_state.cpu.general_purpose_registers[args.rs as usize]
+            >> (program_state.cpu.general_purpose_registers[args.rt as usize] & 0b0001_1111);
 }
 
 // 0x07 - srav
@@ -635,7 +639,7 @@ pub fn sync(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("sync instruction");
 }
 
-// 0x10 - mfhi 
+// 0x10 - mfhi
 pub fn mfhi(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("mfhi");
 }
@@ -656,23 +660,43 @@ pub fn mtlo(_program_state: &mut ProgramState, _args: RArgs) -> () {
 }
 
 // 0x18 - mult
-pub fn mult(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("mult");
+pub fn mult(program_state: &mut ProgramState, args: RArgs) -> () {
+    let temp: i64 = program_state.cpu.general_purpose_registers[args.rs as usize] as i32 as i64
+        * program_state.cpu.general_purpose_registers[args.rt as usize] as i32 as i64;
+    (program_state.cpu.hi, program_state.cpu.lo) = ((temp >> 32) as i32 as u32, temp as i32 as u32);
 }
 
 // 0x19 - multu
-pub fn multu(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("multu");
+pub fn multu(program_state: &mut ProgramState, args: RArgs) -> () {
+    let temp: u64 = program_state.cpu.general_purpose_registers[args.rs as usize] as u64
+        * program_state.cpu.general_purpose_registers[args.rt as usize] as u64;
+    (program_state.cpu.hi, program_state.cpu.lo) = ((temp >> 32) as u32, temp as u32);
 }
 
 // 0x1A - div
-pub fn div(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("div");
+pub fn div(program_state: &mut ProgramState, args: RArgs) -> () {
+    // I should note that dividing by zero
+    // does NOT trigger any special exception per the MIPS standard.
+    // quotient goes into LO, remainder into HI
+    (program_state.cpu.lo, program_state.cpu.hi) = (
+        (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+            / program_state.cpu.general_purpose_registers[args.rt as usize] as i32) as u32,
+        (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+            % program_state.cpu.general_purpose_registers[args.rt as usize] as i32) as u32,
+    );
 }
 
 // 0x1B - divu
-pub fn divu(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("divu");
+pub fn divu(program_state: &mut ProgramState, args: RArgs) -> () {
+    // I should note that dividing by zero
+    // does NOT trigger any special exception per the MIPS standard.
+    // quotient goes into LO, remainder into HI
+    (program_state.cpu.lo, program_state.cpu.hi) = (
+        program_state.cpu.general_purpose_registers[args.rs as usize]
+            / program_state.cpu.general_purpose_registers[args.rt as usize],
+        program_state.cpu.general_purpose_registers[args.rs as usize]
+            % program_state.cpu.general_purpose_registers[args.rt as usize],
+    );
 }
 
 // 0x20 - add
@@ -680,13 +704,10 @@ pub fn add(program_state: &mut ProgramState, args: RArgs) -> () {
     program_state.cpu.general_purpose_registers[args.rd as usize] =
         program_state.cpu.general_purpose_registers[args.rs as usize]
             + program_state.cpu.general_purpose_registers[args.rt as usize];
-
-    // println!("Adding ${}({}) to ${}({}) and storing in ${}, now it's {}", rs, program_state.cpu.general_purpose_registers[args.rs as usize], rt, program_state.cpu.general_purpose_registers[args.rt as usize], rd, program_state.cpu.general_purpose_registers[args.rs as usize] + program_state.cpu.general_purpose_registers[args.rt as usize]);
 }
 
 // 0x21 - addu
 pub fn addu(program_state: &mut ProgramState, args: RArgs) -> () {
-    // check that below works
     program_state.cpu.general_purpose_registers[args.rd as usize] =
         program_state.cpu.general_purpose_registers[args.rs as usize]
             .overflowing_add(program_state.cpu.general_purpose_registers[args.rt as usize])
@@ -942,7 +963,7 @@ pub fn deret(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("deret");
 }
 
-// 
+//
 pub fn mfc0(_program_state: &mut ProgramState, _args: CopMovRArgs) -> () {
     todo!("mfc0");
 }
@@ -984,7 +1005,6 @@ pub fn cfc1(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
 pub fn mtc1(_program_state: &mut ProgramState, _args: CopMovRArgs) -> () {
     todo!("mtc1");
 }
-
 
 // 0x00;0x06 - CT (Coprocessor to) - GPR <- FPU
 pub fn ctc1(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
@@ -1255,7 +1275,6 @@ pub fn rsqrt_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
 pub fn rsqrt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
     todo!("rsqrt.s");
 }
-
 
 // 0x0f.s - floor.w.s
 pub fn floor_w_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
@@ -1547,8 +1566,10 @@ pub fn maddu(_program_state: &mut ProgramState, _args: RArgs) -> () {
 }
 
 // 0x02 - mul
-pub fn mul(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("mul");
+pub fn mul(program_state: &mut ProgramState, args: RArgs) -> () {
+    program_state.cpu.general_purpose_registers[args.rd as usize] =
+        (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+            * program_state.cpu.general_purpose_registers[args.rt as usize] as i32) as u32;
 }
 
 // 0x04 - msub
@@ -1601,7 +1622,7 @@ pub fn ins(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("ins");
 }
 
-// 0x20 - BSHFL multiplexing 
+// 0x20 - BSHFL multiplexing
 pub fn bshfl(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("wsbh(0x02) , seb(0x20) , seh(0x30)");
 }

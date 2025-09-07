@@ -128,7 +128,9 @@ pub(crate) fn expand_nop(_args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<A
 /// This also shouldn't really be a pseudoinstruction, but it makes sense.
 /// PAUSE is just a special case of SLL.
 /// It doesn't do anything yet so I haven't handled any special funny business.
-pub(crate) fn expand_pause(_args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
+pub(crate) fn expand_pause(
+    _args: Vec<AstKind>,
+) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     let zero = AstKind::Register(Register::Zero);
     let imm_five = AstKind::Immediate(5);
 
@@ -140,13 +142,15 @@ pub(crate) fn expand_pause(_args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec
 
 /// This is the same as the other SLL variations with rd=0...
 /// SSNOP is a special case of SLL with SLL $0, $0, 1
-pub(crate) fn expand_ssnop(_args: Vec<AstKind>) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
+pub(crate) fn expand_ssnop(
+    _args: Vec<AstKind>,
+) -> Result<Vec<(&'static str, Vec<AstKind>)>, String> {
     let zero = AstKind::Register(Register::Zero);
     let imm_one = AstKind::Immediate(1);
 
     Ok(vec![
         // sll $0, $0, 1
-        ("sll", vec![zero.clone(), zero, imm_one])
+        ("sll", vec![zero.clone(), zero, imm_one]),
     ])
 }
 

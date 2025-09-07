@@ -38,6 +38,8 @@ pub struct Symbol {
 pub struct Processor {
     pub pc: u32,
     pub general_purpose_registers: [u32; 32],
+    pub hi: u32,
+    pub lo: u32,
 }
 
 /// Coprocessor 0 is for communication with the OS. Look in name-core/exception for more.

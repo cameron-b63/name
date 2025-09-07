@@ -2,7 +2,10 @@ use crate::{
     elf_def::RelocationEntryType,
     instruction::{
         formats::{
-            bit_field_type::BitFieldArgs, cond_mov_cc_type::CondMovCCArgs, cop_mov_r_type::CopMovRArgs, fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs, fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs, i_type::IArgs, j_type::JArgs, r_type::RArgs, regimm_i_type::RegImmIArgs
+            bit_field_type::BitFieldArgs, cond_mov_cc_type::CondMovCCArgs,
+            cop_mov_r_type::CopMovRArgs, fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs,
+            fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs, i_type::IArgs, j_type::JArgs,
+            r_type::RArgs, regimm_i_type::RegImmIArgs,
         },
         instruction::RawInstruction,
     },
