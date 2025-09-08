@@ -109,6 +109,8 @@ pub enum FpFmt {
     Reserved = 0,
     Single = 16,
     Double = 17,
+    Word = 20,
+    Long = 21,
 }
 
 // Cast FpFmt to its proper u32 rep in fmt3 form, page 115
@@ -118,6 +120,8 @@ impl FpFmt {
         match self {
             FpFmt::Single => 0,
             FpFmt::Double => 1,
+            FpFmt::Word => 4,
+            FpFmt::Long => 5,
             _ => 2,
         }
     }
