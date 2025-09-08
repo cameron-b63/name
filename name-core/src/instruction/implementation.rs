@@ -74,14 +74,14 @@ pub fn jal(program_state: &mut ProgramState, args: JArgs) -> () {
 
 // 0x04 - beq
 pub fn beq(program_state: &mut ProgramState, args: IArgs) -> () {
-    // Sign extend offset
-    let offset: i32 = ((args.imm & 0xFFFF) as i16 as i32) << 2;
-
     if program_state.cpu.general_purpose_registers[args.rs as usize]
         != program_state.cpu.general_purpose_registers[args.rt as usize]
     {
         return;
     }
+
+    // Sign extend offset
+    let offset: i32 = (args.imm as u16 as i16 as i32) << 2;
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
@@ -90,14 +90,14 @@ pub fn beq(program_state: &mut ProgramState, args: IArgs) -> () {
 
 // 0x05 - bne
 pub fn bne(program_state: &mut ProgramState, args: IArgs) -> () {
-    // Sign extend offset
-    let offset: i32 = ((args.imm & 0xFFFF) as i16 as i32) << 2;
-
     if program_state.cpu.general_purpose_registers[args.rs as usize]
         == program_state.cpu.general_purpose_registers[args.rt as usize]
     {
         return;
     }
+
+    // Sign extend offset
+    let offset: i32 = ((args.imm & 0xFFFF) as i16 as i32) << 2;
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
@@ -106,11 +106,11 @@ pub fn bne(program_state: &mut ProgramState, args: IArgs) -> () {
 
 // 0x06 - blez
 pub fn blez(program_state: &mut ProgramState, args: IArgs) -> () {
-    let offset: i32 = ((args.imm & 0xFFFF) as i16 as i32) << 2;
-
     if (program_state.cpu.general_purpose_registers[args.rs as usize] as i32) > 0 {
         return;
     }
+
+    let offset: i32 = ((args.imm & 0xFFFF) as i16 as i32) << 2;
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
@@ -119,12 +119,12 @@ pub fn blez(program_state: &mut ProgramState, args: IArgs) -> () {
 
 // 0x07 - bgtz
 pub fn bgtz(program_state: &mut ProgramState, args: IArgs) -> () {
-    // Sign extend offset
-    let offset: i32 = (args.imm as i16 as i32) << 2;
-
     if program_state.cpu.general_purpose_registers[args.rs as usize] as i32 <= 0 {
         return;
     }
+
+    // Sign extend offset
+    let offset: i32 = (args.imm as i16 as i32) << 2;
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
@@ -833,13 +833,29 @@ pub fn tne(_program_state: &mut ProgramState, _args: RArgs) -> () {
 */
 
 // 0x00 - bltz
-pub fn bltz(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("bltz");
+pub fn bltz(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    if(program_state.cpu.general_purpose_registers[args.rs as usize] as i32)
+        >= (program_state.cpu.general_purpose_registers[0] as i32)
+    {
+        return;
+    }
+
+    let offset = (args.imm as u16 as i16 as i32) << 2;
+    let target_address = (program_state.cpu.pc as i32 + offset) as u32;
+    program_state.jump_if_valid(target_address);
 }
 
 // 0x01 - bgez
-pub fn bgez(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("bgez");
+pub fn bgez(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    if(program_state.cpu.general_purpose_registers[args.rs as usize] as i32)
+        < (program_state.cpu.general_purpose_registers[0] as i32)
+    {
+        return;
+    }
+
+    let offset = (args.imm as u16 as i16 as i32) << 2;
+    let target_address = (program_state.cpu.pc as i32 + offset) as u32;
+    program_state.jump_if_valid(target_address);
 }
 
 // 0x02 - bltzl
@@ -888,8 +904,19 @@ pub fn bltzal(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
 }
 
 // 0x11 - bgezal
-pub fn bgezal(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("bgezal");
+pub fn bgezal(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    if (program_state.cpu.general_purpose_registers[args.rs as usize] as i32)
+        < (program_state.cpu.general_purpose_registers[0] as i32)
+    {
+        return;
+    }
+
+    let offset = (args.imm as u16 as i16 as i32) << 2;
+    let target_address = (program_state.cpu.pc as i32 + offset) as u32;
+
+    let temp = program_state.cpu.pc;
+    program_state.jump_if_valid(target_address);
+    program_state.cpu.general_purpose_registers[Ra as usize] = temp;
 }
 
 // 0x12 - bltzall
