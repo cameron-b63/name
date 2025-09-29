@@ -29,6 +29,40 @@ pub fn pack_up_u64(program_state: &mut ProgramState, target: u32, value: u64) {
     program_state.cp1.registers[target as usize + 1] = f32::from_bits(value as u32);
 }
 
+/// This is a helper function which takes the bitwise representation (u64) of a sign/magnitude long
+/// and converts it to the corresponding i64 signed value.
+pub fn u64_to_long(long_bits: u64) -> i64 {
+    let bitmask = 1 << 63;
+    if (long_bits & bitmask) == 0 {
+        return long_bits as i64;
+    } else {
+        return -((long_bits & !bitmask) as i64);
+    }
+}
+
+/// This is a helper function which takes a signed (i64) value and converts it to
+/// the corresponding sign/magnitude long bits (u64).
+/// note: potentially lossy.
+pub fn i64_to_long_bits(long_value: i64) -> u64 {
+    let sign_bit = 1 << 63;
+    if long_value > 0 {
+        return (long_value as u64) & !sign_bit;
+    } else {
+        return ((long_value as u64) & !sign_bit) | sign_bit;
+    }
+}
+
+/// This is a helper function which takes the bitwise representation (u32) of a sign/magnitude word
+/// and converts it to the corresponding i32 signed value.
+pub fn u32_to_word(word_bits: u32) -> i32 {
+    let bitmask = 1 << 31;
+    if (word_bits & bitmask) == 0 {
+        return word_bits as i32;
+    } else {
+        return -((word_bits & !bitmask) as i32);
+    }
+}
+
 /// Some operations will have subnormal results. This essentially means they're super tiny.
 /// For details, see the definition of FCSR (FS bit).
 /// This function facilitates the subnormal stuff.

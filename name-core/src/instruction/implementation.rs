@@ -9,7 +9,9 @@ use crate::instruction::formats::i_type::IArgs;
 use crate::instruction::formats::j_type::JArgs;
 use crate::instruction::formats::r_type::RArgs;
 use crate::instruction::formats::regimm_i_type::RegImmIArgs;
-use crate::instruction::implementation_helpers::perform_op_with_flush;
+use crate::instruction::implementation_helpers::{
+    i64_to_long_bits, perform_op_with_flush, u32_to_word, u64_to_long,
+};
 use crate::structs::{
     ProgramState,
     Register::{At, Ra},
@@ -834,7 +836,7 @@ pub fn tne(_program_state: &mut ProgramState, _args: RArgs) -> () {
 
 // 0x00 - bltz
 pub fn bltz(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
-    if(program_state.cpu.general_purpose_registers[args.rs as usize] as i32)
+    if (program_state.cpu.general_purpose_registers[args.rs as usize] as i32)
         >= (program_state.cpu.general_purpose_registers[0] as i32)
     {
         return;
@@ -847,7 +849,7 @@ pub fn bltz(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
 
 // 0x01 - bgez
 pub fn bgez(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
-    if(program_state.cpu.general_purpose_registers[args.rs as usize] as i32)
+    if (program_state.cpu.general_purpose_registers[args.rs as usize] as i32)
         < (program_state.cpu.general_purpose_registers[0] as i32)
     {
         return;
@@ -1076,33 +1078,72 @@ pub fn bc1(program_state: &mut ProgramState, args: FpCCBranchArgs) -> () {
 // 0x00 - add.fmt
 
 // 0x00.d - add.d
-pub fn add_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("add.d");
+pub fn add_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let _ = is_register_aligned(program_state, args.fs);
+    let _ = is_register_aligned(program_state, args.ft);
+
+    let s = f64::from_bits(extract_u64(program_state, args.fs));
+    let t = f64::from_bits(extract_u64(program_state, args.ft));
+    let result = perform_op_with_flush(program_state, s + t);
+
+    pack_up_u64(program_state, args.fd, f64::to_bits(result));
 }
 
 // 0x00.s - add.s
-pub fn add_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("add.s");
+pub fn add_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    program_state.cp1.registers[args.fd as usize] = perform_op_with_flush(
+        program_state,
+        program_state.cp1.registers[args.fs as usize]
+            + program_state.cp1.registers[args.ft as usize],
+    );
 }
 
+// 0x01.fmt - sub.fmt
+
 // 0x01.d - sub.d
-pub fn sub_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("sub.d");
+pub fn sub_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let _ = is_register_aligned(program_state, args.fs);
+    let _ = is_register_aligned(program_state, args.ft);
+
+    let a = f64::from_bits(extract_u64(program_state, args.fs));
+    let b = f64::from_bits(extract_u64(program_state, args.ft));
+
+    let res = perform_op_with_flush(program_state, a - b);
+    pack_up_u64(program_state, args.fd, res.to_bits());
 }
 
 // 0x01.s - sub.s
-pub fn sub_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("sub.s");
+pub fn sub_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    program_state.cp1.registers[args.fd as usize] = perform_op_with_flush(
+        program_state,
+        program_state.cp1.registers[args.fs as usize]
+            - program_state.cp1.registers[args.ft as usize],
+    );
 }
 
 // 0x02.d - mul.d
-pub fn mul_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("mul.d");
+pub fn mul_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let _ = is_register_aligned(program_state, args.fs);
+    let _ = is_register_aligned(program_state, args.ft);
+
+    let f1 = f64::from_bits(extract_u64(program_state, args.fs));
+    let f2 = f64::from_bits(extract_u64(program_state, args.ft));
+
+    let res = perform_op_with_flush(program_state, f1 * f2);
+
+    pack_up_u64(program_state, args.fd, res.to_bits());
 }
 
 // 0x02.s - mul.s
-pub fn mul_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("mul.s");
+pub fn mul_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    program_state.cp1.registers[args.fd as usize] = perform_op_with_flush(
+        program_state,
+        program_state.cp1.registers[args.fs as usize]
+            * program_state.cp1.registers[args.ft as usize],
+    );
 }
 
 // 0x03 - div.fmt
@@ -1119,6 +1160,15 @@ pub fn div_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
     let result: f64 = perform_op_with_flush(program_state, numerator / denominator);
 
     pack_up_u64(program_state, args.fd, f64::to_bits(result));
+}
+
+// 0x03.s - div.s
+pub fn div_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    program_state.cp1.registers[args.fd as usize] = perform_op_with_flush(
+        program_state,
+        program_state.cp1.registers[args.fs as usize]
+            / program_state.cp1.registers[args.ft as usize],
+    );
 }
 
 // 0x04.d - sqrt.d
@@ -1168,24 +1218,40 @@ pub fn mov_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
     todo!("mov.s");
 }
 
+// 0x07.* - neg.fmt
+
 // 0x07.d - neg.d
-pub fn neg_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("neg.d");
+pub fn neg_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let _ = is_register_aligned(program_state, args.fs);
+
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs)) * -1.0;
+
+    pack_up_u64(program_state, args.fd, double_value.to_bits());
 }
 
 // 0x07.s - neg.s
-pub fn neg_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("neg.s");
+pub fn neg_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    program_state.cp1.registers[args.fd as usize] =
+        -1.0 * program_state.cp1.registers[args.fs as usize];
 }
 
 // 0x08.d - round.l.d
-pub fn round_l_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("round.l.d");
+pub fn round_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let _ = is_register_aligned(program_state, args.fs);
+
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs)).round();
+    let long_value = u64_to_long(double_value.to_bits());
+    pack_up_u64(program_state, args.fd, long_value as u64);
 }
 
 // 0x08.s - round.l.s
-pub fn round_l_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("round.l.s");
+pub fn round_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+
+    let single_value = program_state.cp1.registers[args.fs as usize].round();
+    pack_up_u64(program_state, args.fd, (single_value as f64).to_bits());
 }
 
 // 0x09.d - trunc.l.d
@@ -1229,13 +1295,18 @@ pub fn floor_l_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
 }
 
 // 0x0c.d - round.w.d
-pub fn round_w_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("round.w.d");
+pub fn round_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fs);
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs)).round();
+    let word_value = u32_to_word(double_value as u64 as u32);
+    program_state.cp1.registers[args.fd as usize] = f32::from_bits(word_value as u32);
 }
 
 // 0x0c.s - round.w.s
-pub fn round_w_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("round.w.s");
+pub fn round_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let single_value = program_state.cp1.registers[args.fs as usize].round();
+    program_state.cp1.registers[args.fd as usize] =
+        f32::from_bits(u32_to_word(single_value.to_bits()) as u32);
 }
 
 // 0x0d.d - trunc.w.d
@@ -1308,14 +1379,84 @@ pub fn floor_w_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
     todo!("floor.w.s");
 }
 
-// 0x20.s - cvt.s.d
-pub fn cvt_s_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("cvt.s.d");
+// 0x20.d - cvt.s.d
+pub fn cvt_s_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fs);
+    let double_value = extract_u64(program_state, args.fs) as f64;
+    program_state.cp1.registers[args.fd as usize] = double_value as f32;
+}
+
+// 0x20.l - cvt.s.l
+pub fn cvt_s_l(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fs);
+    let long_value = u64_to_long(extract_u64(program_state, args.fs));
+    program_state.cp1.registers[args.fd as usize] = long_value as f64 as f32;
+}
+
+// 0x20.w - cvt.s.w
+pub fn cvt_s_w(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    program_state.cp1.registers[args.fd as usize] =
+        u32_to_word(program_state.cp1.registers[args.fs as usize].to_bits()) as f32;
+}
+
+// 0x21.s - cvt.d.l
+pub fn cvt_d_l(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let _ = is_register_aligned(program_state, args.fs);
+
+    let long_value = u64_to_long(extract_u64(program_state, args.fs));
+    pack_up_u64(program_state, args.fd, (long_value as f64).to_bits());
 }
 
 // 0x21.s - cvt.d.s
-pub fn cvt_d_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("cvt.d.s");
+pub fn cvt_d_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+
+    program_state.cp1.registers[args.fd as usize + 1] =
+        program_state.cp1.registers[args.fs as usize];
+}
+
+// 0x21.s - cvt.d.w
+pub fn cvt_d_w(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+
+    let word_value = u32_to_word(program_state.cp1.registers[args.fs as usize].to_bits());
+    let double_value = word_value as i64 as f64;
+    pack_up_u64(program_state, args.fd, double_value.to_bits());
+}
+
+// 0x24.d - cvt.w.d
+pub fn cvt_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fs);
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+    program_state.cp1.registers[args.fd as usize] =
+        f32::from_bits(u32_to_word((double_value as f32).to_bits()) as u32);
+}
+
+// 0x24.s - cvt.w.s
+pub fn cvt_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let single_value = program_state.cp1.registers[args.fs as usize];
+    program_state.cp1.registers[args.fd as usize] =
+        f32::from_bits(u32_to_word(single_value.to_bits()) as u32);
+}
+
+// 0x25.d - cvt.l.d
+pub fn cvt_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let _ = is_register_aligned(program_state, args.fs);
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+    let rounded_double = double_value.round() as i64;
+    let long_bits = i64_to_long_bits(rounded_double);
+    pack_up_u64(program_state, args.fd, long_bits);
+}
+
+// 0x25.s - cvt.l.s
+pub fn cvt_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let _ = is_register_aligned(program_state, args.fd);
+    let single_value = program_state.cp1.registers[args.fs as usize];
+    let rounded_single = single_value.round() as i32;
+    let long_bits = rounded_single as u32 as u64;
+    pack_up_u64(program_state, args.fd, long_bits);
 }
 
 // 0x30.d - c.f.d
