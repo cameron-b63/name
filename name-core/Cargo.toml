@@ -15,5 +15,8 @@ strum_macros = "0.26"
 paste = "1.0.15"
 bumpalo = "3.16.0"
 
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+
 [lints]
 workspace = true

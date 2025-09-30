@@ -205,7 +205,7 @@ pub const SYMBOL_TABLE_ENTRY_SIZE: u32 = 8;
 // as well as information from the original TIS ELF specification.
 #[repr(C)]
 // Used to avoid aligment issues. Not sure it's necessary but honestly better safe than sorry in this case.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Elf32Header {
     pub e_ident: [u8; 16], // Contains { {EI_MAG0 .. EIMAG3}, EI_CLASS, EI_DATA, EI_VERSION, EI_OSABI, EI_ABIVERSION, EI_PAD}
     pub e_type: u16,       // Identifies object file type (ET_REL before linking, ET_EXEC after)
@@ -250,7 +250,7 @@ impl Elf32Header {
 // This struct was also derived from https://en.wikipedia.org/wiki/Executable_and_Linkable_Format
 // It will be found at e_phoff, and have e_phnum entries, each of size e_phentsize. That's why we specified it prior.
 #[repr(C)]
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Elf32ProgramHeader {
     pub(crate) p_type: u32, // Indicates type. PT_LOAD signals a loadable segment (.text, .rodata, .data, etc.)
     pub(crate) p_offset: u32, // Offset of segment in the file image
@@ -283,7 +283,7 @@ impl Elf32ProgramHeader {
 // This struct was indeed also derived from https://en.wikipedia.org/wiki/Executable_and_Linkable_Format
 // It will be found at e_shoff, and have e_shnum entries, each of size e_shentsize. the string representation of the name of each entry is found at e_shstrndx.
 #[repr(C)]
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Elf32SectionHeader {
     pub(crate) sh_name: u32, // Offset to .shstrtab section containing name of this section
     pub(crate) sh_type: u32, // Type of header. SHT_PROGBITS signals program data, SHT_SYMTAB the symbol table, etc.
@@ -436,7 +436,7 @@ impl Elf32Sym {
 
 // To construct an ET_REL ELF file, we'll use the following struct:
 #[repr(C)]
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Elf {
     pub file_header: Elf32Header,
     pub program_header_table: Vec<Elf32ProgramHeader>,

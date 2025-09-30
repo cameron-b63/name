@@ -328,6 +328,7 @@ pub fn create_new_elf(sections: Vec<Vec<u8>>, elf_type: ElfType, create_shstrtab
 
     // Craft final sections
     let mut final_sections: Vec<Vec<u8>> = sections.clone();
+    dbg!(&final_sections);
 
     final_sections.push(shstrtab_section); // Is empty if create_shstrtab is false
 
@@ -389,8 +390,7 @@ pub fn extract_symbol_table_to_sections(symbol_table: Vec<Symbol>) -> (Vec<u8>, 
     return (section_dot_symtab, section_dot_strtab);
 }
 
-// This function creates a new file with the passed name and writes all bytes into an Elf object
-pub fn write_elf_to_file(file_name: &PathBuf, et_rel: &Elf) -> Result<(), String> {
+pub fn write_elf_to_bytes(et_rel: &Elf) -> Result<Vec<u8>, String> {
     // Declare file_bytes vector to push all these file bytes onto
     // Concatenate all bytes in file header
     let mut file_bytes: Vec<u8> = et_rel.file_header.to_bytes().to_vec();
@@ -410,6 +410,12 @@ pub fn write_elf_to_file(file_name: &PathBuf, et_rel: &Elf) -> Result<(), String
         file_bytes.extend_from_slice(&entry.to_bytes());
     }
 
+    Ok(file_bytes)
+}
+
+// This function creates a new file with the passed name and writes all bytes into an Elf object
+pub fn write_elf_to_file(file_name: &PathBuf, et_rel: &Elf) -> Result<(), String> {
+    let file_bytes = write_elf_to_bytes(et_rel)?;
     // Write file bytes to output file
     let mut f: fs::File = fs::File::create(file_name).expect("Unable to write file");
     f.write_all(&file_bytes).expect("Unable to write data.");
@@ -455,14 +461,12 @@ pub fn read_bytes_to_elf(file_contents: Vec<u8>) -> Result<Elf, String> {
 
     let section_header_table_bytes =
         &file_contents[(elf_header.e_shoff as usize)..file_contents.len()];
+
     let section_header_table: Vec<Elf32SectionHeader> =
-        parse_sh_table_bytes(section_header_table_bytes)
-            .into_iter()
-            .filter(|entry| entry.sh_name != 0)
-            .collect();
+        parse_sh_table_bytes(section_header_table_bytes);
 
     let mut sections: Vec<Vec<u8>> = vec![];
-    for sh in &section_header_table {
+    for sh in section_header_table.iter().filter(|sh| sh.sh_name != 0) {
         sections.push(
             file_contents[(sh.sh_offset) as usize..(sh.sh_offset + sh.sh_size as u32) as usize]
                 .to_owned(),
@@ -600,13 +604,7 @@ fn get_string_from_strtab(strtab: &Vec<u8>, offset: u32) -> Option<&str> {
 pub fn extract_lineinfo(elf: &Elf) -> SourceContext {
     let shstrtab = &elf.sections[elf.file_header.e_shstrndx as usize - 1];
     let idx = match find_target_section_index(&elf.section_header_table, shstrtab, ".line") {
-        // Absolute wizard shit going on here.
-        // I have absolutely ZERO clue why find_target_section_index is now magically no longer off-by-one.
-        // My best guess is that something is malformed and still accounting for section .rel,
-        // but I can find no evidence to support this thought. I'm very lost.
-        // Please watch out when using find_target_section_index, as it may magically not be off by one I guess??
-        // Will do my best to fix this but at this point I'm more scared of the fix than the problem...
-        Some(i) => i,
+        Some(i) => i - 1,
         None => panic!("No lineinfo supplied in ELF!"),
     };
 
@@ -750,4 +748,85 @@ pub fn deserialize_line_info(data: &Vec<u8>) -> SourceContext {
     }
 
     return SourceContext::new(result, filenames);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn elf_serialize_desearlize_iso() {
+        let mock_rel_table: Vec<RelocationEntry> = vec![
+            RelocationEntry {
+                r_offset: 0,
+                r_sym: 0,
+                r_type: crate::elf_def::RelocationEntryType::R16,
+            },
+            RelocationEntry {
+                r_offset: 4,
+                r_sym: 0,
+                r_type: crate::elf_def::RelocationEntryType::R16,
+            },
+            RelocationEntry {
+                r_offset: 0,
+                r_sym: 0,
+                r_type: crate::elf_def::RelocationEntryType::R16,
+            },
+        ];
+
+        let mock_rel_section: Vec<u8> = mock_rel_table
+            .iter()
+            .flat_map(|entry| entry.to_bytes())
+            .collect();
+
+        let empty_symtab_entry: Elf32Sym = Elf32Sym {
+            st_name: 0,
+            st_value: 0,
+            st_size: 0,
+            st_info: 0,
+            st_other: 0,
+            st_shndx: 0,
+        };
+
+        let mock_symtab: Vec<Elf32Sym> = vec![
+            empty_symtab_entry.clone(),
+            Elf32Sym {
+                st_name: 1,
+                st_value: 0xDEADBEEF,
+                st_size: 3,
+                st_info: 0,
+                st_other: 0,
+                st_shndx: 0,
+            },
+            empty_symtab_entry.clone(),
+            Elf32Sym {
+                st_name: 1,
+                st_value: 0x8BADF00D,
+                st_size: 4,
+                st_info: 0,
+                st_other: 0,
+                st_shndx: 0,
+            },
+        ];
+        let mock_sections: Vec<Vec<u8>> = vec![
+            vec![0u8; 8],
+            vec![0u8; 8],
+            mock_rel_section,
+            mock_symtab
+                .iter()
+                .map(|symbol| symbol.to_bytes())
+                .flatten()
+                .collect(),
+            vec![b'\0', b'h', b'i', b'\0', b'\0', b'm', b'o', b'm', b'\0'],
+            vec![0u8; 32],
+        ];
+
+        let mock_consolidated_elf: Elf = create_new_elf(mock_sections, ElfType::Relocatable, true);
+
+        assert_eq!(
+            mock_consolidated_elf,
+            read_bytes_to_elf(write_elf_to_bytes(&mock_consolidated_elf).unwrap()).unwrap()
+        );
+    }
 }

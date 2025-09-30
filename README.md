@@ -54,9 +54,9 @@ The order in which sections appear in linked, multi-module programs is not yet s
 The NAME MIPS assembler uses a few key steps:
 
 #### Lexing
-Source code is first run through the [lexer](name-core/src/parse/lexer.rs) for tokenizing. The lexer maps the source code to a `Vec<Token>`, validating that everything in the source file can be interpreted by the parser. The lexer is position-based and performs greedy matching based on lookaheads, with each lexeme responsible for describing its own structure in [lexer.rs](name-core/src/parse/lexer.rs). 
+Source code is first run through the [lexer](name-core/src/parse/lexer.rs) for tokenizing. The lexer maps the source code to a `Vec<Token>`, validating that everything in the source file can be interpreted by the parser. The lexer is position-based and performs greedy matching based on lookaheads, with each lexeme responsible for describing its own structure in [lexer.rs](name-core/src/parse/lexer.rs).
 
-This "description" is a function which returns a `Token` of a specific `TokenKind`. The `Token` also includes a `SrcSpan`, which describes the byte position (start-end) in the source file of the token. 
+This "description" is a function which returns a `Token` of a specific `TokenKind`. The `Token` also includes a `SrcSpan`, which describes the byte position (start-end) in the source file of the token.
 
 #### Parsing
 The [parser](name-core/src/parse/parse.rs) uses the `Vec<Token>` produced by the lexer to create an AST. The AST begins as a `Vec<Ast>` with one element: an `Ast::Root`. The AST, once created by the parser, is folded into the assembly environment recursively from that `Ast::Root`. During this folding process, actual assembly occurs.

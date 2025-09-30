@@ -40,3 +40,6 @@ run.sh
 
 MIPS/*
 MIPS
+
+*.bin
+*.o

@@ -173,6 +173,7 @@ pub fn relocate_text_entries(
             SHSTRTAB => None, // Do not conserve .shstrtab
             _ => Some(section.clone()),
         })
+        .filter(|sec| !sec.is_empty()) // ditch empty sections
         .collect();
     Ok(create_new_elf(
         exec_sections,

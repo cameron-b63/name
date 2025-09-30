@@ -1,0 +1,16 @@
+[package]
+name = "name"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+license-file.workspace = true
+repository.workspace = true
+
+[dependencies]
+clap = { version = "4.5.9", features = ["derive"] }
+name-as = { version = "0.1.0", path = "../name-as" }
+name_core = { version = "0.1.0", path = "../name-core" }
+name-ld = { version = "0.1.0", path = "../name-ld" }
+name-emu = { version = "0.1.0", path = "../name-emu" }
+[lints]
+workspace = true

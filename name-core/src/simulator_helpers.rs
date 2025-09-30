@@ -93,7 +93,7 @@ pub fn extract_loadable_sections(elf: &Elf) -> (Vec<u8>, Vec<u8>) {
         &elf.sections[elf.file_header.e_shstrndx as usize - 1],
         ".text",
     ) {
-        Some(section_index) => elf.sections[section_index].clone(),
+        Some(section_index) => elf.sections[section_index - 1].clone(),
         None => unreachable!(),
     };
 
@@ -102,7 +102,7 @@ pub fn extract_loadable_sections(elf: &Elf) -> (Vec<u8>, Vec<u8>) {
         &elf.sections[elf.file_header.e_shstrndx as usize - 1],
         ".data",
     ) {
-        Some(section_index) => elf.sections[section_index].clone(),
+        Some(section_index) => elf.sections[section_index - 1].clone(),
         None => vec![],
     };
 
