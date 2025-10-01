@@ -1,4 +1,7 @@
-use crate::{exception::definitions::ExceptionType, structs::ProgramState};
+use crate::{
+    exception::definitions::{ExceptionType, FpExceptionType},
+    structs::ProgramState,
+};
 
 /// Helper function for instructions that operate on register pairs to remove invalid cases.
 /// If the register is improperly aligned given current program state, it will trigger
@@ -25,41 +28,34 @@ pub fn extract_u64(program_state: &mut ProgramState, target: u32) -> u64 {
 /// The target register should be the u32 repr of the high (even) register.
 /// For instance, extracting the double word inside $f2/$f3 means you should pass $f2's repr.
 pub fn pack_up_u64(program_state: &mut ProgramState, target: u32, value: u64) {
-    program_state.cp1.registers[target as usize] = f32::from_bits((value >> 32) as u32);
-    program_state.cp1.registers[target as usize + 1] = f32::from_bits(value as u32);
+    program_state.cp1.registers[target as usize] = (value >> 32) as u32;
+    program_state.cp1.registers[target as usize + 1] = value as u32;
 }
 
-/// This is a helper function which takes the bitwise representation (u64) of a sign/magnitude long
-/// and converts it to the corresponding i64 signed value.
-pub fn u64_to_long(long_bits: u64) -> i64 {
-    let bitmask = 1 << 63;
-    if (long_bits & bitmask) == 0 {
-        return long_bits as i64;
-    } else {
-        return -((long_bits & !bitmask) as i64);
-    }
-}
-
-/// This is a helper function which takes a signed (i64) value and converts it to
-/// the corresponding sign/magnitude long bits (u64).
-/// note: potentially lossy.
-pub fn i64_to_long_bits(long_value: i64) -> u64 {
-    let sign_bit = 1 << 63;
-    if long_value > 0 {
-        return (long_value as u64) & !sign_bit;
-    } else {
-        return ((long_value as u64) & !sign_bit) | sign_bit;
-    }
-}
-
-/// This is a helper function which takes the bitwise representation (u32) of a sign/magnitude word
-/// and converts it to the corresponding i32 signed value.
-pub fn u32_to_word(word_bits: u32) -> i32 {
-    let bitmask = 1 << 31;
-    if (word_bits & bitmask) == 0 {
-        return word_bits as i32;
-    } else {
-        return -((word_bits & !bitmask) as i32);
+/// There are various FPU rounding modes, and the user should be able to use whatever they want.
+/// Reference MIPS Volume I-A, page 95, table 6.10
+pub fn apply_fpu_rounding<T>(program_state: &mut ProgramState, value: T) -> T
+where
+    T: Roundable,
+{
+    match program_state.cp1.get_rounding_mode() {
+        0b00 => {
+            // nearest even
+            value.round()
+        }
+        0b01 => {
+            // toward zero
+            value.trunc()
+        }
+        0b10 => {
+            // toward plus inf
+            value.ceil()
+        }
+        0b11 => {
+            // toward minus inf
+            value.floor()
+        }
+        _ => unreachable!(), // This is matching on a two-bit value. It's strictly enumerated.
     }
 }
 
@@ -71,6 +67,7 @@ where
     T: FloatFlush + Copy,
 {
     if program_state.cp1.fenr_fs_bit_set() && result.is_subnormal() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Underflow));
         T::flush_zero_with_sign(result)
     } else {
         result
@@ -101,5 +98,50 @@ impl FloatFlush for f64 {
 
     fn flush_zero_with_sign(self) -> Self {
         0.0_f64.copysign(self)
+    }
+}
+
+/// This trait facilitates generalizing FPU rounding.
+/// It will make the apply_fpu_rounding<T>(T)->T function generic.
+pub trait Roundable {
+    fn round(self) -> Self;
+    fn trunc(self) -> Self;
+    fn ceil(self) -> Self;
+    fn floor(self) -> Self;
+}
+
+impl Roundable for f32 {
+    fn round(self) -> Self {
+        self.round()
+    }
+
+    fn trunc(self) -> Self {
+        self.trunc()
+    }
+
+    fn ceil(self) -> Self {
+        self.ceil()
+    }
+
+    fn floor(self) -> Self {
+        self.floor()
+    }
+}
+
+impl Roundable for f64 {
+    fn round(self) -> Self {
+        self.round()
+    }
+
+    fn trunc(self) -> Self {
+        self.trunc()
+    }
+
+    fn ceil(self) -> Self {
+        self.ceil()
+    }
+
+    fn floor(self) -> Self {
+        self.floor()
     }
 }

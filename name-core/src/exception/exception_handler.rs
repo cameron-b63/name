@@ -117,8 +117,9 @@ pub fn handle_exception(
         ExceptionType::Trap => {
             todo!("Not sure how we want trap to work yet.");
         }
-        ExceptionType::FloatingPoint => {
+        ExceptionType::FloatingPoint(_) => {
             // Will be more useful once cp1 is implemented
+            // TODO: Take a look at cause registers and don't panic unless needed
             eprintln!(
                 "{}",
                 generate_err(source_context, epc, "Floating point exception occurred.")

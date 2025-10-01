@@ -1,5 +1,8 @@
 use super::{constants::*, definitions::ExceptionType};
-use crate::structs::ProgramState;
+use crate::{
+    exception::definitions::FpExceptionType,
+    structs::{Coprocessor1, ProgramState},
+};
 
 impl ProgramState {
     /// When an exception is triggered in the MIPS architecture,
@@ -20,7 +23,12 @@ impl ProgramState {
         // Set the EXL bit.
         self.cp0.set_exception_level(EXCEPTION_BEING_HANDLED);
         // Set the ExcCode field of Cause to the proper value
-        self.cp0.set_exc_code(exception_type.into());
+        self.cp0.set_exc_code(u32::from(exception_type));
+
+        // If the exception is floating-point, populate the FCSR fields in Coprocessor 1.
+        if let ExceptionType::FloatingPoint(fp_exception_type) = exception_type.clone() {
+            self.cp1.set_fp_exception(fp_exception_type);
+        }
     }
 
     /// When an exception was handled without needing to halt, Coprocessor 0 is reset to indicate normal operation.
@@ -32,5 +40,16 @@ impl ProgramState {
         self.cpu.pc = self.cp0.get_epc() + 4;
         // Clear EPC
         self.cp0.set_epc(0u32);
+        // Clear FPU exception bits
+        self.cp1.clear_fp_exception();
     }
+}
+
+impl Coprocessor1 {
+    pub fn set_fp_exception(&mut self, fp_exception_type: FpExceptionType) {
+        let current_fcsr_exception_state = self.get_fexr();
+        self.set_fexr(current_fcsr_exception_state | fp_exception_type as u32);
+    }
+
+    pub fn clear_fp_exception(&mut self) {}
 }

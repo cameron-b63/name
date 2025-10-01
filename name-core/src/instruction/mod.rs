@@ -9,3 +9,4 @@ pub mod instruction_set;
 pub mod instruction_table;
 pub use instruction::*;
 pub mod pseudo_instruction_set;
+pub mod sign_magnitude;

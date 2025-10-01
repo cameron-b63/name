@@ -82,9 +82,9 @@ pub mod fpu_control {
      (11) = V (Invalid operation) => 1;
      (10) = Z (Divide by zero) => 1;
      (9) = O (Overflow) => 1;
-     (8) = U (Underflow) => 1;
-     (7) = I (Inexact) => 1;
-     - (6-2) = 0; Unused since all "enables" trigger exceptions => 0.
+     (8) = U (Underflow) => 0;
+     (7) = I (Inexact) => 0;
+     - (6-2) = 0;
      - (1-0) = 0; Rounding mode is round to nearest (not round toward zero) => 0.
      */
     pub const FCSR_DEFAULT_VALUES: u32 = 0b0000000_1_0_00_0_1_1_000000_11111_00000_00;

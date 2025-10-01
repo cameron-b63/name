@@ -39,7 +39,7 @@ impl Coprocessor0 {
 impl Coprocessor1 {
     pub fn new() -> Self {
         Coprocessor1 {
-            registers: [0.0; 32],
+            registers: [0; 32],
             control_registers: [FIR_DEFAULT_VALUES, FCSR_DEFAULT_VALUES],
         }
     }

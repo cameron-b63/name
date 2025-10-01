@@ -1,4 +1,4 @@
-use crate::exception::definitions::ExceptionType;
+use crate::exception::definitions::{ExceptionType, FpExceptionType};
 use crate::instruction::formats::cond_mov_cc_type::CondMovCCArgs;
 use crate::instruction::formats::cop_mov_r_type::CopMovRArgs;
 use crate::instruction::formats::fp_cc_branch_type::FpCCBranchArgs;
@@ -9,9 +9,8 @@ use crate::instruction::formats::i_type::IArgs;
 use crate::instruction::formats::j_type::JArgs;
 use crate::instruction::formats::r_type::RArgs;
 use crate::instruction::formats::regimm_i_type::RegImmIArgs;
-use crate::instruction::implementation_helpers::{
-    i64_to_long_bits, perform_op_with_flush, u32_to_word, u64_to_long,
-};
+use crate::instruction::implementation_helpers::{apply_fpu_rounding, perform_op_with_flush};
+use crate::instruction::sign_magnitude::{SignMagnitudeLong, SignMagnitudeWord};
 use crate::structs::{
     ProgramState,
     Register::{At, Ra},
@@ -33,6 +32,7 @@ use super::implementation_helpers::{extract_u64, is_register_aligned, pack_up_u6
  |_| \_/_/    \_\/   |_____\_____/_/    \_\_|  |_____\____/|_| \_|
 
 
+    Some macros are defined at the very top of the file to make logic more readable.
 
     To get around this file, you should know the order in which these
     instruction implementations appear.
@@ -45,6 +45,31 @@ use super::implementation_helpers::{extract_u64, is_register_aligned, pack_up_u6
      - SPECIAL2 (opcode 0x1c)
      - SPECIAL3 (opcode 0x1f)
 */
+
+/*
+
+  __  __          _____ _____   ____   _____
+ |  \/  |   /\   / ____|  __ \ / __ \ / ____|
+ | \  / |  /  \ | |    | |__) | |  | | (___
+ | |\/| | / /\ \| |    |  _  /| |  | |\___ \
+ | |  | |/ ____ \ |____| | \ \| |__| |____) |
+ |_|  |_/_/    \_\_____|_|  \_\\____/|_____/
+
+
+
+*/
+
+/// This macro easily checks the alignment of an arbitrary number of
+/// passed floating-point register locations.
+/// For use in double precision and long type floating-point instructions.
+#[macro_export]
+macro_rules! check_alignment {
+    ($program_state: expr, $($x: expr),+ ) => {
+        $(
+            let _ = is_register_aligned($program_state, $x);
+        )+
+    };
+}
 
 /*
 
@@ -414,7 +439,7 @@ pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
         i += 1;
     }
 
-    program_state.cp1.registers[args.rt as usize] = f32::from_bits(result_word);
+    program_state.cp1.registers[args.rt as usize] = result_word;
 }
 
 // 0x33 - pref
@@ -480,7 +505,7 @@ pub fn swc1(program_state: &mut ProgramState, args: IArgs) -> () {
     }
 
     // Retrieve value of ft from coprocessor 1
-    let value: u32 = f32::to_bits(program_state.cp1.registers[args.rt as usize]);
+    let value: u32 = program_state.cp1.registers[args.rt as usize];
 
     // Checks passed. Store word.
     let mut i = 0;
@@ -1079,96 +1104,274 @@ pub fn bc1(program_state: &mut ProgramState, args: FpCCBranchArgs) -> () {
 
 // 0x00.d - add.d
 pub fn add_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
-    let _ = is_register_aligned(program_state, args.ft);
+    check_alignment!(program_state, args.fd, args.fs, args.ft);
 
     let s = f64::from_bits(extract_u64(program_state, args.fs));
     let t = f64::from_bits(extract_u64(program_state, args.ft));
+
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // If the operation results in magnitude subtraction of infinities, the operation is invalid.
+    if s.is_infinite() && t.is_infinite() && (s.to_bits() >> 63) != (t.to_bits() >> 63)
+    // (second check reads: "sign bits don't match")
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // Addition performed here
     let result = perform_op_with_flush(program_state, s + t);
 
-    pack_up_u64(program_state, args.fd, f64::to_bits(result));
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+    }
+
+    pack_up_u64(program_state, args.fd, result.to_bits());
 }
 
 // 0x00.s - add.s
 pub fn add_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    program_state.cp1.registers[args.fd as usize] = perform_op_with_flush(
-        program_state,
-        program_state.cp1.registers[args.fs as usize]
-            + program_state.cp1.registers[args.ft as usize],
-    );
+    let s = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+    let t = f32::from_bits(program_state.cp1.registers[args.ft as usize]);
+
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // If the operation results in magnitude subtraction of infinities, the operation is invalid.
+    if s.is_infinite() && t.is_infinite() && (s.to_bits() >> 31) != (t.to_bits() >> 31)
+    // (second check reads: "sign bits don't match")
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // Addition performed here
+    let result = perform_op_with_flush(program_state, s + t);
+
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+    }
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
 }
 
 // 0x01.fmt - sub.fmt
 
 // 0x01.d - sub.d
 pub fn sub_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
-    let _ = is_register_aligned(program_state, args.ft);
+    check_alignment!(program_state, args.fd, args.fs, args.ft);
 
-    let a = f64::from_bits(extract_u64(program_state, args.fs));
-    let b = f64::from_bits(extract_u64(program_state, args.ft));
+    let s = f64::from_bits(extract_u64(program_state, args.fs));
+    let t = f64::from_bits(extract_u64(program_state, args.ft));
 
-    let res = perform_op_with_flush(program_state, a - b);
-    pack_up_u64(program_state, args.fd, res.to_bits());
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // If the operation results in magnitude subtraction of infinities, the operation is invalid.
+    if s.is_infinite() && t.is_infinite() && (s.to_bits() >> 63) == (t.to_bits() >> 63)
+    // (second check reads: "sign bits match")
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // Subtraction performed here
+    let result = perform_op_with_flush(program_state, s - t);
+
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+    }
+
+    pack_up_u64(program_state, args.fd, result.to_bits());
 }
 
 // 0x01.s - sub.s
 pub fn sub_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    program_state.cp1.registers[args.fd as usize] = perform_op_with_flush(
-        program_state,
-        program_state.cp1.registers[args.fs as usize]
-            - program_state.cp1.registers[args.ft as usize],
-    );
+    let s = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+    let t = f32::from_bits(program_state.cp1.registers[args.ft as usize]);
+
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // If the operation results in magnitude subtraction of infinities, the operation is invalid.
+    if s.is_infinite() && t.is_infinite() && (s.to_bits() >> 31) == (t.to_bits() >> 31)
+    // (second check reads: "sign bits match")
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // Subtraction performed here
+    let result = perform_op_with_flush(program_state, s - t);
+
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+    }
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
 }
+
+// 0x02.fmt - mul.fmt
 
 // 0x02.d - mul.d
 pub fn mul_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
-    let _ = is_register_aligned(program_state, args.ft);
+    check_alignment!(program_state, args.fd, args.fs, args.ft);
 
-    let f1 = f64::from_bits(extract_u64(program_state, args.fs));
-    let f2 = f64::from_bits(extract_u64(program_state, args.ft));
+    let s = f64::from_bits(extract_u64(program_state, args.fs));
+    let t = f64::from_bits(extract_u64(program_state, args.ft));
 
-    let res = perform_op_with_flush(program_state, f1 * f2);
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
 
-    pack_up_u64(program_state, args.fd, res.to_bits());
+    // If the operation is 0 x inf, with any signs, then trigger an InvalidOperation.
+    if s.abs() == 0.0 && t.is_infinite() || s.is_infinite() && t.abs() == 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // Perform multiplication
+    let result = perform_op_with_flush(program_state, s * t);
+
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+    }
+
+    pack_up_u64(program_state, args.fd, result.to_bits());
 }
 
 // 0x02.s - mul.s
 pub fn mul_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    program_state.cp1.registers[args.fd as usize] = perform_op_with_flush(
-        program_state,
-        program_state.cp1.registers[args.fs as usize]
-            * program_state.cp1.registers[args.ft as usize],
-    );
+    let s = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+    let t = f32::from_bits(program_state.cp1.registers[args.ft as usize]);
+
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // If the operation is 0 x inf, with any signs, then trigger an InvalidOperation.
+    if s.abs() == 0.0 && t.is_infinite() || s.is_infinite() && t.abs() == 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // Perform multiplication
+    let result = perform_op_with_flush(program_state, s * t);
+
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+    }
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
 }
 
 // 0x03 - div.fmt
 
 // 0x03.d - div.d
 pub fn div_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
-    let _ = is_register_aligned(program_state, args.ft);
+    check_alignment!(program_state, args.fd, args.fs, args.ft);
 
-    let numerator: f64 = f64::from_bits(extract_u64(program_state, args.fs));
-    let denominator: f64 = f64::from_bits(extract_u64(program_state, args.ft));
+    let s: f64 = f64::from_bits(extract_u64(program_state, args.fs));
+    let t: f64 = f64::from_bits(extract_u64(program_state, args.ft));
 
-    let result: f64 = perform_op_with_flush(program_state, numerator / denominator);
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
 
-    pack_up_u64(program_state, args.fd, f64::to_bits(result));
+    // 0/0 and inf/inf are invalid.
+    if s.abs() == 0.0 && t.abs() == 0.0 || s.is_infinite() && t.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // Check for division by zero
+    if t.abs() == 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::DivideByZero));
+    }
+
+    // Division performed here
+    let result: f64 = perform_op_with_flush(program_state, s / t);
+
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+    }
+
+    pack_up_u64(program_state, args.fd, result.to_bits());
 }
 
 // 0x03.s - div.s
 pub fn div_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    program_state.cp1.registers[args.fd as usize] = perform_op_with_flush(
-        program_state,
-        program_state.cp1.registers[args.fs as usize]
-            / program_state.cp1.registers[args.ft as usize],
-    );
+    let s = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+    let t = f32::from_bits(program_state.cp1.registers[args.ft as usize]);
+
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // 0/0 and inf/inf are invalid.
+    if s.abs() == 0.0 && t.abs() == 0.0 || s.is_infinite() && t.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // Check for division by zero
+    if t.abs() == 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::DivideByZero));
+    }
+
+    // Division performed here
+    let result: f32 = perform_op_with_flush(program_state, s / t);
+
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+    }
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
 }
 
 // 0x04.d - sqrt.d
@@ -1181,33 +1384,25 @@ pub fn sqrt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
     todo!("sqrt.s");
 }
 
-// 0x05 - abs.fmt
+// 0x05 - abs.fmt (this should NOT panic when taking abs(NaN) due to FCSR dictating IEEE 2008 revision instead of legacy MIPS!)
 
 // 0x05.d - abs.d
 pub fn abs_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
-
-    let temp: u64 = extract_u64(program_state, args.fs);
-
-    // Simply clear the sign bit.
-    // Refer to IEEE 754-2008 documentation if this appears non-sensical.
-    let mask: u64 = 0x7FFF_FFFF_FFFF_FFFF;
-    let result: u64 = temp & mask;
-
-    let _ = pack_up_u64(program_state, args.fd, result);
+    check_alignment!(program_state, args.fd, args.fs);
+    let s = f64::from_bits(extract_u64(program_state, args.fs));
+    let result = s.abs();
+    let _ = pack_up_u64(program_state, args.fd, result.to_bits());
 }
 
 // 0x05.s - abs.s
 pub fn abs_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    program_state.cp1.registers[args.fd as usize] =
-        f32::abs(program_state.cp1.registers[args.fs as usize]);
+    let s = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+    program_state.cp1.registers[args.fd as usize] = f32::abs(s).to_bits();
 }
 
 // 0x06.d - mov.d
 pub fn mov_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
+    check_alignment!(program_state, args.fd, args.fs);
 
     let temp: u64 = extract_u64(program_state, args.fs);
     let _ = pack_up_u64(program_state, args.fd, temp);
@@ -1218,110 +1413,362 @@ pub fn mov_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
     todo!("mov.s");
 }
 
-// 0x07.* - neg.fmt
+// 0x07.fmt - neg.fmt
 
 // 0x07.d - neg.d
 pub fn neg_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
+    check_alignment!(program_state, args.fd, args.fs);
 
-    let double_value = f64::from_bits(extract_u64(program_state, args.fs)) * -1.0;
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+    let negated_value = double_value * -1.0;
 
-    pack_up_u64(program_state, args.fd, double_value.to_bits());
+    pack_up_u64(program_state, args.fd, negated_value.to_bits());
 }
 
 // 0x07.s - neg.s
 pub fn neg_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    program_state.cp1.registers[args.fd as usize] =
-        -1.0 * program_state.cp1.registers[args.fs as usize];
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+    let negated_value = single_value * -1.0;
+
+    program_state.cp1.registers[args.fd as usize] = negated_value.to_bits();
 }
+
+// 0x08.fmt - round.l.fmt
 
 // 0x08.d - round.l.d
 pub fn round_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
+    check_alignment!(program_state, args.fd, args.fs);
 
-    let double_value = f64::from_bits(extract_u64(program_state, args.fs)).round();
-    let long_value = u64_to_long(double_value.to_bits());
-    pack_up_u64(program_state, args.fd, long_value as u64);
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+
+    if double_value.is_nan() || double_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_double = double_value.round();
+
+    if !SignMagnitudeLong::can_represent_double(rounded_double) {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let long_value = SignMagnitudeLong::from(rounded_double);
+    pack_up_u64(program_state, args.fd, long_value.to_bits());
 }
 
 // 0x08.s - round.l.s
 pub fn round_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
+    check_alignment!(program_state, args.fd);
 
-    let single_value = program_state.cp1.registers[args.fs as usize].round();
-    pack_up_u64(program_state, args.fd, (single_value as f64).to_bits());
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+    let rounded_single = single_value.round();
+    let long_value = SignMagnitudeLong::from(rounded_single as f64);
+    pack_up_u64(program_state, args.fd, long_value.to_bits());
 }
 
 // 0x09.d - trunc.l.d
-pub fn trunc_l_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("trunc.l.d");
+pub fn trunc_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    check_alignment!(program_state, args.fd, args.fs);
+
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+
+    if double_value.is_nan() || double_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_double = double_value.trunc();
+
+    if !SignMagnitudeLong::can_represent_double(rounded_double) {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let long_value = SignMagnitudeLong::from(rounded_double);
+    pack_up_u64(program_state, args.fd, long_value.to_bits());
 }
 
 // 0x09.s - trunc.l.s
-pub fn trunc_l_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("trunc.l.s");
+pub fn trunc_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    check_alignment!(program_state, args.fd);
+
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+    let rounded_single = single_value.trunc();
+    let long_value = SignMagnitudeLong::from(rounded_single as f64);
+    pack_up_u64(program_state, args.fd, long_value.to_bits());
 }
 
 // 0x0a.d - ceil.l.d
-pub fn ceil_l_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("ceil.l.d");
+pub fn ceil_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    check_alignment!(program_state, args.fd, args.fs);
+
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+
+    if double_value.is_nan() || double_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_double = double_value.ceil();
+
+    if !SignMagnitudeLong::can_represent_double(rounded_double) {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let long_value = SignMagnitudeLong::from(rounded_double);
+    pack_up_u64(program_state, args.fd, long_value.to_bits());
 }
 
 // 0x0a.s - ceil.l.s
-pub fn ceil_l_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("ceil.l.s");
-}
+pub fn ceil_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    check_alignment!(program_state, args.fd);
 
-// 0x09.d - ceil.w.d
-pub fn ceil_w_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("ceil.w.d");
-}
-
-// 0x09.s - ceil.w.s
-pub fn ceil_w_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("ceil.w.s");
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+    let rounded_single = single_value.ceil();
+    let long_value = SignMagnitudeLong::from(rounded_single as f64);
+    pack_up_u64(program_state, args.fd, long_value.to_bits());
 }
 
 // 0x0b.d - floor.l.d
-pub fn floor_l_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("floor.l.d");
+pub fn floor_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    check_alignment!(program_state, args.fd, args.fs);
+
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+
+    if double_value.is_nan() || double_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_double = double_value.floor();
+
+    if !SignMagnitudeLong::can_represent_double(rounded_double) {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let long_value = SignMagnitudeLong::from(rounded_double);
+    pack_up_u64(program_state, args.fd, long_value.to_bits());
 }
 
 // 0x0b.s - floor.l.s
-pub fn floor_l_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("floor.l.s");
+pub fn floor_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    check_alignment!(program_state, args.fd);
+
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+    let rounded_single = single_value.floor();
+    let long_value = SignMagnitudeLong::from(rounded_single as f64);
+    pack_up_u64(program_state, args.fd, long_value.to_bits());
 }
 
 // 0x0c.d - round.w.d
 pub fn round_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fs);
-    let double_value = f64::from_bits(extract_u64(program_state, args.fs)).round();
-    let word_value = u32_to_word(double_value as u64 as u32);
-    program_state.cp1.registers[args.fd as usize] = f32::from_bits(word_value as u32);
+    check_alignment!(program_state, args.fs);
+
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+
+    if double_value.is_nan() || double_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_double = double_value.round();
+
+    if !SignMagnitudeWord::can_represent_double(rounded_double) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let result = SignMagnitudeWord::from(rounded_double as f32);
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
 }
 
 // 0x0c.s - round.w.s
 pub fn round_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let single_value = program_state.cp1.registers[args.fs as usize].round();
-    program_state.cp1.registers[args.fd as usize] =
-        f32::from_bits(u32_to_word(single_value.to_bits()) as u32);
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+
+    if single_value.is_nan() || single_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_single = single_value.round();
+
+    if !SignMagnitudeWord::can_represent_single(rounded_single) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let result = SignMagnitudeWord::from(rounded_single as f32);
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
 }
 
 // 0x0d.d - trunc.w.d
-pub fn trunc_w_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("trunc.w.d");
+pub fn trunc_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    check_alignment!(program_state, args.fs);
+
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+
+    if double_value.is_nan() || double_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_double = double_value.trunc();
+
+    if !SignMagnitudeWord::can_represent_double(rounded_double) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let result = SignMagnitudeWord::from(rounded_double as f32);
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
 }
 
 // 0x0d.s - trunc.w.s
-pub fn trunc_w_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("trunc.w.s");
+pub fn trunc_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+
+    if single_value.is_nan() || single_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_single = single_value.trunc();
+
+    if !SignMagnitudeWord::can_represent_single(rounded_single) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let result = SignMagnitudeWord::from(rounded_single as f32);
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+}
+
+// 0x0e.d - ceil.w.d
+pub fn ceil_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    check_alignment!(program_state, args.fs);
+
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+
+    if double_value.is_nan() || double_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_double = double_value.ceil();
+
+    if !SignMagnitudeWord::can_represent_double(rounded_double) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let result = SignMagnitudeWord::from(rounded_double as f32);
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+}
+
+// 0x0e.s - ceil.w.s
+pub fn ceil_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+
+    if single_value.is_nan() || single_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_single = single_value.ceil();
+
+    if !SignMagnitudeWord::can_represent_single(rounded_single) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let result = SignMagnitudeWord::from(rounded_single as f32);
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
 }
 
 // 0x0f.d - floor.w.d
-pub fn floor_w_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("floor.w.d");
+pub fn floor_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    check_alignment!(program_state, args.fs);
+
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+
+    if double_value.is_nan() || double_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_double = double_value.floor();
+
+    if !SignMagnitudeWord::can_represent_double(rounded_double) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let result = SignMagnitudeWord::from(rounded_double as f32);
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+}
+
+// 0x0f.s - floor.w.s
+pub fn floor_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+
+    if single_value.is_nan() || single_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_single = single_value.floor();
+
+    if !SignMagnitudeWord::can_represent_single(rounded_single) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let result = SignMagnitudeWord::from(rounded_single as f32);
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
 }
 
 // 0x11.d - movf.d/movt.d
@@ -1374,89 +1821,160 @@ pub fn rsqrt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
     todo!("rsqrt.s");
 }
 
-// 0x0f.s - floor.w.s
-pub fn floor_w_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("floor.w.s");
-}
+// 0x20.fmt - cvt.s.fmt
 
 // 0x20.d - cvt.s.d
 pub fn cvt_s_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fs);
+    check_alignment!(program_state, args.fs);
+
     let double_value = extract_u64(program_state, args.fs) as f64;
-    program_state.cp1.registers[args.fd as usize] = double_value as f32;
+    let single_value = double_value as f32;
+
+    program_state.cp1.registers[args.fd as usize] = single_value.to_bits();
 }
 
 // 0x20.l - cvt.s.l
 pub fn cvt_s_l(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fs);
-    let long_value = u64_to_long(extract_u64(program_state, args.fs));
-    program_state.cp1.registers[args.fd as usize] = long_value as f64 as f32;
+    // Officially, this is supposed to be unpredictable.
+    check_alignment!(program_state, args.fs);
+
+    let long_value = SignMagnitudeLong::from_bits(extract_u64(program_state, args.fs));
+    let double_value = i64::from(long_value) as f64;
+    let single_value = double_value as f32;
+
+    program_state.cp1.registers[args.fd as usize] = single_value.to_bits();
 }
 
 // 0x20.w - cvt.s.w
 pub fn cvt_s_w(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    program_state.cp1.registers[args.fd as usize] =
-        u32_to_word(program_state.cp1.registers[args.fs as usize].to_bits()) as f32;
+    let word_value = i32::from(SignMagnitudeWord::from_bits(
+        program_state.cp1.registers[args.fs as usize],
+    ));
+    let single_value = word_value as f32;
+    program_state.cp1.registers[args.fd as usize] = single_value.to_bits();
 }
+
+// 0x21.fmt - cvt.d.fmt
 
 // 0x21.s - cvt.d.l
 pub fn cvt_d_l(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
+    check_alignment!(program_state, args.fd, args.fs);
 
-    let long_value = u64_to_long(extract_u64(program_state, args.fs));
-    pack_up_u64(program_state, args.fd, (long_value as f64).to_bits());
+    let long_value = SignMagnitudeLong::from_bits(extract_u64(program_state, args.fs));
+    let double_value = i64::from(long_value) as f64;
+
+    pack_up_u64(program_state, args.fd, double_value.to_bits());
 }
 
 // 0x21.s - cvt.d.s
 pub fn cvt_d_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
+    check_alignment!(program_state, args.fd);
 
-    program_state.cp1.registers[args.fd as usize + 1] =
-        program_state.cp1.registers[args.fs as usize];
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+    let double_value = single_value as f64;
+
+    pack_up_u64(program_state, args.fd, double_value.to_bits());
 }
 
 // 0x21.s - cvt.d.w
 pub fn cvt_d_w(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
+    check_alignment!(program_state, args.fd);
 
-    let word_value = u32_to_word(program_state.cp1.registers[args.fs as usize].to_bits());
-    let double_value = word_value as i64 as f64;
+    let word_value = SignMagnitudeWord::from_bits(program_state.cp1.registers[args.fs as usize]);
+    let single_value = i32::from(word_value) as f32;
+    let double_value = single_value as f64;
+
     pack_up_u64(program_state, args.fd, double_value.to_bits());
 }
 
+// 0x24.fmt - cvt.w.fmt
+
 // 0x24.d - cvt.w.d
 pub fn cvt_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fs);
+    check_alignment!(program_state, args.fs);
+
     let double_value = f64::from_bits(extract_u64(program_state, args.fs));
-    program_state.cp1.registers[args.fd as usize] =
-        f32::from_bits(u32_to_word((double_value as f32).to_bits()) as u32);
+
+    if !SignMagnitudeWord::can_represent_double(double_value)
+        || double_value.is_nan()
+        || double_value.is_infinite()
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_double = apply_fpu_rounding(program_state, double_value);
+    let word_value = rounded_double.trunc() as i64 as i32;
+    let word = SignMagnitudeWord::from(word_value);
+
+    program_state.cp1.registers[args.fd as usize] = word.to_bits();
 }
 
 // 0x24.s - cvt.w.s
 pub fn cvt_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let single_value = program_state.cp1.registers[args.fs as usize];
-    program_state.cp1.registers[args.fd as usize] =
-        f32::from_bits(u32_to_word(single_value.to_bits()) as u32);
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+
+    if !SignMagnitudeWord::can_represent_single(single_value)
+        || single_value.is_nan()
+        || single_value.is_infinite()
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_single = apply_fpu_rounding(program_state, single_value);
+    let word_value = rounded_single.trunc() as i32;
+    let word = SignMagnitudeWord::from(word_value);
+
+    program_state.cp1.registers[args.fd as usize] = word.to_bits();
 }
+
+// 0x25.fmt - cvt.l.fmt
 
 // 0x25.d - cvt.l.d
 pub fn cvt_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
+    check_alignment!(program_state, args.fd, args.fs);
+
     let double_value = f64::from_bits(extract_u64(program_state, args.fs));
-    let rounded_double = double_value.round() as i64;
-    let long_bits = i64_to_long_bits(rounded_double);
-    pack_up_u64(program_state, args.fd, long_bits);
+
+    if !SignMagnitudeLong::can_represent_double(double_value)
+        || double_value.is_nan()
+        || double_value.is_infinite()
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_double = apply_fpu_rounding(program_state, double_value);
+    let long_value = rounded_double.trunc() as i64;
+    let long = SignMagnitudeLong::from(long_value);
+
+    pack_up_u64(program_state, args.fd, long.to_bits());
 }
 
 // 0x25.s - cvt.l.s
 pub fn cvt_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let single_value = program_state.cp1.registers[args.fs as usize];
-    let rounded_single = single_value.round() as i32;
-    let long_bits = rounded_single as u32 as u64;
-    pack_up_u64(program_state, args.fd, long_bits);
+    check_alignment!(program_state, args.fd);
+
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+
+    if !SignMagnitudeLong::can_represent_single(single_value)
+        || single_value.is_nan()
+        || single_value.is_infinite()
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    let rounded_single = apply_fpu_rounding(program_state, single_value);
+    let long_value = rounded_single as i32 as i64;
+    let long = SignMagnitudeLong::from(long_value);
+
+    pack_up_u64(program_state, args.fd, long.to_bits());
 }
 
 // 0x30.d - c.f.d
