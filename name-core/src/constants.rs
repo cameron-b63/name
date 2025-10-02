@@ -71,6 +71,7 @@ pub mod fpu_control {
      - (20) = 0; Reserved => 0.
      - (19) = 1; Indicates if ABS.fmt and NEG.fmt instructions are compliant with IEEE 754-2008. They are => 1.
      - (18) = 1; Indicates if NAN handling follows legacy MIPS or IEEE 754-2008 recommendations. Sticking with IEEE => 1.
+        ^ side note from future Cameron... how the hell did you know that this was the right choice?????????
      - (17-12) = 0; Indicates the cause of an exception. Bit breakdown below:
      (17) = E (Unimplemented operation);
      (16) = V (Invalid operation);
@@ -78,7 +79,7 @@ pub mod fpu_control {
      (14) = O (Overflow);
      (13) = U (Underflow);
      (12) = I (Inexact);
-     - (11-7) = 0b11111; Enables bits: control whether or not a cause leads to an exception.
+     - (11-7) = 0b11100; Enables bits: control whether or not a cause leads to an exception.
      (11) = V (Invalid operation) => 1;
      (10) = Z (Divide by zero) => 1;
      (9) = O (Overflow) => 1;
@@ -87,7 +88,7 @@ pub mod fpu_control {
      - (6-2) = 0;
      - (1-0) = 0; Rounding mode is round to nearest (not round toward zero) => 0.
      */
-    pub const FCSR_DEFAULT_VALUES: u32 = 0b0000000_1_0_00_0_1_1_000000_11111_00000_00;
+    pub const FCSR_DEFAULT_VALUES: u32 = 0b0000000_1_0_00_0_1_1_000000_11100_00000_00;
 
     /// Constant index of FIR
     pub const FIR_INDEX: usize = 0;

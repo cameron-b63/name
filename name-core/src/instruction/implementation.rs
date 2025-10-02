@@ -21,6 +21,26 @@ use super::implementation_helpers::{extract_u64, is_register_aligned, pack_up_u6
 // This file contains the implementations for all
 // individual instructions defined in the instruction set
 
+/// This is the double-precision QNaN that will be supplied if:
+/// an instruction generates an InvalidOperation floating-point error, and
+/// FCSR disables InvalidOperation explicit trap.
+/// If you don't know what that means, you should DEFINITELY NOT mess with this value!
+///
+/// P.S., the magic number bit pattern comes from me generating a valid QNaN according to
+/// MIPS Volume I-A. See table 6.3 on page 82!
+const F64_QNAN: f64 = f64::from_bits(0x7ff8_0000_0000_0000);
+/// See F64_QNAN
+const F32_QNAN: f32 = f32::from_bits(0x7fc0_0000);
+// These NaNs are going to be related to error states in conversion.
+/// This NaN is for an FP number that's too big to be included as a long.
+const LONG_TOO_BIG_NAN: u64 = 0x7FFF_FFFF_FFFF_FFFF;
+/// This NaN is for an FP number that's too small to be included as a long.
+const LONG_TOO_SMALL_NAN: u64 = 0x8000_0000_0000_0000;
+/// This NaN is for an FP number that's too big to be included as a word.
+const WORD_TOO_BIG_NAN: u32 = 0x7FFF_FFFF;
+/// This NaN is for an FP number that's too small to be included as a word.
+const WORD_TOO_SMALL_NAN: u32 = 0x8000_0000;
+
 /*
 
 
@@ -68,6 +88,48 @@ macro_rules! check_alignment {
         $(
             let _ = is_register_aligned($program_state, $x);
         )+
+    };
+}
+
+/// This macro supplies a 32-bit QNaN to the given program state (into fd) and returns.
+/// (program_state, destination)
+#[macro_export]
+macro_rules! f32_qnan {
+    ($program_state: expr, $destination: expr) => {
+        $program_state.cp1.registers[$destination as usize] = F32_QNAN.to_bits();
+        return;
+    };
+}
+
+/// This macro supplies a 64-bit QNaN to the given program state (into fd, fd+1) and returns.
+/// (program_state, destination)
+#[macro_export]
+macro_rules! f64_qnan {
+    ($program_state: expr, $destination: expr) => {
+        pack_up_u64($program_state, $destination, F64_QNAN.to_bits());
+        return;
+    };
+}
+
+/// This macro supplies the rounded version of the result using RM in FCSR to destination in program state.
+/// (program_state, destination, result)
+#[macro_export]
+macro_rules! f32_roundoff {
+    ($program_state: expr, $destination: expr, $result: expr) => {
+        let rounded_result = apply_fpu_rounding($program_state, $result);
+        $program_state.cp1.registers[$destination as usize] = rounded_result.to_bits();
+        return;
+    };
+}
+
+/// This macro supplies the rounded version of the result using RM in FCSR to destination in program state.
+/// (program_state, destination, result)
+#[macro_export]
+macro_rules! f64_roundoff {
+    ($program_state: expr, $destination: expr, $result: expr) => {
+        let rounded_result = apply_fpu_rounding($program_state, $result);
+        pack_up_u64($program_state, $destination, rounded_result.to_bits());
+        return;
     };
 }
 
@@ -1114,6 +1176,8 @@ pub fn add_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        // If the exception path was disabled, supply a QNaN
+        f64_qnan!(program_state, args.fd);
     }
 
     // If the operation results in magnitude subtraction of infinities, the operation is invalid.
@@ -1123,6 +1187,7 @@ pub fn add_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f64_qnan!(program_state, args.fd);
     }
 
     // Addition performed here
@@ -1130,7 +1195,9 @@ pub fn add_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
 
     // Check for overflow after operation
     if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        // Overflow without explicit trap results in rounding with RM in FCSR
+        f64_roundoff!(program_state, args.fd, result);
     }
 
     pack_up_u64(program_state, args.fd, result.to_bits());
@@ -1146,6 +1213,7 @@ pub fn add_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f32_qnan!(program_state, args.fd);
     }
 
     // If the operation results in magnitude subtraction of infinities, the operation is invalid.
@@ -1155,6 +1223,7 @@ pub fn add_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f32_qnan!(program_state, args.fd);
     }
 
     // Addition performed here
@@ -1162,7 +1231,8 @@ pub fn add_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
 
     // Check for overflow after operation
     if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        f32_roundoff!(program_state, args.fd, result);
     }
 
     program_state.cp1.registers[args.fd as usize] = result.to_bits();
@@ -1182,6 +1252,7 @@ pub fn sub_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f64_qnan!(program_state, args.fd);
     }
 
     // If the operation results in magnitude subtraction of infinities, the operation is invalid.
@@ -1191,6 +1262,7 @@ pub fn sub_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f64_qnan!(program_state, args.fd);
     }
 
     // Subtraction performed here
@@ -1198,7 +1270,8 @@ pub fn sub_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
 
     // Check for overflow after operation
     if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        f64_roundoff!(program_state, args.fd, result);
     }
 
     pack_up_u64(program_state, args.fd, result.to_bits());
@@ -1214,6 +1287,7 @@ pub fn sub_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f32_qnan!(program_state, args.fd);
     }
 
     // If the operation results in magnitude subtraction of infinities, the operation is invalid.
@@ -1223,6 +1297,7 @@ pub fn sub_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f32_qnan!(program_state, args.fd);
     }
 
     // Subtraction performed here
@@ -1230,7 +1305,8 @@ pub fn sub_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
 
     // Check for overflow after operation
     if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        f32_roundoff!(program_state, args.fd, result);
     }
 
     program_state.cp1.registers[args.fd as usize] = result.to_bits();
@@ -1250,6 +1326,7 @@ pub fn mul_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f64_qnan!(program_state, args.fd);
     }
 
     // If the operation is 0 x inf, with any signs, then trigger an InvalidOperation.
@@ -1257,6 +1334,7 @@ pub fn mul_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f64_qnan!(program_state, args.fd);
     }
 
     // Perform multiplication
@@ -1264,7 +1342,8 @@ pub fn mul_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
 
     // Check for overflow after operation
     if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        f64_roundoff!(program_state, args.fd, result);
     }
 
     pack_up_u64(program_state, args.fd, result.to_bits());
@@ -1280,6 +1359,7 @@ pub fn mul_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f32_qnan!(program_state, args.fd);
     }
 
     // If the operation is 0 x inf, with any signs, then trigger an InvalidOperation.
@@ -1287,6 +1367,7 @@ pub fn mul_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f32_qnan!(program_state, args.fd);
     }
 
     // Perform multiplication
@@ -1294,7 +1375,8 @@ pub fn mul_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
 
     // Check for overflow after operation
     if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        f32_roundoff!(program_state, args.fd, result);
     }
 
     program_state.cp1.registers[args.fd as usize] = result.to_bits();
@@ -1314,6 +1396,7 @@ pub fn div_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f64_qnan!(program_state, args.fd);
     }
 
     // 0/0 and inf/inf are invalid.
@@ -1321,11 +1404,20 @@ pub fn div_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f64_qnan!(program_state, args.fd);
     }
 
     // Check for division by zero
     if t.abs() == 0.0 {
         program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::DivideByZero));
+        // If the explicit trap is disabled, supply a properly signed infinity
+        if s.signum() == t.signum() {
+            pack_up_u64(program_state, args.fd, f64::INFINITY.to_bits());
+            return;
+        } else {
+            pack_up_u64(program_state, args.fd, f64::NEG_INFINITY.to_bits());
+            return;
+        }
     }
 
     // Division performed here
@@ -1333,7 +1425,8 @@ pub fn div_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
 
     // Check for overflow after operation
     if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        f64_roundoff!(program_state, args.fd, result);
     }
 
     pack_up_u64(program_state, args.fd, result.to_bits());
@@ -1349,6 +1442,7 @@ pub fn div_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f32_qnan!(program_state, args.fd);
     }
 
     // 0/0 and inf/inf are invalid.
@@ -1356,11 +1450,20 @@ pub fn div_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        f32_qnan!(program_state, args.fd);
     }
 
     // Check for division by zero
     if t.abs() == 0.0 {
         program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::DivideByZero));
+        // If the explicit trap is disabled, supply a properly signed infinity
+        if s.signum() == t.signum() {
+            program_state.cp1.registers[args.fd as usize] = f32::INFINITY.to_bits();
+            return;
+        } else {
+            program_state.cp1.registers[args.fd as usize] = f32::NEG_INFINITY.to_bits();
+            return;
+        }
     }
 
     // Division performed here
@@ -1368,7 +1471,8 @@ pub fn div_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
 
     // Check for overflow after operation
     if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow))
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        f32_roundoff!(program_state, args.fd, result);
     }
 
     program_state.cp1.registers[args.fd as usize] = result.to_bits();
@@ -1435,8 +1539,11 @@ pub fn neg_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
 
 // 0x08.fmt - round.l.fmt
 
-// 0x08.d - round.l.d
-pub fn round_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+// These higher-order functions round floating-point numbers using a specific mode.
+// They allows us to write all variants of mode.fmt.fmt with simple function calls.
+
+/// This is a generalization of <round>.l.d
+fn mode_l_d<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) -> () where F: Fn(f64) -> f64 {
     check_alignment!(program_state, args.fd, args.fs);
 
     let double_value = f64::from_bits(extract_u64(program_state, args.fs));
@@ -1445,330 +1552,243 @@ pub fn round_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        // Non-explicit path requires some pretty iffy checks.
+        if double_value.is_nan() {
+            // Supply 0 if NaN in conversion.
+            pack_up_u64(program_state, args.fd, 0);
+            return;
+        } else if double_value.is_sign_positive() {
+            // Positive infinity should supply a very specific NaN:
+            pack_up_u64(program_state, args.fd, LONG_TOO_BIG_NAN);
+            return;
+        } else {
+            pack_up_u64(program_state, args.fd, LONG_TOO_SMALL_NAN);
+            return;
+        }
     }
 
-    let rounded_double = double_value.round();
+    let rounded_double = mode(double_value);
 
     if !SignMagnitudeLong::can_represent_double(rounded_double) {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+        if rounded_double > 0.0 {
+            pack_up_u64(program_state, args.fd, LONG_TOO_BIG_NAN);
+            return;
+        } else {
+            pack_up_u64(program_state, args.fd, LONG_TOO_SMALL_NAN);
+            return;
+        }
     }
 
     let long_value = SignMagnitudeLong::from(rounded_double);
+
     pack_up_u64(program_state, args.fd, long_value.to_bits());
+}
+
+/// This is a generalization of <round>.l.s
+fn mode_l_s<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) where F: Fn(f32) -> f32 {
+        check_alignment!(program_state, args.fd);
+
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+
+    if single_value.is_nan() || single_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::InvalidOperation));
+        if single_value.is_nan() {
+            // Supply 0 if NaN
+            pack_up_u64(program_state, args.fd, 0);
+            return;
+        } else if single_value.is_sign_positive() {
+            pack_up_u64(program_state, args.fd, LONG_TOO_BIG_NAN);
+            return;
+        } else {
+            pack_up_u64(program_state, args.fd, LONG_TOO_SMALL_NAN);
+            return;
+        }
+    }
+
+    let rounded_single = mode(single_value);
+
+    if !SignMagnitudeLong::can_represent_single(rounded_single) {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::InvalidOperation));
+        if rounded_single > 0.0 {
+            pack_up_u64(program_state, args.fd, LONG_TOO_BIG_NAN);
+            return;
+        } else {
+            pack_up_u64(program_state, args.fd, LONG_TOO_SMALL_NAN);
+            return;
+        }
+    }
+
+    let long_value = SignMagnitudeLong::from(rounded_single as f64);
+    pack_up_u64(program_state, args.fd, long_value.to_bits());
+}
+
+/// This is a generalization of <round>.w.d
+fn mode_w_d<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) where F: Fn(f64) -> f64 {
+    check_alignment!(program_state, args.fs);
+
+    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
+
+    if double_value.is_nan() || double_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        // If no explicit trap, NaNs should be 0, infinities too big:
+        if double_value.is_nan() {
+            program_state.cp1.registers[args.fd as usize] = 0;
+            return;
+        } else if double_value.is_sign_positive() {
+            program_state.cp1.registers[args.fd as usize] = WORD_TOO_BIG_NAN;
+            return;
+        } else {
+            program_state.cp1.registers[args.fd as usize] = WORD_TOO_SMALL_NAN;
+            return;
+        }
+    }
+
+    let rounded_double = mode(double_value);
+
+    if !SignMagnitudeWord::can_represent_double(rounded_double) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        if rounded_double > 0.0 {
+            program_state.cp1.registers[args.fd as usize] = WORD_TOO_BIG_NAN;
+            return;
+        } else {
+            program_state.cp1.registers[args.fd as usize] = WORD_TOO_SMALL_NAN;
+            return;
+        }
+    }
+
+    let result = SignMagnitudeWord::from(rounded_double as f32);
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+}
+
+/// This is a generalization of <round>.w.s
+fn mode_w_s<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) where F: Fn(f32) -> f32 {
+    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
+
+    if single_value.is_nan() || single_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        // If no explicit trap, supply 0 on NaN and special on infty
+        if single_value.is_nan() {
+            program_state.cp1.registers[args.fd as usize] = 0;
+            return;
+        } else if single_value.is_sign_positive() {
+            program_state.cp1.registers[args.fd as usize] = WORD_TOO_BIG_NAN;
+            return;
+        } else {
+            program_state.cp1.registers[args.fd as usize] = WORD_TOO_SMALL_NAN;
+            return;
+        }
+    }
+
+    let rounded_single = mode(single_value);
+
+    if !SignMagnitudeWord::can_represent_single(rounded_single) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        if rounded_single > 0.0 {
+            program_state.cp1.registers[args.fd as usize] = WORD_TOO_BIG_NAN;
+            return;
+        } else {
+            program_state.cp1.registers[args.fd as usize] = WORD_TOO_SMALL_NAN;
+            return;
+        }
+    }
+
+    let result = SignMagnitudeWord::from(rounded_single as f32);
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+}
+
+// 0x08.d - round.l.d
+pub fn round_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_l_d(program_state, args, f64::round);
 }
 
 // 0x08.s - round.l.s
 pub fn round_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    check_alignment!(program_state, args.fd);
-
-    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
-    let rounded_single = single_value.round();
-    let long_value = SignMagnitudeLong::from(rounded_single as f64);
-    pack_up_u64(program_state, args.fd, long_value.to_bits());
+    mode_l_s(program_state, args, f32::round);
 }
 
 // 0x09.d - trunc.l.d
 pub fn trunc_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    check_alignment!(program_state, args.fd, args.fs);
-
-    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
-
-    if double_value.is_nan() || double_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let rounded_double = double_value.trunc();
-
-    if !SignMagnitudeLong::can_represent_double(rounded_double) {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let long_value = SignMagnitudeLong::from(rounded_double);
-    pack_up_u64(program_state, args.fd, long_value.to_bits());
+    mode_l_d(program_state, args, f64::trunc);
 }
 
 // 0x09.s - trunc.l.s
 pub fn trunc_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    check_alignment!(program_state, args.fd);
-
-    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
-    let rounded_single = single_value.trunc();
-    let long_value = SignMagnitudeLong::from(rounded_single as f64);
-    pack_up_u64(program_state, args.fd, long_value.to_bits());
+    mode_l_s(program_state, args, f32::trunc);
 }
 
 // 0x0a.d - ceil.l.d
 pub fn ceil_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    check_alignment!(program_state, args.fd, args.fs);
-
-    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
-
-    if double_value.is_nan() || double_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let rounded_double = double_value.ceil();
-
-    if !SignMagnitudeLong::can_represent_double(rounded_double) {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let long_value = SignMagnitudeLong::from(rounded_double);
-    pack_up_u64(program_state, args.fd, long_value.to_bits());
+    mode_l_d(program_state, args, f64::ceil);
 }
 
 // 0x0a.s - ceil.l.s
 pub fn ceil_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    check_alignment!(program_state, args.fd);
-
-    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
-    let rounded_single = single_value.ceil();
-    let long_value = SignMagnitudeLong::from(rounded_single as f64);
-    pack_up_u64(program_state, args.fd, long_value.to_bits());
+    mode_l_s(program_state, args, f32::ceil);
 }
 
 // 0x0b.d - floor.l.d
 pub fn floor_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    check_alignment!(program_state, args.fd, args.fs);
-
-    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
-
-    if double_value.is_nan() || double_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let rounded_double = double_value.floor();
-
-    if !SignMagnitudeLong::can_represent_double(rounded_double) {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let long_value = SignMagnitudeLong::from(rounded_double);
-    pack_up_u64(program_state, args.fd, long_value.to_bits());
+    mode_l_d(program_state, args, f64::round);
 }
 
 // 0x0b.s - floor.l.s
 pub fn floor_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    check_alignment!(program_state, args.fd);
-
-    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
-    let rounded_single = single_value.floor();
-    let long_value = SignMagnitudeLong::from(rounded_single as f64);
-    pack_up_u64(program_state, args.fd, long_value.to_bits());
+    mode_l_s(program_state, args, f32::floor);
 }
 
 // 0x0c.d - round.w.d
 pub fn round_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    check_alignment!(program_state, args.fs);
-
-    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
-
-    if double_value.is_nan() || double_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let rounded_double = double_value.round();
-
-    if !SignMagnitudeWord::can_represent_double(rounded_double) {
-        // The result cannot actually be represented as a word
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let result = SignMagnitudeWord::from(rounded_double as f32);
-
-    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+    mode_w_d(program_state, args, f64::round);
 }
 
 // 0x0c.s - round.w.s
 pub fn round_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
-
-    if single_value.is_nan() || single_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let rounded_single = single_value.round();
-
-    if !SignMagnitudeWord::can_represent_single(rounded_single) {
-        // The result cannot actually be represented as a word
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let result = SignMagnitudeWord::from(rounded_single as f32);
-
-    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+    mode_w_s(program_state, args, f32::round);
 }
 
 // 0x0d.d - trunc.w.d
 pub fn trunc_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    check_alignment!(program_state, args.fs);
-
-    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
-
-    if double_value.is_nan() || double_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let rounded_double = double_value.trunc();
-
-    if !SignMagnitudeWord::can_represent_double(rounded_double) {
-        // The result cannot actually be represented as a word
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let result = SignMagnitudeWord::from(rounded_double as f32);
-
-    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+    mode_w_d(program_state, args, f64::trunc);
 }
 
 // 0x0d.s - trunc.w.s
 pub fn trunc_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
-
-    if single_value.is_nan() || single_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let rounded_single = single_value.trunc();
-
-    if !SignMagnitudeWord::can_represent_single(rounded_single) {
-        // The result cannot actually be represented as a word
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let result = SignMagnitudeWord::from(rounded_single as f32);
-
-    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+    mode_w_s(program_state, args, f32::trunc);
 }
 
 // 0x0e.d - ceil.w.d
 pub fn ceil_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    check_alignment!(program_state, args.fs);
-
-    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
-
-    if double_value.is_nan() || double_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let rounded_double = double_value.ceil();
-
-    if !SignMagnitudeWord::can_represent_double(rounded_double) {
-        // The result cannot actually be represented as a word
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let result = SignMagnitudeWord::from(rounded_double as f32);
-
-    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+    mode_w_d(program_state, args, f64::ceil);
 }
 
 // 0x0e.s - ceil.w.s
 pub fn ceil_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
-
-    if single_value.is_nan() || single_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let rounded_single = single_value.ceil();
-
-    if !SignMagnitudeWord::can_represent_single(rounded_single) {
-        // The result cannot actually be represented as a word
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let result = SignMagnitudeWord::from(rounded_single as f32);
-
-    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+    mode_w_s(program_state, args, f32::ceil);
 }
 
 // 0x0f.d - floor.w.d
 pub fn floor_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    check_alignment!(program_state, args.fs);
-
-    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
-
-    if double_value.is_nan() || double_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let rounded_double = double_value.floor();
-
-    if !SignMagnitudeWord::can_represent_double(rounded_double) {
-        // The result cannot actually be represented as a word
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let result = SignMagnitudeWord::from(rounded_double as f32);
-
-    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+    mode_w_d(program_state, args, f64::floor);
 }
 
 // 0x0f.s - floor.w.s
 pub fn floor_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
-
-    if single_value.is_nan() || single_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let rounded_single = single_value.floor();
-
-    if !SignMagnitudeWord::can_represent_single(rounded_single) {
-        // The result cannot actually be represented as a word
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-    }
-
-    let result = SignMagnitudeWord::from(rounded_single as f32);
-
-    program_state.cp1.registers[args.fd as usize] = result.to_bits();
+    mode_w_s(program_state, args, f32::floor);
 }
 
 // 0x11.d - movf.d/movt.d

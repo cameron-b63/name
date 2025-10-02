@@ -46,10 +46,58 @@ impl ProgramState {
 }
 
 impl Coprocessor1 {
+    /// Set the FEXR register according to the specified exception.
     pub fn set_fp_exception(&mut self, fp_exception_type: FpExceptionType) {
         let current_fcsr_exception_state = self.get_fexr();
         self.set_fexr(current_fcsr_exception_state | fp_exception_type as u32);
     }
 
-    pub fn clear_fp_exception(&mut self) {}
+    /// Clear all floating-point exceptions.
+    pub fn clear_fp_exception(&mut self) {
+        self.set_fexr(0u32);
+    }
+
+    /// Retrieve all floating-point exceptions that have occurred.
+    /// Check both Cause and Flags; the exception handler will check if
+    /// explicit traps are enabled.
+    pub fn get_floating_point_errors(&self) -> Vec<FpExceptionType> {
+        // The following bitmasks are coming straight from FCSR in constants.rs;
+        // If you've been keeping track of the fp exception handling code,
+        // this follows EVZOUI in FEXR.
+        let fexr = self.get_fexr();
+        let mut res: Vec<FpExceptionType> = Vec::new();
+
+        // Just so you know: FEXR bitmask is    0b0000_0000_0000_0011_1111_0000_0111_1100
+
+        // Unimplemented Operation
+        if (fexr & 0b0000_0000_0000_0010_0000_0000_0000_0000) != 0 {
+            res.push(FpExceptionType::UnimplementedOperation);
+        }
+        // Invalid Operation
+        if (fexr & 0b0000_0000_0000_0001_0000_0000_0100_0000) != 0 {
+            res.push(FpExceptionType::InvalidOperation);
+        }
+
+        // Divide By Zero
+        if (fexr & 0b0000_0000_0000_0000_1000_0000_0010_0000) != 0 {
+            res.push(FpExceptionType::DivideByZero);
+        }
+
+        // Overflow
+        if (fexr & 0b0000_0000_0000_0000_0100_0000_0001_0000) != 0 {
+            res.push(FpExceptionType::Overflow);
+        }
+
+        // Underflow
+        if (fexr & 0b0000_0000_0000_0000_0010_0000_0000_1000) != 0 {
+            res.push(FpExceptionType::Underflow);
+        }
+
+        // Inexact
+        if (fexr & 0b0000_0000_0000_0000_0001_0000_0000_0100) != 0 {
+            res.push(FpExceptionType::Inexact);
+        }
+
+        res
+    }
 }
