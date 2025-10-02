@@ -1,12 +1,13 @@
 use crate::parse::span::Span;
 use std::collections::VecDeque;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum TokenKind {
     Ident,
     Register,
     FpRegister,
     Directive,
+    MacroArg,
 
     // whole numbers
     HexNumber,
@@ -71,6 +72,18 @@ impl TokenCursor {
             self.next()
         } else {
             None
+        }
+    }
+
+    pub fn try_next_if(&mut self, kind: TokenKind) -> Result<Token, String> {
+        if let Some(tok) = self.next() {
+            if tok.is_kind(kind) {
+                Ok(tok)
+            } else {
+                Err(format!("Expected {:?} found {:?}", kind, tok.kind))
+            }
+        } else {
+            Err("Unexpected eof in token cursor".into())
         }
     }
 }
