@@ -328,7 +328,6 @@ pub fn create_new_elf(sections: Vec<Vec<u8>>, elf_type: ElfType, create_shstrtab
 
     // Craft final sections
     let mut final_sections: Vec<Vec<u8>> = sections.clone();
-    dbg!(&final_sections);
 
     final_sections.push(shstrtab_section); // Is empty if create_shstrtab is false
 

@@ -10,14 +10,13 @@ use name_core::{
     parse::session::Session,
 };
 
-use args::Cli;
 use assembler::assemble_file::assemble_file;
 use bumpalo::Bump;
 use std::path::PathBuf;
 
-pub fn run_assembler(args: &Cli) -> Elf {
+pub fn run_assembler(input_filename: PathBuf) -> Elf {
     // Grab the input file from args and get the parent directory
-    let mut dir_path = PathBuf::from(&args.input_filename);
+    let mut dir_path = PathBuf::from(&input_filename);
     dir_path.pop();
 
     // Bump allocation for strings in the parsing session.
@@ -29,8 +28,8 @@ pub fn run_assembler(args: &Cli) -> Elf {
     let mut session = Session::new(&bump, dir_path);
 
     // Assembler entry point
-    let assembler_environment = assemble_file(&mut session, args.input_filename.clone())
-        .unwrap_or_else(|_e| {
+    let assembler_environment =
+        assemble_file(&mut session, input_filename.clone()).unwrap_or_else(|_e| {
             std::process::exit(1);
         });
 
