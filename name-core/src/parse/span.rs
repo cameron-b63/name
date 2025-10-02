@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct SrcSpan {
     pub pos: usize,
     pub length: usize,
@@ -19,7 +19,7 @@ impl SrcSpan {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Span<T> {
     pub src_span: SrcSpan,
     pub kind: T,
