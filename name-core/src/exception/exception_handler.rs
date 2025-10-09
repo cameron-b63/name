@@ -140,16 +140,8 @@ pub fn handle_exception(
                         exit(0);
                     }
                     FpExceptionType::UnimplementedOperation => {
-                        // This must be an explicit trap. If it's happening, it should crash.
-                        eprintln!(
-                            "{}",
-                            generate_err(
-                                source_context,
-                                epc,
-                                "The target floating-point operation is not implemented."
-                            )
-                        );
-                        exit(0);
+                        // This must be an explicit trap. However, it represents letting software handle impl, so it won't crash.
+                        // Do nothing...
                     }
                     FpExceptionType::InvalidOperation => {
                         // If explicit trap for invalid operation is enabled, this should crash.

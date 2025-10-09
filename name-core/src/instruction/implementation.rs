@@ -86,7 +86,9 @@ const WORD_TOO_SMALL_NAN: u32 = 0x8000_0000;
 macro_rules! check_alignment {
     ($program_state: expr, $($x: expr),+ ) => {
         $(
-            let _ = is_register_aligned($program_state, $x);
+            {
+                let _ = is_register_aligned($program_state, $x);
+            }
         )+
     };
 }
@@ -1543,7 +1545,10 @@ pub fn neg_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
 // They allows us to write all variants of mode.fmt.fmt with simple function calls.
 
 /// This is a generalization of <round>.l.d
-fn mode_l_d<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) -> () where F: Fn(f64) -> f64 {
+fn mode_l_d<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) -> ()
+where
+    F: Fn(f64) -> f64,
+{
     check_alignment!(program_state, args.fd, args.fs);
 
     let double_value = f64::from_bits(extract_u64(program_state, args.fs));
@@ -1588,13 +1593,18 @@ fn mode_l_d<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) -> () w
 }
 
 /// This is a generalization of <round>.l.s
-fn mode_l_s<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) where F: Fn(f32) -> f32 {
-        check_alignment!(program_state, args.fd);
+fn mode_l_s<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F)
+where
+    F: Fn(f32) -> f32,
+{
+    check_alignment!(program_state, args.fd);
 
     let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
 
     if single_value.is_nan() || single_value.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::InvalidOperation));
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
         if single_value.is_nan() {
             // Supply 0 if NaN
             pack_up_u64(program_state, args.fd, 0);
@@ -1611,7 +1621,9 @@ fn mode_l_s<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) where F
     let rounded_single = mode(single_value);
 
     if !SignMagnitudeLong::can_represent_single(rounded_single) {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::InvalidOperation));
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
         if rounded_single > 0.0 {
             pack_up_u64(program_state, args.fd, LONG_TOO_BIG_NAN);
             return;
@@ -1626,7 +1638,10 @@ fn mode_l_s<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) where F
 }
 
 /// This is a generalization of <round>.w.d
-fn mode_w_d<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) where F: Fn(f64) -> f64 {
+fn mode_w_d<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F)
+where
+    F: Fn(f64) -> f64,
+{
     check_alignment!(program_state, args.fs);
 
     let double_value = f64::from_bits(extract_u64(program_state, args.fs));
@@ -1670,7 +1685,10 @@ fn mode_w_d<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) where F
 }
 
 /// This is a generalization of <round>.w.s
-fn mode_w_s<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) where F: Fn(f32) -> f32 {
+fn mode_w_s<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F)
+where
+    F: Fn(f32) -> f32,
+{
     let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
 
     if single_value.is_nan() || single_value.is_infinite() {
@@ -1848,7 +1866,26 @@ pub fn cvt_s_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
     check_alignment!(program_state, args.fs);
 
     let double_value = extract_u64(program_state, args.fs) as f64;
+
+    // NaNs will still be represented properly in target format.
     let single_value = double_value as f32;
+
+    // If the double is too big, signal overflow or supply inf
+    if double_value > f32::MAX as f64 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        if double_value > 0.0 {
+            program_state.cp1.registers[args.fd as usize] = f32::INFINITY.to_bits();
+            return;
+        } else {
+            program_state.cp1.registers[args.fd as usize] = f32::NEG_INFINITY.to_bits();
+            return;
+        }
+    }
+
+    // If the conversion is lossy, signal inexact (rounding handled by rust)
+    if single_value as f64 != double_value {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
 
     program_state.cp1.registers[args.fd as usize] = single_value.to_bits();
 }
@@ -1856,13 +1893,37 @@ pub fn cvt_s_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
 // 0x20.l - cvt.s.l
 pub fn cvt_s_l(program_state: &mut ProgramState, args: FpRArgs) -> () {
     // Officially, this is supposed to be unpredictable.
-    check_alignment!(program_state, args.fs);
+    program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::UnimplementedOperation));
+    // However...
+    let _ = check_alignment!(program_state, args.fs);
 
-    let long_value = SignMagnitudeLong::from_bits(extract_u64(program_state, args.fs));
-    let double_value = i64::from(long_value) as f64;
-    let single_value = double_value as f32;
+    let long_value = i64::from(SignMagnitudeLong::from_bits(extract_u64(program_state, args.fd)));
+
+    // If source won't fit in target format, except/supply default
+    if long_value.abs() > f32::MAX as i64 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        let ret = match long_value.signum() {
+            0 | 1 => f32::INFINITY,
+            -1 => f32::NEG_INFINITY,
+            _ => unreachable!(),
+        };
+
+        program_state.cp1.registers[args.fd as usize] = ret.to_bits();
+    }
+
+    // Perform conversion
+    let single_value = long_value as f64 as f32;
+
+    // If the resulting integer can only be represented with loss of precision, except inexact or round
+    if single_value.fract() != 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+        
+        let ret = apply_fpu_rounding(program_state, single_value);
+        program_state.cp1.registers[args.fd as usize] = ret.to_bits();
+    }
 
     program_state.cp1.registers[args.fd as usize] = single_value.to_bits();
+
 }
 
 // 0x20.w - cvt.s.w
@@ -1870,23 +1931,59 @@ pub fn cvt_s_w(program_state: &mut ProgramState, args: FpRArgs) -> () {
     let word_value = i32::from(SignMagnitudeWord::from_bits(
         program_state.cp1.registers[args.fs as usize],
     ));
+
+    // If source can't fit in destination format, signal overflow or supply default
+    if word_value < f32::MAX as i32 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+
+        let ret = match word_value.signum() {
+            0 | 1 => f32::INFINITY,
+            -1 => f32::NEG_INFINITY,
+            _ => unreachable!(),
+        };
+
+        program_state.cp1.registers[args.fd as usize] = ret.to_bits();
+    }
+
+    // Perform conversion
     let single_value = word_value as f32;
+
+    // If the rounded value can't be represented without loss of precision, signal inexact or round
+    if single_value.fract() != 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+
+        let ret = apply_fpu_rounding(program_state, single_value);
+        program_state.cp1.registers[args.fd as usize] = ret.to_bits();
+    }
+
     program_state.cp1.registers[args.fd as usize] = single_value.to_bits();
 }
 
 // 0x21.fmt - cvt.d.fmt
 
-// 0x21.s - cvt.d.l
+// 0x21.l - cvt.d.l
 pub fn cvt_d_l(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    // Officially, this operation is unpredictable for a 32-bit FPU.
+    program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::UnimplementedOperation));
+    // However...
     check_alignment!(program_state, args.fd, args.fs);
 
     let long_value = SignMagnitudeLong::from_bits(extract_u64(program_state, args.fs));
-    let double_value = i64::from(long_value) as f64;
+    let int_value = i64::from(long_value);
 
-    pack_up_u64(program_state, args.fd, double_value.to_bits());
+    // Check upper bound of double's representable space
+    let inexact = int_value.abs() > f64::MAX.trunc() as i64;
+
+    if inexact {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
+
+    // The rounding should be applied regardless of whether the result was inexact
+    f64_roundoff!(program_state, args.fd, int_value as f64);
 }
 
 // 0x21.s - cvt.d.s
+// This is an upward cast, so it's always exact
 pub fn cvt_d_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
     check_alignment!(program_state, args.fd);
 
@@ -1897,6 +1994,7 @@ pub fn cvt_d_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
 }
 
 // 0x21.s - cvt.d.w
+// This is an upward cast, so it's always exact
 pub fn cvt_d_w(program_state: &mut ProgramState, args: FpRArgs) -> () {
     check_alignment!(program_state, args.fd);
 
@@ -1922,7 +2020,7 @@ pub fn cvt_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
-    }
+    };
 
     let rounded_double = apply_fpu_rounding(program_state, double_value);
     let word_value = rounded_double.trunc() as i64 as i32;
@@ -1955,6 +2053,11 @@ pub fn cvt_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
 
 // 0x25.d - cvt.l.d
 pub fn cvt_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    // Officially, this operation is unpredictable for a 32-bit FPU.
+    
+    // program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::UnimplementedOperation));
+
+    // However...
     check_alignment!(program_state, args.fd, args.fs);
 
     let double_value = f64::from_bits(extract_u64(program_state, args.fs));
@@ -1966,9 +2069,19 @@ pub fn cvt_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+
+        // If the InvalidOperation exception is disabled, supply the default value from docs.
+        pack_up_u64(program_state, args.fd, LONG_TOO_BIG_NAN); 
+        return;
     }
 
     let rounded_double = apply_fpu_rounding(program_state, double_value);
+
+    // If rounding actually resulted in loss of information, it would come from losing fractional part of original float
+    if double_value.fract() != 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
+
     let long_value = rounded_double.trunc() as i64;
     let long = SignMagnitudeLong::from(long_value);
 
@@ -1977,6 +2090,11 @@ pub fn cvt_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
 
 // 0x25.s - cvt.l.s
 pub fn cvt_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    // Officially, this operation is unpredictable for a 32-bit FPU.
+    
+    // program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::UnimplementedOperation));
+
+    // However...
     check_alignment!(program_state, args.fd);
 
     let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
@@ -1988,9 +2106,18 @@ pub fn cvt_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
+
+        pack_up_u64(program_state, args.fd, LONG_TOO_BIG_NAN);
+        return;
     }
 
     let rounded_single = apply_fpu_rounding(program_state, single_value);
+
+    // If rounding actually resulted in loss of information, it would come from losing fractional part of original float
+    if single_value.fract() != 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
+
     let long_value = rounded_single as i32 as i64;
     let long = SignMagnitudeLong::from(long_value);
 
