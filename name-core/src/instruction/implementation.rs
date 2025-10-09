@@ -1503,7 +1503,8 @@ pub fn abs_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
 // 0x05.s - abs.s
 pub fn abs_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
     let s = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
-    program_state.cp1.registers[args.fd as usize] = f32::abs(s).to_bits();
+    let result = s.abs();
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
 }
 
 // 0x06.d - mov.d
@@ -1524,19 +1525,20 @@ pub fn mov_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
 // 0x07.d - neg.d
 pub fn neg_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
     check_alignment!(program_state, args.fd, args.fs);
+    
+    let double_bits = extract_u64(program_state, args.fs);
 
-    let double_value = f64::from_bits(extract_u64(program_state, args.fs));
-    let negated_value = double_value * -1.0;
+    // Flip the sign bit
+    let negated_bits = double_bits ^ !0x7FFF_FFFF_FFFF_FFFF;
 
-    pack_up_u64(program_state, args.fd, negated_value.to_bits());
+    pack_up_u64(program_state, args.fd, negated_bits);
 }
 
 // 0x07.s - neg.s
 pub fn neg_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let single_value = f32::from_bits(program_state.cp1.registers[args.fs as usize]);
-    let negated_value = single_value * -1.0;
-
-    program_state.cp1.registers[args.fd as usize] = negated_value.to_bits();
+    // Flip the sign bit
+    let negated_bits = program_state.cp1.registers[args.fs as usize] ^ !0x7FFF_FFFF;
+    program_state.cp1.registers[args.fd as usize] = negated_bits;
 }
 
 // 0x08.fmt - round.l.fmt
