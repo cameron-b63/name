@@ -219,6 +219,10 @@ impl<'a> Lexer<'a> {
                         TokenKind::Register
                     }
                 }
+                '%' => {
+                    self.consume_name();
+                    TokenKind::MacroArg
+                }
                 '+' => TokenKind::Plus,
                 '-' => TokenKind::Minus,
                 '(' => TokenKind::LParen,

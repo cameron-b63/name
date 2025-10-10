@@ -405,7 +405,6 @@ impl<'sess, 'sess_ref> Parser<'sess, 'sess_ref> {
                 AstKind::Globl(l)
             }
             ".align" => todo!(),
-            ".macro" => todo!(),
             ".word" => AstKind::Word(self.parse_repeatable_args(Self::parse_number)?),
             _ => {
                 return Err(Span {
