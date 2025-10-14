@@ -10,7 +10,7 @@ use crate::instruction::formats::j_type::JArgs;
 use crate::instruction::formats::r_type::RArgs;
 use crate::instruction::formats::regimm_i_type::RegImmIArgs;
 use crate::instruction::implementation_helpers::{
-    apply_fpu_rounding, perform_op_with_flush, FloatBits, FloatComparable,
+    apply_fpu_rounding, perform_op_with_flush, FloatArithmetic, FloatBits, FloatComparable
 };
 use crate::instruction::sign_magnitude::{SignMagnitudeLong, SignMagnitudeWord};
 use crate::structs::{
@@ -23,16 +23,6 @@ use super::implementation_helpers::is_register_aligned;
 // This file contains the implementations for all
 // individual instructions defined in the instruction set
 
-/// This is the double-precision QNaN that will be supplied if:
-/// an instruction generates an InvalidOperation floating-point error, and
-/// FCSR disables InvalidOperation explicit trap.
-/// If you don't know what that means, you should DEFINITELY NOT mess with this value!
-///
-/// P.S., the magic number bit pattern comes from me generating a valid QNaN according to
-/// MIPS Volume I-A. See table 6.3 on page 82!
-const F64_QNAN: f64 = f64::from_bits(0x7ff8_0000_0000_0000);
-/// See F64_QNAN
-const F32_QNAN: f32 = f32::from_bits(0x7fc0_0000);
 // These NaNs are going to be related to error states in conversion.
 /// This NaN is for an FP number that's too big to be included as a long.
 const LONG_TOO_BIG_NAN: u64 = 0x7FFF_FFFF_FFFF_FFFF;
@@ -80,48 +70,6 @@ const WORD_TOO_SMALL_NAN: u32 = 0x8000_0000;
 
 
 */
-
-/// This macro supplies a 32-bit QNaN to the given program state (into fd) and returns.
-/// (program_state, destination)
-#[macro_export]
-macro_rules! f32_qnan {
-    ($program_state: expr, $destination: expr) => {
-        f32::pack_bits($program_state, $destination, F32_QNAN.to_bits());
-        return;
-    };
-}
-
-/// This macro supplies a 64-bit QNaN to the given program state (into fd, fd+1) and returns.
-/// (program_state, destination)
-#[macro_export]
-macro_rules! f64_qnan {
-    ($program_state: expr, $destination: expr) => {
-        f64::pack_bits($program_state, $destination, F64_QNAN.to_bits());
-        return;
-    };
-}
-
-/// This macro supplies the rounded version of the result using RM in FCSR to destination in program state.
-/// (program_state, destination, result)
-#[macro_export]
-macro_rules! f32_roundoff {
-    ($program_state: expr, $destination: expr, $result: expr) => {
-        let rounded_result = apply_fpu_rounding($program_state, $result);
-        f32::pack_bits($program_state, $destination, rounded_result.to_bits());
-        return;
-    };
-}
-
-/// This macro supplies the rounded version of the result using RM in FCSR to destination in program state.
-/// (program_state, destination, result)
-#[macro_export]
-macro_rules! f64_roundoff {
-    ($program_state: expr, $destination: expr, $result: expr) => {
-        let rounded_result = apply_fpu_rounding($program_state, $result);
-        f64::pack_bits($program_state, $destination, rounded_result.to_bits());
-        return;
-    };
-}
 
 /*
 
@@ -1153,12 +1101,10 @@ pub fn bc1(program_state: &mut ProgramState, args: FpCCBranchArgs) -> () {
     }
 }
 
-// 0x00 - add.fmt
-
-// 0x00.d - add.d
-pub fn add_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let s = f64::extract_value(program_state, args.fs);
-    let t = f64::extract_value(program_state, args.ft);
+// 0x00.fmt - add.fmt
+pub fn addf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let s = T::extract_value(program_state, args.fs);
+    let t = T::extract_value(program_state, args.ft);
 
     // If either operation is a signaling NaN, the operation is invalid.
     if s.is_nan() || t.is_nan() {
@@ -1166,17 +1112,18 @@ pub fn add_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
             FpExceptionType::InvalidOperation,
         ));
         // If the exception path was disabled, supply a QNaN
-        f64_qnan!(program_state, args.fd);
+        f64::pack_qnan(program_state, args.fd);
+        return
     }
 
     // If the operation results in magnitude subtraction of infinities, the operation is invalid.
-    if s.is_infinite() && t.is_infinite() && (s.to_bits() >> 63) != (t.to_bits() >> 63)
-    // (second check reads: "sign bits don't match")
+    if s.is_infinite() && t.is_infinite() && s.signum() != t.signum()
     {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
-        f64_qnan!(program_state, args.fd);
+        T::pack_qnan(program_state, args.fd);
+        return;
     }
 
     // Addition performed here
@@ -1186,70 +1133,35 @@ pub fn add_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
     if result.is_infinite() {
         program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
         // Overflow without explicit trap results in rounding with RM in FCSR
-        f64_roundoff!(program_state, args.fd, result);
+        T::round_off(program_state, args.fd, result);
+        return;
     }
 
-    f64::pack_value(program_state, args.fd, result);
-}
-
-// 0x00.s - add.s
-pub fn add_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let s = f32::extract_value(program_state, args.fs);
-    let t = f32::extract_value(program_state, args.ft);
-
-    // If either operation is a signaling NaN, the operation is invalid.
-    if s.is_nan() || t.is_nan() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-        f32_qnan!(program_state, args.fd);
-    }
-
-    // If the operation results in magnitude subtraction of infinities, the operation is invalid.
-    if s.is_infinite() && t.is_infinite() && (s.to_bits() >> 31) != (t.to_bits() >> 31)
-    // (second check reads: "sign bits don't match")
-    {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-        f32_qnan!(program_state, args.fd);
-    }
-
-    // Addition performed here
-    let result = perform_op_with_flush(program_state, s + t);
-
-    // Check for overflow after operation
-    if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
-        f32_roundoff!(program_state, args.fd, result);
-    }
-
-    f32::pack_value(program_state, args.fd, result);
+    T::pack_value(program_state, args.fd, result);
 }
 
 // 0x01.fmt - sub.fmt
-
-// 0x01.d - sub.d
-pub fn sub_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let s = f64::extract_value(program_state, args.fs);
-    let t = f64::extract_value(program_state, args.ft);
+pub fn subf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let s = T::extract_value(program_state, args.fs);
+    let t = T::extract_value(program_state, args.ft);
 
     // If either operation is a signaling NaN, the operation is invalid.
     if s.is_nan() || t.is_nan() {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
-        f64_qnan!(program_state, args.fd);
+        T::pack_qnan(program_state, args.fd);
+        return;
     }
 
     // If the operation results in magnitude subtraction of infinities, the operation is invalid.
-    if s.is_infinite() && t.is_infinite() && (s.to_bits() >> 63) == (t.to_bits() >> 63)
-    // (second check reads: "sign bits match")
+    if s.is_infinite() && t.is_infinite() && s.signum() == t.signum()
     {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
-        f64_qnan!(program_state, args.fd);
+        T::pack_qnan(program_state, args.fd);
+        return;
     }
 
     // Subtraction performed here
@@ -1258,68 +1170,34 @@ pub fn sub_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
     // Check for overflow after operation
     if result.is_infinite() {
         program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
-        f64_roundoff!(program_state, args.fd, result);
+        T::round_off(program_state, args.fd, result);
+        return;
     }
 
-    f64::pack_value(program_state, args.fd, result);
-}
-
-// 0x01.s - sub.s
-pub fn sub_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let s = f32::extract_value(program_state, args.fs);
-    let t = f32::extract_value(program_state, args.ft);
-
-    // If either operation is a signaling NaN, the operation is invalid.
-    if s.is_nan() || t.is_nan() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-        f32_qnan!(program_state, args.fd);
-    }
-
-    // If the operation results in magnitude subtraction of infinities, the operation is invalid.
-    if s.is_infinite() && t.is_infinite() && (s.to_bits() >> 31) == (t.to_bits() >> 31)
-    // (second check reads: "sign bits match")
-    {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-        f32_qnan!(program_state, args.fd);
-    }
-
-    // Subtraction performed here
-    let result = perform_op_with_flush(program_state, s - t);
-
-    // Check for overflow after operation
-    if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
-        f32_roundoff!(program_state, args.fd, result);
-    }
-
-    f32::pack_value(program_state, args.fd, result);
+    T::pack_value(program_state, args.fd, result);
 }
 
 // 0x02.fmt - mul.fmt
-
-// 0x02.d - mul.d
-pub fn mul_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let s = f64::extract_value(program_state, args.fs);
-    let t = f64::extract_value(program_state, args.ft);
+pub fn mulf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let s = T::extract_value(program_state, args.fs);
+    let t = T::extract_value(program_state, args.ft);
 
     // If either operation is a signaling NaN, the operation is invalid.
     if s.is_nan() || t.is_nan() {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
-        f64_qnan!(program_state, args.fd);
+        T::pack_qnan(program_state, args.fd);
+        return;
     }
 
     // If the operation is 0 x inf, with any signs, then trigger an InvalidOperation.
-    if s.abs() == 0.0 && t.is_infinite() || s.is_infinite() && t.abs() == 0.0 {
+    if s.is_zero() && t.is_infinite() || s.is_infinite() && t.is_zero() {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
-        f64_qnan!(program_state, args.fd);
+        T::pack_qnan(program_state, args.fd);
+        return;
     }
 
     // Perform multiplication
@@ -1328,137 +1206,60 @@ pub fn mul_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
     // Check for overflow after operation
     if result.is_infinite() {
         program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
-        f64_roundoff!(program_state, args.fd, result);
+        T::round_off(program_state, args.fd, result);
+        return;
     }
 
-    f64::pack_value(program_state, args.fd, result);
-}
-
-// 0x02.s - mul.s
-pub fn mul_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let s = f32::extract_value(program_state, args.fs);
-    let t = f32::extract_value(program_state, args.ft);
-
-    // If either operation is a signaling NaN, the operation is invalid.
-    if s.is_nan() || t.is_nan() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-        f32_qnan!(program_state, args.fd);
-    }
-
-    // If the operation is 0 x inf, with any signs, then trigger an InvalidOperation.
-    if s.abs() == 0.0 && t.is_infinite() || s.is_infinite() && t.abs() == 0.0 {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-        f32_qnan!(program_state, args.fd);
-    }
-
-    // Perform multiplication
-    let result = perform_op_with_flush(program_state, s * t);
-
-    // Check for overflow after operation
-    if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
-        f32_roundoff!(program_state, args.fd, result);
-    }
-
-    f32::pack_value(program_state, args.fd, result);
+    T::pack_value(program_state, args.fd, result);
 }
 
 // 0x03 - div.fmt
-
-// 0x03.d - div.d
-pub fn div_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let s: f64 = f64::extract_value(program_state, args.fs);
-    let t: f64 = f64::extract_value(program_state, args.ft);
+pub fn divf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let s = T::extract_value(program_state, args.fs);
+    let t = T::extract_value(program_state, args.ft);
 
     // If either operation is a signaling NaN, the operation is invalid.
     if s.is_nan() || t.is_nan() {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
-        f64_qnan!(program_state, args.fd);
+        T::pack_qnan(program_state, args.fd);
+        return;
     }
 
     // 0/0 and inf/inf are invalid.
-    if s.abs() == 0.0 && t.abs() == 0.0 || s.is_infinite() && t.is_infinite() {
+    if s.is_zero() && t.is_zero() || s.is_infinite() && t.is_infinite() {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
-        f64_qnan!(program_state, args.fd);
+        T::pack_qnan(program_state, args.fd);
+        return;
     }
 
     // Check for division by zero
-    if t.abs() == 0.0 {
+    if t.is_zero() {
         program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::DivideByZero));
         // If the explicit trap is disabled, supply a properly signed infinity
         if s.signum() == t.signum() {
-            f64::pack_value(program_state, args.fd, f64::INFINITY);
+            T::pack_value(program_state, args.fd, T::INFINITY);
             return;
         } else {
-            f64::pack_value(program_state, args.fd, f64::NEG_INFINITY);
+            T::pack_value(program_state, args.fd, T::NEG_INFINITY);
             return;
         }
     }
 
     // Division performed here
-    let result: f64 = perform_op_with_flush(program_state, s / t);
+    let result = perform_op_with_flush(program_state, s / t);
 
     // Check for overflow after operation
     if result.is_infinite() {
         program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
-        f64_roundoff!(program_state, args.fd, result);
+        T::round_off(program_state, args.fd, result);
+        return;
     }
 
-    f64::pack_value(program_state, args.fd, result);
-}
-
-// 0x03.s - div.s
-pub fn div_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let s = f32::extract_value(program_state, args.fs);
-    let t = f32::extract_value(program_state, args.ft);
-
-    // If either operation is a signaling NaN, the operation is invalid.
-    if s.is_nan() || t.is_nan() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-        f32_qnan!(program_state, args.fd);
-    }
-
-    // 0/0 and inf/inf are invalid.
-    if s.abs() == 0.0 && t.abs() == 0.0 || s.is_infinite() && t.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(
-            FpExceptionType::InvalidOperation,
-        ));
-        f32_qnan!(program_state, args.fd);
-    }
-
-    // Check for division by zero
-    if t.abs() == 0.0 {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::DivideByZero));
-        // If the explicit trap is disabled, supply a properly signed infinity
-        if s.signum() == t.signum() {
-            f32::pack_value(program_state, args.fd, f32::INFINITY);
-            return;
-        } else {
-            f32::pack_value(program_state, args.fd, f32::NEG_INFINITY);
-            return;
-        }
-    }
-
-    // Division performed here
-    let result: f32 = perform_op_with_flush(program_state, s / t);
-
-    // Check for overflow after operation
-    if result.is_infinite() {
-        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
-        f32_roundoff!(program_state, args.fd, result);
-    }
-
-    f32::pack_value(program_state, args.fd, result);
+    T::pack_value(program_state, args.fd, result);
 }
 
 // 0x04.d - sqrt.d
@@ -1472,51 +1273,23 @@ pub fn sqrt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
 }
 
 // 0x05 - abs.fmt (this should NOT panic when taking abs(NaN) due to FCSR dictating IEEE 2008 revision instead of legacy MIPS!)
-
-// 0x05.d - abs.d
-pub fn abs_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let s = f64::extract_value(program_state, args.fs);
+pub fn abs<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let s = T::extract_value(program_state, args.fs);
     let result = s.abs();
-    let _ = f64::pack_value(program_state, args.fd, result);
+    let _ = T::pack_value(program_state, args.fd, result);
 }
 
-// 0x05.s - abs.s
-pub fn abs_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let s = f32::extract_value(program_state, args.fs);
-    let result = s.abs();
-    f32::pack_value(program_state, args.fd, result);
-}
-
-// 0x06.d - mov.d
-pub fn mov_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let temp: u64 = f64::extract_bits(program_state, args.fs);
-    let _ = f64::pack_bits(program_state, args.fd, temp);
-}
-
-// 0x06.s - mov.s
-pub fn mov_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let temp: u32 = f32::extract_bits(program_state, args.fs);
-    let _ = f32::pack_bits(program_state, args.fd, temp);
+// 0x06.fmt - mov.fmt
+pub fn mov_float<T: FloatBits>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let temp: T::Bits = T::extract_bits(program_state, args.fs);
+    let _ = T::pack_bits(program_state, args.fd, temp);
 }
 
 // 0x07.fmt - neg.fmt
-
-// 0x07.d - neg.d
-pub fn neg_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let double_bits = f64::extract_bits(program_state, args.fs);
-
-    // Flip the sign bit
-    let negated_bits = double_bits ^ !0x7FFF_FFFF_FFFF_FFFF;
-
-    f64::pack_bits(program_state, args.fd, negated_bits);
-}
-
-// 0x07.s - neg.s
-pub fn neg_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    // Flip the sign bit
-    let single_bits = f32::extract_bits(program_state, args.fs);
-    let negated_bits = single_bits ^ !0x7FFF_FFFF;
-    f32::pack_bits(program_state, args.fd, negated_bits);
+pub fn negf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let value = T::extract_value(program_state, args.fs);
+    let negated = value.neg();
+    T::pack_value(program_state, args.fd, negated);
 }
 
 // 0x08.fmt - round.l.fmt
@@ -1895,7 +1668,7 @@ pub fn cvt_s_l(program_state: &mut ProgramState, args: FpRArgs) -> () {
     }
 
     // Round no matter what
-    f32_roundoff!(program_state, args.fd, single_value);
+    f32::round_off(program_state, args.fd, single_value);
 }
 
 // 0x20.w - cvt.s.w
@@ -1926,7 +1699,7 @@ pub fn cvt_s_w(program_state: &mut ProgramState, args: FpRArgs) -> () {
     }
 
     // Round no matter what
-    f32_roundoff!(program_state, args.fd, single_value);
+    f32::round_off(program_state, args.fd, single_value);
 }
 
 // 0x21.fmt - cvt.d.fmt
@@ -1963,7 +1736,7 @@ pub fn cvt_d_l(program_state: &mut ProgramState, args: FpRArgs) -> () {
     }
 
     // The rounding should be applied regardless of whether the result was inexact
-    f64_roundoff!(program_state, args.fd, double_value);
+    f64::round_off(program_state, args.fd, double_value);
 }
 
 // 0x21.s - cvt.d.s

@@ -1,7 +1,22 @@
+use std::ops::{Add, Div, Mul, Sub};
+
 use crate::{
     exception::definitions::{ExceptionType, FpExceptionType},
     structs::ProgramState,
 };
+
+// This file contains helper values, functions, and traits that will make working with implementations more ergonomic.
+
+/// This is the double-precision QNaN that will be supplied if:
+/// an instruction generates an InvalidOperation floating-point error, and
+/// FCSR disables InvalidOperation explicit trap.
+/// If you don't know what that means, you should DEFINITELY NOT mess with this value!
+///
+/// P.S., the magic number bit pattern comes from me generating a valid QNaN according to
+/// MIPS Volume I-A. See table 6.3 on page 82!
+const F64_QNAN: f64 = f64::from_bits(0x7ff8_0000_0000_0000);
+/// See F64_QNAN
+const F32_QNAN: f32 = f32::from_bits(0x7fc0_0000);
 
 /// Helper function for instructions that operate on register pairs to remove invalid cases.
 /// If the register is improperly aligned given current program state, it will trigger
@@ -116,7 +131,7 @@ where
 /// This function facilitates the subnormal stuff.
 pub fn perform_op_with_flush<T>(program_state: &mut ProgramState, result: T) -> T
 where
-    T: FloatFlush + Copy,
+    T: FloatArithmetic,
 {
     if program_state.cp1.fenr_fs_bit_set() && result.is_subnormal() {
         program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Underflow));
@@ -198,7 +213,98 @@ impl Roundable for f64 {
     }
 }
 
-/// Trait to make functions like is_nan() usable in generalized comparisons.
+/// Trait to bundle up arithmetic capabilities, as well as provide general-purpose utility functions like is_infinite() and signum()
+pub trait FloatArithmetic: FloatBits + FloatFlush + Roundable + PartialEq + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> {
+    const INFINITY: Self;
+    const NEG_INFINITY: Self;
+    fn is_infinite(self) -> bool;
+    fn is_nan(self) -> bool;
+    fn is_zero(self) -> bool;
+    fn signum(self) -> Self;
+    fn abs(self) -> Self;
+    fn neg(self) -> Self;
+    fn pack_qnan(program_state: &mut ProgramState, destination: u32) -> ();
+    fn round_off(program_state: &mut ProgramState, destination: u32, value: Self) -> ();
+}
+
+impl FloatArithmetic for f32 {
+    const INFINITY: Self = f32::INFINITY;
+    const NEG_INFINITY: Self = f32::NEG_INFINITY;
+
+    fn is_infinite(self) -> bool {
+        self.is_infinite()
+    }
+
+    fn is_nan(self) -> bool {
+        self.is_nan()
+    }
+
+    fn is_zero(self) -> bool {
+        self == 0.0
+    }
+
+    fn signum(self) -> Self {
+        self.signum()
+    }
+
+    fn abs(self) -> Self {
+        self.abs()
+    }
+
+    fn neg(self) -> Self {
+        f32::from_bits(self.to_bits() ^ !0x7FFF_FFFF)
+    }
+
+    fn pack_qnan(program_state: &mut ProgramState, destination: u32) -> () {
+        f32::pack_bits(program_state, destination, F32_QNAN.to_bits());
+        return;
+    }
+
+    fn round_off(program_state: &mut ProgramState, destination: u32, value: Self) -> () {
+        let rounded_result = apply_fpu_rounding(program_state, value);
+        f32::pack_value(program_state, destination, rounded_result);
+    }
+}
+
+impl FloatArithmetic for f64 {
+    const INFINITY: Self = f64::INFINITY;
+    const NEG_INFINITY: Self = f64::NEG_INFINITY;
+
+    fn is_infinite(self) -> bool {
+        self.is_infinite()
+    }
+
+    fn is_nan(self) -> bool {
+        self.is_nan()
+    }
+
+    fn is_zero(self) -> bool {
+        self == 0.0
+    }
+
+    fn signum(self) -> Self {
+        self.signum()
+    }
+
+    fn abs(self) -> Self {
+        self.abs()
+    }
+
+    fn neg(self) -> Self {
+        f64::from_bits(self.to_bits() ^ !0x7FFF_FFFF_FFFF_FFFF)
+    }
+
+    fn pack_qnan(program_state: &mut ProgramState, destination: u32) -> () {
+        f64::pack_value(program_state, destination, F64_QNAN);
+    }
+
+    fn round_off(program_state: &mut ProgramState, destination: u32, value: Self) -> () {
+        let rounded_result = apply_fpu_rounding(program_state, value);
+        f64::pack_value(program_state, destination, rounded_result);
+    }
+}
+
+/// Trait to bundle up everything required to allow a type to be used in comparisons
 pub trait FloatComparable: PartialEq + PartialOrd + FloatBits {
     fn is_nan(self) -> bool;
     fn is_signaling_nan(value: Self) -> bool;
