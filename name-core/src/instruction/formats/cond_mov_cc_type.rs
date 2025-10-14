@@ -9,7 +9,10 @@
     funct as a selector;
 */
 
-use crate::{instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction}, parse::parse::AstKind};
+use crate::{
+    instruction::{information::ArgumentType, AssembleResult, ErrorKind, RawInstruction},
+    parse::parse::AstKind,
+};
 
 /// CondMovCCArgs is pretty much just reserved for movf and movt.
 /// It is syntactic sugar for us (semantic wrapper over r-type)
@@ -28,11 +31,11 @@ impl From<CondMovCCArgs> for RawInstruction {
     fn from(cond_mov_cc_args: CondMovCCArgs) -> Self {
         RawInstruction::new(
             (cond_mov_cc_args.opcode << 26)
-            | (cond_mov_cc_args.rs << 21)
-            | (cond_mov_cc_args.cc << 18)
-            | (cond_mov_cc_args.tf << 16)
-            | (cond_mov_cc_args.rd << 11)
-            | cond_mov_cc_args.funct
+                | (cond_mov_cc_args.rs << 21)
+                | (cond_mov_cc_args.cc << 18)
+                | (cond_mov_cc_args.tf << 16)
+                | (cond_mov_cc_args.rd << 11)
+                | cond_mov_cc_args.funct,
         )
     }
 }
@@ -55,17 +58,25 @@ impl From<RawInstruction> for CondMovCCArgs {
 impl CondMovCCArgs {
     pub fn assign_cond_mov_cc_args(
         arguments: Vec<AstKind>,
-        args_to_use: &[ArgumentType]
+        args_to_use: &[ArgumentType],
     ) -> AssembleResult<Self> {
         let mut rs = 0;
         let mut cc = 0;
         let mut rd = 0;
 
-        for(i, passed) in arguments.into_iter().enumerate() {
+        for (i, passed) in arguments.into_iter().enumerate() {
             match args_to_use[i] {
-                ArgumentType::Rs => rs = passed.get_register_as_u32().ok_or(ErrorKind::InvalidArgument)? as u32,
+                ArgumentType::Rs => {
+                    rs = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)? as u32
+                }
                 ArgumentType::Immediate => cc = passed.get_immediate().unwrap_or(0),
-                ArgumentType::Rd => rd = passed.get_register_as_u32().ok_or(ErrorKind::InvalidArgument)? as u32,
+                ArgumentType::Rd => {
+                    rd = passed
+                        .get_register_as_u32()
+                        .ok_or(ErrorKind::InvalidArgument)? as u32
+                }
                 _ => unreachable!(),
             }
         }

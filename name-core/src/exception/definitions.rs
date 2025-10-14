@@ -21,7 +21,7 @@ impl SourceContext {
 }
 
 // This enum contains all the exceptions we could generate.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum ExceptionType {
     // Interrupt,
     // TlbMod,
@@ -38,7 +38,7 @@ pub enum ExceptionType {
     ArithmeticOverflow,
     Trap,
     // MsaFloatingPoint,
-    FloatingPoint,
+    FloatingPoint(FpExceptionType),
     // Implementation Dependent,
     // Implementation Dependent,
     // TlbReadInhibit,
@@ -70,7 +70,7 @@ impl From<ExceptionType> for u32 {
             ExceptionType::CoprocessorUnusable => 0x0b,
             ExceptionType::ArithmeticOverflow => 0x0c,
             ExceptionType::Trap => 0x0d,
-            ExceptionType::FloatingPoint => 0x0f,
+            ExceptionType::FloatingPoint(_) => 0x0f,
         }
     }
 }
@@ -91,11 +91,24 @@ impl TryFrom<u32> for ExceptionType {
             0x0b => Ok(ExceptionType::CoprocessorUnusable),
             0x0c => Ok(ExceptionType::ArithmeticOverflow),
             0x0d => Ok(ExceptionType::Trap),
-            0x0f => Ok(ExceptionType::FloatingPoint),
+            0x0f => Ok(ExceptionType::FloatingPoint(FpExceptionType::None)),
             _ => Err(format!(
                 "Failed to coerce ExcCode {} to ExceptionType.",
                 value
             )),
         }
     }
+}
+
+/// Represents the floating point exceptions as encoded in FCSR, following the EVZOUI bit pattern.
+/// See MIPS Volume I-A.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FpExceptionType {
+    None = 0,
+    UnimplementedOperation = 0b0000_0000_0000_0010_0000_0000_0000_0000,
+    InvalidOperation = 0b0000_0000_0000_0001_0000_0000_0000_0000,
+    DivideByZero = 0b0000_0000_0000_0000_1000_0000_0000_0000,
+    Overflow = 0b0000_0000_0000_0000_0100_0000_0000_0000,
+    Underflow = 0b0000_0000_0000_0000_0010_0000_0000_1000,
+    Inexact = 0b0000_0000_0000_0000_0001_0000_0000_0100,
 }

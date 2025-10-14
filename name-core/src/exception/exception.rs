@@ -1,5 +1,8 @@
 use super::{constants::*, definitions::ExceptionType};
-use crate::structs::ProgramState;
+use crate::{
+    exception::definitions::FpExceptionType,
+    structs::{Coprocessor1, ProgramState},
+};
 
 impl ProgramState {
     /// When an exception is triggered in the MIPS architecture,
@@ -20,7 +23,12 @@ impl ProgramState {
         // Set the EXL bit.
         self.cp0.set_exception_level(EXCEPTION_BEING_HANDLED);
         // Set the ExcCode field of Cause to the proper value
-        self.cp0.set_exc_code(exception_type.into());
+        self.cp0.set_exc_code(u32::from(exception_type));
+
+        // If the exception is floating-point, populate the FCSR fields in Coprocessor 1.
+        if let ExceptionType::FloatingPoint(fp_exception_type) = exception_type.clone() {
+            self.cp1.set_fp_exception(fp_exception_type);
+        }
     }
 
     /// When an exception was handled without needing to halt, Coprocessor 0 is reset to indicate normal operation.
@@ -32,5 +40,64 @@ impl ProgramState {
         self.cpu.pc = self.cp0.get_epc() + 4;
         // Clear EPC
         self.cp0.set_epc(0u32);
+        // Clear FPU exception bits
+        self.cp1.clear_fp_exception();
+    }
+}
+
+impl Coprocessor1 {
+    /// Set the FEXR register according to the specified exception.
+    pub fn set_fp_exception(&mut self, fp_exception_type: FpExceptionType) {
+        let current_fcsr_exception_state = self.get_fexr();
+        self.set_fexr(current_fcsr_exception_state | fp_exception_type as u32);
+    }
+
+    /// Clear all floating-point exceptions.
+    pub fn clear_fp_exception(&mut self) {
+        self.set_fexr(0u32);
+    }
+
+    /// Retrieve all floating-point exceptions that have occurred.
+    /// Check both Cause and Flags; the exception handler will check if
+    /// explicit traps are enabled.
+    pub fn get_floating_point_errors(&self) -> Vec<FpExceptionType> {
+        // The following bitmasks are coming straight from FCSR in constants.rs;
+        // If you've been keeping track of the fp exception handling code,
+        // this follows EVZOUI in FEXR.
+        let fexr = self.get_fexr();
+        let mut res: Vec<FpExceptionType> = Vec::new();
+
+        // Just so you know: FEXR bitmask is    0b0000_0000_0000_0011_1111_0000_0111_1100
+
+        // Unimplemented Operation
+        if (fexr & 0b0000_0000_0000_0010_0000_0000_0000_0000) != 0 {
+            res.push(FpExceptionType::UnimplementedOperation);
+        }
+        // Invalid Operation
+        if (fexr & 0b0000_0000_0000_0001_0000_0000_0100_0000) != 0 {
+            res.push(FpExceptionType::InvalidOperation);
+        }
+
+        // Divide By Zero
+        if (fexr & 0b0000_0000_0000_0000_1000_0000_0010_0000) != 0 {
+            res.push(FpExceptionType::DivideByZero);
+        }
+
+        // Overflow
+        if (fexr & 0b0000_0000_0000_0000_0100_0000_0001_0000) != 0 {
+            res.push(FpExceptionType::Overflow);
+        }
+
+        // Underflow
+        if (fexr & 0b0000_0000_0000_0000_0010_0000_0000_1000) != 0 {
+            res.push(FpExceptionType::Underflow);
+        }
+
+        // Inexact
+        if (fexr & 0b0000_0000_0000_0000_0001_0000_0000_0100) != 0 {
+            res.push(FpExceptionType::Inexact);
+        }
+
+        res
     }
 }

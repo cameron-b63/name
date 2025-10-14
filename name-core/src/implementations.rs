@@ -9,6 +9,8 @@ impl Default for Processor {
         Self {
             pc: MIPS_TEXT_START_ADDR,
             general_purpose_registers: [0u32; 32],
+            hi: 0,
+            lo: 0,
         }
     }
 }
@@ -18,6 +20,8 @@ impl Processor {
         Processor {
             pc: entry,
             general_purpose_registers: [0; 32],
+            hi: 0,
+            lo: 0,
         }
     }
 }
@@ -35,7 +39,7 @@ impl Coprocessor0 {
 impl Coprocessor1 {
     pub fn new() -> Self {
         Coprocessor1 {
-            registers: [0.0; 32],
+            registers: [0; 32],
             control_registers: [FIR_DEFAULT_VALUES, FCSR_DEFAULT_VALUES],
         }
     }

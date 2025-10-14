@@ -1,8 +1,9 @@
 use std::process::exit;
 
 use crate::{
+    constants::fpu_control::FCSR_INDEX,
     debug::debug_utils::DebuggerState,
-    exception::definitions::{ExceptionType, SourceContext},
+    exception::definitions::{ExceptionType, FpExceptionType, SourceContext},
     structs::{OperatingSystem, ProgramState},
 };
 
@@ -117,13 +118,129 @@ pub fn handle_exception(
         ExceptionType::Trap => {
             todo!("Not sure how we want trap to work yet.");
         }
-        ExceptionType::FloatingPoint => {
-            // Will be more useful once cp1 is implemented
-            eprintln!(
-                "{}",
-                generate_err(source_context, epc, "Floating point exception occurred.")
-            );
-            exit(0);
+        ExceptionType::FloatingPoint(_) => {
+            // This scope is going to refer to "explicit trap" quite a bit.
+            // Check MIPS Volume I-A, of course, but essentially, all IEEE-defined floating-point
+            // exceptions have the capability to be caught or replaced with sensible values.
+            // specifics are defined in I-A, but simply put, explicit trap for us probably means crash.
+            // magic numbers for the enabled-bit check are coming from FCSR's bit field breakdown.
+            let fp_exceptions: Vec<FpExceptionType> = program_state.cp1.get_floating_point_errors();
+            for fp_exception_type in fp_exceptions {
+                match fp_exception_type {
+                    FpExceptionType::None => {
+                        // Catch-all. Please don't have this triggering!
+                        eprintln!(
+                            "{}",
+                            generate_err(
+                                source_context,
+                                epc,
+                                "An unspecified floating point exception occurred."
+                            )
+                        );
+                        exit(0);
+                    }
+                    FpExceptionType::UnimplementedOperation => {
+                        // This must be an explicit trap. However, it represents letting software handle impl, so it won't crash.
+                        // Do nothing...
+                    }
+                    FpExceptionType::InvalidOperation => {
+                        // If explicit trap for invalid operation is enabled, this should crash.
+                        if (program_state.cp1.control_registers[FCSR_INDEX]
+                            & 0b0000_0000_0000_0000_0000_1000_0000_0000)
+                            != 0
+                        {
+                            eprintln!(
+                                "{}",
+                                generate_err(
+                                    source_context,
+                                    epc,
+                                    "An invalid operation occurred in a floating-point instruction; NaN, Infinity, or indeterminate forms may trigger this exception."
+                                )
+                            );
+                            exit(0);
+                        }
+                        // If explicit trap is not enabled, this should supply a QNan.
+                        // That's the burden of the caller;
+                        // the right thing to do is go back to where we came and clear exception state.
+                    }
+                    FpExceptionType::DivideByZero => {
+                        // If explicit trap for divide by zero is enabled, this should crash.
+                        if (program_state.cp1.control_registers[FCSR_INDEX]
+                            & 0b0000_0000_0000_0000_0000_0100_0000_0000)
+                            != 0
+                        {
+                            eprintln!(
+                                "{}",
+                                generate_err(
+                                    source_context,
+                                    epc,
+                                    "Division by zero in a floating-point division instruction occurred."
+                                )
+                            );
+                            exit(0);
+                        }
+
+                        // If explicit trap is not enabled, it should supply a properly signed infinity. This is the burden of the caller.
+                    }
+                    FpExceptionType::Overflow => {
+                        // If explicit trap for overflow is enabled, this should crash.
+                        if (program_state.cp1.control_registers[FCSR_INDEX]
+                            & 0b0000_0000_0000_0000_0000_0010_0000_0000)
+                            != 0
+                        {
+                            eprintln!(
+                                "{}",
+                                generate_err(
+                                    source_context,
+                                    epc,
+                                    "Floating-point overflow occurred."
+                                )
+                            );
+                            exit(0);
+                        }
+
+                        // If explicit trap is not enabled, the instruction should apply the rounding mode indicated in FCSR.
+                    }
+                    FpExceptionType::Underflow => {
+                        // If explicit trap for underflow is enabled, this should crash.
+                        if (program_state.cp1.control_registers[FCSR_INDEX]
+                            & 0b0000_0000_0000_0000_0000_0001_0000_0000)
+                            != 0
+                        {
+                            eprintln!(
+                                "{}",
+                                generate_err(
+                                    source_context,
+                                    epc,
+                                    "Subnormal results occurred (floating-point underflow)."
+                                )
+                            );
+                            exit(0);
+                        }
+
+                        // If explicit trap is disabled, flush to zero on subnormal.
+                    }
+                    FpExceptionType::Inexact => {
+                        // If explicit trap for inexact is enabled, this should crash.
+                        if (program_state.cp1.control_registers[FCSR_INDEX]
+                            & 0b0000_0000_0000_0000_0000_0000_1000_0000)
+                            != 0
+                        {
+                            eprintln!(
+                                "{}",
+                                generate_err(
+                                    source_context,
+                                    epc,
+                                    "Floating-point arithmetic was inexact."
+                                )
+                            );
+                            exit(0);
+                        }
+
+                        // If explicit trap is disabled, supply a rounded result (if this came from overflow, supply overflowed).
+                    }
+                }
+            }
         }
     }
 

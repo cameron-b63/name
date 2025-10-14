@@ -1,4 +1,4 @@
-use crate::exception::definitions::ExceptionType;
+use crate::exception::definitions::{ExceptionType, FpExceptionType};
 use crate::instruction::formats::cond_mov_cc_type::CondMovCCArgs;
 use crate::instruction::formats::cop_mov_r_type::CopMovRArgs;
 use crate::instruction::formats::fp_cc_branch_type::FpCCBranchArgs;
@@ -9,16 +9,29 @@ use crate::instruction::formats::i_type::IArgs;
 use crate::instruction::formats::j_type::JArgs;
 use crate::instruction::formats::r_type::RArgs;
 use crate::instruction::formats::regimm_i_type::RegImmIArgs;
-use crate::instruction::implementation_helpers::perform_op_with_flush;
+use crate::instruction::implementation_helpers::{
+    apply_fpu_rounding, perform_op_with_flush, FloatArithmetic, FloatBits, FloatComparable
+};
+use crate::instruction::sign_magnitude::{SignMagnitudeLong, SignMagnitudeWord};
 use crate::structs::{
     ProgramState,
     Register::{At, Ra},
 };
 
-use super::implementation_helpers::{extract_u64, is_register_aligned, pack_up_u64};
+use super::implementation_helpers::is_register_aligned;
 
 // This file contains the implementations for all
 // individual instructions defined in the instruction set
+
+// These NaNs are going to be related to error states in conversion.
+/// This NaN is for an FP number that's too big to be included as a long.
+const LONG_TOO_BIG_NAN: u64 = 0x7FFF_FFFF_FFFF_FFFF;
+/// This NaN is for an FP number that's too small to be included as a long.
+const LONG_TOO_SMALL_NAN: u64 = 0x8000_0000_0000_0000;
+/// This NaN is for an FP number that's too big to be included as a word.
+const WORD_TOO_BIG_NAN: u32 = 0x7FFF_FFFF;
+/// This NaN is for an FP number that's too small to be included as a word.
+const WORD_TOO_SMALL_NAN: u32 = 0x8000_0000;
 
 /*
 
@@ -31,6 +44,7 @@ use super::implementation_helpers::{extract_u64, is_register_aligned, pack_up_u6
  |_| \_/_/    \_\/   |_____\_____/_/    \_\_|  |_____\____/|_| \_|
 
 
+    Some macros are defined at the very top of the file to make logic more readable.
 
     To get around this file, you should know the order in which these
     instruction implementations appear.
@@ -42,6 +56,19 @@ use super::implementation_helpers::{extract_u64, is_register_aligned, pack_up_u6
      - COP1X (opcode 0x13)
      - SPECIAL2 (opcode 0x1c)
      - SPECIAL3 (opcode 0x1f)
+*/
+
+/*
+
+  __  __          _____ _____   ____   _____
+ |  \/  |   /\   / ____|  __ \ / __ \ / ____|
+ | \  / |  /  \ | |    | |__) | |  | | (___
+ | |\/| | / /\ \| |    |  _  /| |  | |\___ \
+ | |  | |/ ____ \ |____| | \ \| |__| |____) |
+ |_|  |_/_/    \_\_____|_|  \_\\____/|_____/
+
+
+
 */
 
 /*
@@ -74,14 +101,14 @@ pub fn jal(program_state: &mut ProgramState, args: JArgs) -> () {
 
 // 0x04 - beq
 pub fn beq(program_state: &mut ProgramState, args: IArgs) -> () {
-    // Sign extend offset
-    let offset: i32 = ((args.imm & 0xFFFF) as i16 as i32) << 2;
-
     if program_state.cpu.general_purpose_registers[args.rs as usize]
         != program_state.cpu.general_purpose_registers[args.rt as usize]
     {
         return;
     }
+
+    // Sign extend offset
+    let offset: i32 = (args.imm as u16 as i16 as i32) << 2;
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
@@ -90,14 +117,14 @@ pub fn beq(program_state: &mut ProgramState, args: IArgs) -> () {
 
 // 0x05 - bne
 pub fn bne(program_state: &mut ProgramState, args: IArgs) -> () {
-    // Sign extend offset
-    let offset: i32 = ((args.imm & 0xFFFF) as i16 as i32) << 2;
-
     if program_state.cpu.general_purpose_registers[args.rs as usize]
         == program_state.cpu.general_purpose_registers[args.rt as usize]
     {
         return;
     }
+
+    // Sign extend offset
+    let offset: i32 = ((args.imm & 0xFFFF) as i16 as i32) << 2;
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
@@ -106,11 +133,11 @@ pub fn bne(program_state: &mut ProgramState, args: IArgs) -> () {
 
 // 0x06 - blez
 pub fn blez(program_state: &mut ProgramState, args: IArgs) -> () {
-    let offset: i32 = ((args.imm & 0xFFFF) as i16 as i32) << 2;
-
     if (program_state.cpu.general_purpose_registers[args.rs as usize] as i32) > 0 {
         return;
     }
+
+    let offset: i32 = ((args.imm & 0xFFFF) as i16 as i32) << 2;
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
@@ -119,12 +146,12 @@ pub fn blez(program_state: &mut ProgramState, args: IArgs) -> () {
 
 // 0x07 - bgtz
 pub fn bgtz(program_state: &mut ProgramState, args: IArgs) -> () {
-    // Sign extend offset
-    let offset: i32 = (args.imm as i16 as i32) << 2;
-
     if program_state.cpu.general_purpose_registers[args.rs as usize] as i32 <= 0 {
         return;
     }
+
+    // Sign extend offset
+    let offset: i32 = (args.imm as i16 as i32) << 2;
 
     let temp = (program_state.cpu.pc as i32 + offset) as u32;
 
@@ -412,7 +439,7 @@ pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
         i += 1;
     }
 
-    program_state.cp1.registers[args.rt as usize] = f32::from_bits(result_word);
+    program_state.cp1.registers[args.rt as usize] = result_word;
 }
 
 // 0x33 - pref
@@ -452,7 +479,7 @@ pub fn ldc1(program_state: &mut ProgramState, args: IArgs) -> () {
         i += 1;
     }
 
-    pack_up_u64(program_state, args.rt, result_double);
+    f64::pack_bits(program_state, args.rt, result_double);
 }
 
 // 0x38 - sc
@@ -478,7 +505,7 @@ pub fn swc1(program_state: &mut ProgramState, args: IArgs) -> () {
     }
 
     // Retrieve value of ft from coprocessor 1
-    let value: u32 = f32::to_bits(program_state.cp1.registers[args.rt as usize]);
+    let value: u32 = program_state.cp1.registers[args.rt as usize];
 
     // Checks passed. Store word.
     let mut i = 0;
@@ -518,7 +545,7 @@ pub fn sdc1(program_state: &mut ProgramState, args: IArgs) -> () {
     }
 
     // Retrieve value of ft from coprocessor 1
-    let value: u64 = extract_u64(program_state, args.rt);
+    let value: u64 = f64::extract_bits(program_state, args.rt);
 
     // Checks passed. Store word.
     let mut i = 0;
@@ -580,13 +607,17 @@ pub fn sra(_program_state: &mut ProgramState, _args: RArgs) -> () {
 }
 
 // 0x04 - sllv
-pub fn sllv(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("sllv");
+pub fn sllv(program_state: &mut ProgramState, args: RArgs) -> () {
+    program_state.cpu.general_purpose_registers[args.rd as usize] =
+        program_state.cpu.general_purpose_registers[args.rs as usize]
+            << (program_state.cpu.general_purpose_registers[args.rt as usize] & 0b0001_1111);
 }
 
 // 0x06 - srlv
-pub fn srlv(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("srlv");
+pub fn srlv(program_state: &mut ProgramState, args: RArgs) -> () {
+    program_state.cpu.general_purpose_registers[args.rd as usize] =
+        program_state.cpu.general_purpose_registers[args.rs as usize]
+            >> (program_state.cpu.general_purpose_registers[args.rt as usize] & 0b0001_1111);
 }
 
 // 0x07 - srav
@@ -635,7 +666,7 @@ pub fn sync(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("sync instruction");
 }
 
-// 0x10 - mfhi 
+// 0x10 - mfhi
 pub fn mfhi(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("mfhi");
 }
@@ -656,23 +687,43 @@ pub fn mtlo(_program_state: &mut ProgramState, _args: RArgs) -> () {
 }
 
 // 0x18 - mult
-pub fn mult(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("mult");
+pub fn mult(program_state: &mut ProgramState, args: RArgs) -> () {
+    let temp: i64 = program_state.cpu.general_purpose_registers[args.rs as usize] as i32 as i64
+        * program_state.cpu.general_purpose_registers[args.rt as usize] as i32 as i64;
+    (program_state.cpu.hi, program_state.cpu.lo) = ((temp >> 32) as i32 as u32, temp as i32 as u32);
 }
 
 // 0x19 - multu
-pub fn multu(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("multu");
+pub fn multu(program_state: &mut ProgramState, args: RArgs) -> () {
+    let temp: u64 = program_state.cpu.general_purpose_registers[args.rs as usize] as u64
+        * program_state.cpu.general_purpose_registers[args.rt as usize] as u64;
+    (program_state.cpu.hi, program_state.cpu.lo) = ((temp >> 32) as u32, temp as u32);
 }
 
 // 0x1A - div
-pub fn div(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("div");
+pub fn div(program_state: &mut ProgramState, args: RArgs) -> () {
+    // I should note that dividing by zero
+    // does NOT trigger any special exception per the MIPS standard.
+    // quotient goes into LO, remainder into HI
+    (program_state.cpu.lo, program_state.cpu.hi) = (
+        (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+            / program_state.cpu.general_purpose_registers[args.rt as usize] as i32) as u32,
+        (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+            % program_state.cpu.general_purpose_registers[args.rt as usize] as i32) as u32,
+    );
 }
 
 // 0x1B - divu
-pub fn divu(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("divu");
+pub fn divu(program_state: &mut ProgramState, args: RArgs) -> () {
+    // I should note that dividing by zero
+    // does NOT trigger any special exception per the MIPS standard.
+    // quotient goes into LO, remainder into HI
+    (program_state.cpu.lo, program_state.cpu.hi) = (
+        program_state.cpu.general_purpose_registers[args.rs as usize]
+            / program_state.cpu.general_purpose_registers[args.rt as usize],
+        program_state.cpu.general_purpose_registers[args.rs as usize]
+            % program_state.cpu.general_purpose_registers[args.rt as usize],
+    );
 }
 
 // 0x20 - add
@@ -680,13 +731,10 @@ pub fn add(program_state: &mut ProgramState, args: RArgs) -> () {
     program_state.cpu.general_purpose_registers[args.rd as usize] =
         program_state.cpu.general_purpose_registers[args.rs as usize]
             + program_state.cpu.general_purpose_registers[args.rt as usize];
-
-    // println!("Adding ${}({}) to ${}({}) and storing in ${}, now it's {}", rs, program_state.cpu.general_purpose_registers[args.rs as usize], rt, program_state.cpu.general_purpose_registers[args.rt as usize], rd, program_state.cpu.general_purpose_registers[args.rs as usize] + program_state.cpu.general_purpose_registers[args.rt as usize]);
 }
 
 // 0x21 - addu
 pub fn addu(program_state: &mut ProgramState, args: RArgs) -> () {
-    // check that below works
     program_state.cpu.general_purpose_registers[args.rd as usize] =
         program_state.cpu.general_purpose_registers[args.rs as usize]
             .overflowing_add(program_state.cpu.general_purpose_registers[args.rt as usize])
@@ -812,13 +860,29 @@ pub fn tne(_program_state: &mut ProgramState, _args: RArgs) -> () {
 */
 
 // 0x00 - bltz
-pub fn bltz(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("bltz");
+pub fn bltz(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    if (program_state.cpu.general_purpose_registers[args.rs as usize] as i32)
+        >= (program_state.cpu.general_purpose_registers[0] as i32)
+    {
+        return;
+    }
+
+    let offset = (args.imm as u16 as i16 as i32) << 2;
+    let target_address = (program_state.cpu.pc as i32 + offset) as u32;
+    program_state.jump_if_valid(target_address);
 }
 
 // 0x01 - bgez
-pub fn bgez(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("bgez");
+pub fn bgez(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    if (program_state.cpu.general_purpose_registers[args.rs as usize] as i32)
+        < (program_state.cpu.general_purpose_registers[0] as i32)
+    {
+        return;
+    }
+
+    let offset = (args.imm as u16 as i16 as i32) << 2;
+    let target_address = (program_state.cpu.pc as i32 + offset) as u32;
+    program_state.jump_if_valid(target_address);
 }
 
 // 0x02 - bltzl
@@ -867,8 +931,19 @@ pub fn bltzal(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
 }
 
 // 0x11 - bgezal
-pub fn bgezal(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("bgezal");
+pub fn bgezal(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    if (program_state.cpu.general_purpose_registers[args.rs as usize] as i32)
+        < (program_state.cpu.general_purpose_registers[0] as i32)
+    {
+        return;
+    }
+
+    let offset = (args.imm as u16 as i16 as i32) << 2;
+    let target_address = (program_state.cpu.pc as i32 + offset) as u32;
+
+    let temp = program_state.cpu.pc;
+    program_state.jump_if_valid(target_address);
+    program_state.cpu.general_purpose_registers[Ra as usize] = temp;
 }
 
 // 0x12 - bltzall
@@ -942,7 +1017,7 @@ pub fn deret(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("deret");
 }
 
-// 
+//
 pub fn mfc0(_program_state: &mut ProgramState, _args: CopMovRArgs) -> () {
     todo!("mfc0");
 }
@@ -985,7 +1060,6 @@ pub fn mtc1(_program_state: &mut ProgramState, _args: CopMovRArgs) -> () {
     todo!("mtc1");
 }
 
-
 // 0x00;0x06 - CT (Coprocessor to) - GPR <- FPU
 pub fn ctc1(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
     todo!("ctc1");
@@ -1020,58 +1094,172 @@ pub fn bc1(program_state: &mut ProgramState, args: FpCCBranchArgs) -> () {
             program_state.jump_if_valid(temp);
         }
         _ => {
-            // Represents an impossible true/false. Should actually be unreachable!() but you never know...
-            program_state.set_exception(ExceptionType::ReservedInstruction);
+            unreachable!(
+                "Kindly explain how to encode a value other than zero or one using a single bit..."
+            );
         }
     }
 }
 
-// 0x00 - add.fmt
+// 0x00.fmt - add.fmt
+pub fn addf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let s = T::extract_value(program_state, args.fs);
+    let t = T::extract_value(program_state, args.ft);
 
-// 0x00.d - add.d
-pub fn add_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("add.d");
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        // If the exception path was disabled, supply a QNaN
+        f64::pack_qnan(program_state, args.fd);
+        return
+    }
+
+    // If the operation results in magnitude subtraction of infinities, the operation is invalid.
+    if s.is_infinite() && t.is_infinite() && s.signum() != t.signum()
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        T::pack_qnan(program_state, args.fd);
+        return;
+    }
+
+    // Addition performed here
+    let result = perform_op_with_flush(program_state, s + t);
+
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        // Overflow without explicit trap results in rounding with RM in FCSR
+        T::round_off(program_state, args.fd, result);
+        return;
+    }
+
+    T::pack_value(program_state, args.fd, result);
 }
 
-// 0x00.s - add.s
-pub fn add_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("add.s");
+// 0x01.fmt - sub.fmt
+pub fn subf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let s = T::extract_value(program_state, args.fs);
+    let t = T::extract_value(program_state, args.ft);
+
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        T::pack_qnan(program_state, args.fd);
+        return;
+    }
+
+    // If the operation results in magnitude subtraction of infinities, the operation is invalid.
+    if s.is_infinite() && t.is_infinite() && s.signum() == t.signum()
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        T::pack_qnan(program_state, args.fd);
+        return;
+    }
+
+    // Subtraction performed here
+    let result = perform_op_with_flush(program_state, s - t);
+
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        T::round_off(program_state, args.fd, result);
+        return;
+    }
+
+    T::pack_value(program_state, args.fd, result);
 }
 
-// 0x01.d - sub.d
-pub fn sub_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("sub.d");
-}
+// 0x02.fmt - mul.fmt
+pub fn mulf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let s = T::extract_value(program_state, args.fs);
+    let t = T::extract_value(program_state, args.ft);
 
-// 0x01.s - sub.s
-pub fn sub_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("sub.s");
-}
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        T::pack_qnan(program_state, args.fd);
+        return;
+    }
 
-// 0x02.d - mul.d
-pub fn mul_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("mul.d");
-}
+    // If the operation is 0 x inf, with any signs, then trigger an InvalidOperation.
+    if s.is_zero() && t.is_infinite() || s.is_infinite() && t.is_zero() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        T::pack_qnan(program_state, args.fd);
+        return;
+    }
 
-// 0x02.s - mul.s
-pub fn mul_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("mul.s");
+    // Perform multiplication
+    let result = perform_op_with_flush(program_state, s * t);
+
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        T::round_off(program_state, args.fd, result);
+        return;
+    }
+
+    T::pack_value(program_state, args.fd, result);
 }
 
 // 0x03 - div.fmt
+pub fn divf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let s = T::extract_value(program_state, args.fs);
+    let t = T::extract_value(program_state, args.ft);
 
-// 0x03.d - div.d
-pub fn div_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
-    let _ = is_register_aligned(program_state, args.ft);
+    // If either operation is a signaling NaN, the operation is invalid.
+    if s.is_nan() || t.is_nan() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        T::pack_qnan(program_state, args.fd);
+        return;
+    }
 
-    let numerator: f64 = f64::from_bits(extract_u64(program_state, args.fs));
-    let denominator: f64 = f64::from_bits(extract_u64(program_state, args.ft));
+    // 0/0 and inf/inf are invalid.
+    if s.is_zero() && t.is_zero() || s.is_infinite() && t.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        T::pack_qnan(program_state, args.fd);
+        return;
+    }
 
-    let result: f64 = perform_op_with_flush(program_state, numerator / denominator);
+    // Check for division by zero
+    if t.is_zero() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::DivideByZero));
+        // If the explicit trap is disabled, supply a properly signed infinity
+        if s.signum() == t.signum() {
+            T::pack_value(program_state, args.fd, T::INFINITY);
+            return;
+        } else {
+            T::pack_value(program_state, args.fd, T::NEG_INFINITY);
+            return;
+        }
+    }
 
-    pack_up_u64(program_state, args.fd, f64::to_bits(result));
+    // Division performed here
+    let result = perform_op_with_flush(program_state, s / t);
+
+    // Check for overflow after operation
+    if result.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        T::round_off(program_state, args.fd, result);
+        return;
+    }
+
+    T::pack_value(program_state, args.fd, result);
 }
 
 // 0x04.d - sqrt.d
@@ -1084,126 +1272,289 @@ pub fn sqrt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
     todo!("sqrt.s");
 }
 
-// 0x05 - abs.fmt
-
-// 0x05.d - abs.d
-pub fn abs_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
-
-    let temp: u64 = extract_u64(program_state, args.fs);
-
-    // Simply clear the sign bit.
-    // Refer to IEEE 754-2008 documentation if this appears non-sensical.
-    let mask: u64 = 0x7FFF_FFFF_FFFF_FFFF;
-    let result: u64 = temp & mask;
-
-    let _ = pack_up_u64(program_state, args.fd, result);
+// 0x05 - abs.fmt (this should NOT panic when taking abs(NaN) due to FCSR dictating IEEE 2008 revision instead of legacy MIPS!)
+pub fn abs<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let s = T::extract_value(program_state, args.fs);
+    let result = s.abs();
+    let _ = T::pack_value(program_state, args.fd, result);
 }
 
-// 0x05.s - abs.s
-pub fn abs_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    program_state.cp1.registers[args.fd as usize] =
-        f32::abs(program_state.cp1.registers[args.fs as usize]);
+// 0x06.fmt - mov.fmt
+pub fn mov_float<T: FloatBits>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let temp: T::Bits = T::extract_bits(program_state, args.fs);
+    let _ = T::pack_bits(program_state, args.fd, temp);
 }
 
-// 0x06.d - mov.d
-pub fn mov_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
-    let _ = is_register_aligned(program_state, args.fd);
-    let _ = is_register_aligned(program_state, args.fs);
-
-    let temp: u64 = extract_u64(program_state, args.fs);
-    let _ = pack_up_u64(program_state, args.fd, temp);
+// 0x07.fmt - neg.fmt
+pub fn negf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let value = T::extract_value(program_state, args.fs);
+    let negated = value.neg();
+    T::pack_value(program_state, args.fd, negated);
 }
 
-// 0x06.s - mov.s
-pub fn mov_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("mov.s");
+// 0x08.fmt - round.l.fmt
+
+// These higher-order functions round floating-point numbers using a specific mode.
+// They allows us to write all variants of mode.fmt.fmt with simple function calls.
+
+/// This is a generalization of <round>.l.d
+fn mode_l_d<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F) -> ()
+where
+    F: Fn(f64) -> f64,
+{
+    let double_value = f64::extract_value(program_state, args.fs);
+
+    if double_value.is_nan() || double_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        // Non-explicit path requires some pretty iffy checks.
+        if double_value.is_nan() {
+            // Supply 0 if NaN in conversion.
+            f64::pack_bits(program_state, args.fd, 0);
+            return;
+        } else if double_value.is_sign_positive() {
+            // Positive infinity should supply a very specific NaN:
+            f64::pack_bits(program_state, args.fd, LONG_TOO_BIG_NAN);
+            return;
+        } else {
+            f64::pack_bits(program_state, args.fd, LONG_TOO_SMALL_NAN);
+            return;
+        }
+    }
+
+    let rounded_double = mode(double_value);
+
+    if !SignMagnitudeLong::can_represent_double(rounded_double) {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        if rounded_double > 0.0 {
+            f64::pack_bits(program_state, args.fd, LONG_TOO_BIG_NAN);
+            return;
+        } else {
+            f64::pack_bits(program_state, args.fd, LONG_TOO_SMALL_NAN);
+            return;
+        }
+    }
+
+    let long_value = SignMagnitudeLong::from(rounded_double);
+
+    SignMagnitudeLong::pack_value(program_state, args.fd, long_value);
 }
 
-// 0x07.d - neg.d
-pub fn neg_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("neg.d");
+/// This is a generalization of <round>.l.s
+fn mode_l_s<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F)
+where
+    F: Fn(f32) -> f32,
+{
+    let single_value = f32::extract_value(program_state, args.fs);
+
+    if single_value.is_nan() || single_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        if single_value.is_nan() {
+            // Supply 0 if NaN
+            f64::pack_bits(program_state, args.fd, 0);
+            return;
+        } else if single_value.is_sign_positive() {
+            f64::pack_bits(program_state, args.fd, LONG_TOO_BIG_NAN);
+            return;
+        } else {
+            f64::pack_bits(program_state, args.fd, LONG_TOO_SMALL_NAN);
+            return;
+        }
+    }
+
+    let rounded_single = mode(single_value);
+
+    if !SignMagnitudeLong::can_represent_single(rounded_single) {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        if rounded_single > 0.0 {
+            f64::pack_bits(program_state, args.fd, LONG_TOO_BIG_NAN);
+            return;
+        } else {
+            f64::pack_bits(program_state, args.fd, LONG_TOO_SMALL_NAN);
+            return;
+        }
+    }
+
+    let long_value = SignMagnitudeLong::from(rounded_single as f64);
+
+    SignMagnitudeLong::pack_value(program_state, args.fd, long_value);
 }
 
-// 0x07.s - neg.s
-pub fn neg_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("neg.s");
+/// This is a generalization of <round>.w.d
+fn mode_w_d<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F)
+where
+    F: Fn(f64) -> f64,
+{
+    let double_value = f64::extract_value(program_state, args.fs);
+
+    if double_value.is_nan() || double_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        // If no explicit trap, NaNs should be 0, infinities too big:
+        if double_value.is_nan() {
+            f32::pack_bits(program_state, args.fd, 0);
+            return;
+        } else if double_value.is_sign_positive() {
+            f32::pack_bits(program_state, args.fd, WORD_TOO_BIG_NAN);
+            return;
+        } else {
+            f32::pack_bits(program_state, args.fd, WORD_TOO_SMALL_NAN);
+            return;
+        }
+    }
+
+    let rounded_double = mode(double_value);
+
+    if !SignMagnitudeWord::can_represent_double(rounded_double) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        if rounded_double > 0.0 {
+            f32::pack_bits(program_state, args.fd, WORD_TOO_BIG_NAN);
+            return;
+        } else {
+            f32::pack_bits(program_state, args.fd, WORD_TOO_SMALL_NAN);
+            return;
+        }
+    }
+
+    let result = SignMagnitudeWord::from(rounded_double as f32);
+
+    SignMagnitudeWord::pack_value(program_state, args.fd, result);
+}
+
+/// This is a generalization of <round>.w.s
+fn mode_w_s<F>(program_state: &mut ProgramState, args: FpRArgs, mode: F)
+where
+    F: Fn(f32) -> f32,
+{
+    let single_value = f32::extract_value(program_state, args.fs);
+
+    if single_value.is_nan() || single_value.is_infinite() {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        // If no explicit trap, supply 0 on NaN and special on infty
+        if single_value.is_nan() {
+            f32::pack_bits(program_state, args.fd, 0);
+            return;
+        } else if single_value.is_sign_positive() {
+            f32::pack_bits(program_state, args.fd, WORD_TOO_BIG_NAN);
+            return;
+        } else {
+            f32::pack_bits(program_state, args.fd, WORD_TOO_SMALL_NAN);
+            return;
+        }
+    }
+
+    let rounded_single = mode(single_value);
+
+    if !SignMagnitudeWord::can_represent_single(rounded_single) {
+        // The result cannot actually be represented as a word
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+        if rounded_single > 0.0 {
+            f32::pack_bits(program_state, args.fd, WORD_TOO_BIG_NAN);
+            return;
+        } else {
+            f32::pack_bits(program_state, args.fd, WORD_TOO_SMALL_NAN);
+            return;
+        }
+    }
+
+    let result = SignMagnitudeWord::from(rounded_single as f32);
+
+    program_state.cp1.registers[args.fd as usize] = result.to_bits();
 }
 
 // 0x08.d - round.l.d
-pub fn round_l_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("round.l.d");
+pub fn round_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_l_d(program_state, args, f64::round);
 }
 
 // 0x08.s - round.l.s
-pub fn round_l_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("round.l.s");
+pub fn round_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_l_s(program_state, args, f32::round);
 }
 
 // 0x09.d - trunc.l.d
-pub fn trunc_l_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("trunc.l.d");
+pub fn trunc_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_l_d(program_state, args, f64::trunc);
 }
 
 // 0x09.s - trunc.l.s
-pub fn trunc_l_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("trunc.l.s");
+pub fn trunc_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_l_s(program_state, args, f32::trunc);
 }
 
 // 0x0a.d - ceil.l.d
-pub fn ceil_l_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("ceil.l.d");
+pub fn ceil_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_l_d(program_state, args, f64::ceil);
 }
 
 // 0x0a.s - ceil.l.s
-pub fn ceil_l_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("ceil.l.s");
-}
-
-// 0x09.d - ceil.w.d
-pub fn ceil_w_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("ceil.w.d");
-}
-
-// 0x09.s - ceil.w.s
-pub fn ceil_w_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("ceil.w.s");
+pub fn ceil_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_l_s(program_state, args, f32::ceil);
 }
 
 // 0x0b.d - floor.l.d
-pub fn floor_l_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("floor.l.d");
+pub fn floor_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_l_d(program_state, args, f64::round);
 }
 
 // 0x0b.s - floor.l.s
-pub fn floor_l_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("floor.l.s");
+pub fn floor_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_l_s(program_state, args, f32::floor);
 }
 
 // 0x0c.d - round.w.d
-pub fn round_w_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("round.w.d");
+pub fn round_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_w_d(program_state, args, f64::round);
 }
 
 // 0x0c.s - round.w.s
-pub fn round_w_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("round.w.s");
+pub fn round_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_w_s(program_state, args, f32::round);
 }
 
 // 0x0d.d - trunc.w.d
-pub fn trunc_w_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("trunc.w.d");
+pub fn trunc_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_w_d(program_state, args, f64::trunc);
 }
 
 // 0x0d.s - trunc.w.s
-pub fn trunc_w_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("trunc.w.s");
+pub fn trunc_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_w_s(program_state, args, f32::trunc);
+}
+
+// 0x0e.d - ceil.w.d
+pub fn ceil_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_w_d(program_state, args, f64::ceil);
+}
+
+// 0x0e.s - ceil.w.s
+pub fn ceil_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_w_s(program_state, args, f32::ceil);
 }
 
 // 0x0f.d - floor.w.d
-pub fn floor_w_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("floor.w.d");
+pub fn floor_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_w_d(program_state, args, f64::floor);
+}
+
+// 0x0f.s - floor.w.s
+pub fn floor_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    mode_w_s(program_state, args, f32::floor);
 }
 
 // 0x11.d - movf.d/movt.d
@@ -1256,185 +1607,399 @@ pub fn rsqrt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
     todo!("rsqrt.s");
 }
 
+// 0x20.fmt - cvt.s.fmt
 
-// 0x0f.s - floor.w.s
-pub fn floor_w_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("floor.w.s");
+// 0x20.d - cvt.s.d
+pub fn cvt_s_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let double_value = f64::extract_value(program_state, args.fs);
+
+    // NaNs will still be represented properly in target format.
+    let single_value = double_value as f32;
+
+    // If the double is too big, signal overflow or supply inf
+    if double_value > f32::MAX as f64 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        if double_value > 0.0 {
+            f32::pack_value(program_state, args.fd, f32::INFINITY);
+            return;
+        } else {
+            f32::pack_value(program_state, args.fd, f32::NEG_INFINITY);
+            return;
+        }
+    }
+
+    // If the conversion is lossy, signal inexact (rounding handled by rust)
+    if single_value as f64 != double_value {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
+
+    f32::pack_value(program_state, args.fd, single_value);
 }
 
-// 0x20.s - cvt.s.d
-pub fn cvt_s_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("cvt.s.d");
+// 0x20.l - cvt.s.l
+pub fn cvt_s_l(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    // Officially, this is supposed to be unpredictable.
+    program_state.set_exception(ExceptionType::FloatingPoint(
+        FpExceptionType::UnimplementedOperation,
+    ));
+    // However...
+    let long_value = SignMagnitudeLong::extract_value(program_state, args.fd);
+    let int_value = i64::from(long_value);
+
+    // If source won't fit in target format, except/supply default
+    if int_value.abs() > f32::MAX as i64 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+        let ret = match int_value.signum() {
+            0 | 1 => f32::INFINITY,
+            -1 => f32::NEG_INFINITY,
+            _ => unreachable!(),
+        };
+
+        f32::pack_value(program_state, args.fd, ret);
+        return;
+    }
+
+    // Perform conversion
+    let single_value = int_value as f64 as f32;
+
+    // If the resulting integer can only be represented with loss of precision, except inexact
+    if single_value.fract() != 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
+
+    // Round no matter what
+    f32::round_off(program_state, args.fd, single_value);
+}
+
+// 0x20.w - cvt.s.w
+pub fn cvt_s_w(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let word_value = SignMagnitudeWord::extract_value(program_state, args.fs);
+    let int_value = i32::from(word_value);
+
+    // If source can't fit in destination format, signal overflow or supply default
+    if int_value < f32::MAX as i32 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+
+        let ret = match int_value.signum() {
+            0 | 1 => f32::INFINITY,
+            -1 => f32::NEG_INFINITY,
+            _ => unreachable!(),
+        };
+
+        f32::pack_value(program_state, args.fd, ret);
+        return;
+    }
+
+    // Perform conversion
+    let single_value = int_value as f32;
+
+    // If the rounded value can't be represented without loss of precision, signal inexact
+    if single_value.fract() != 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
+
+    // Round no matter what
+    f32::round_off(program_state, args.fd, single_value);
+}
+
+// 0x21.fmt - cvt.d.fmt
+
+// 0x21.l - cvt.d.l
+pub fn cvt_d_l(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    // Officially, this operation is unpredictable for a 32-bit FPU.
+    program_state.set_exception(ExceptionType::FloatingPoint(
+        FpExceptionType::UnimplementedOperation,
+    ));
+    // However...
+    let long_value = SignMagnitudeLong::extract_value(program_state, args.fs);
+    let int_value = i64::from(long_value);
+
+    // Check upper bound of double's representable space
+    if int_value.abs() > f64::MAX as i64 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Overflow));
+
+        let ret = match int_value.signum() {
+            0 | 1 => f64::INFINITY,
+            -1 => f64::NEG_INFINITY,
+            _ => unreachable!(),
+        };
+
+        f64::pack_value(program_state, args.fd, ret);
+        return;
+    }
+
+    let double_value = int_value as f64;
+
+    // Signal if the cast was inexact
+    if double_value.fract() != 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
+
+    // The rounding should be applied regardless of whether the result was inexact
+    f64::round_off(program_state, args.fd, double_value);
 }
 
 // 0x21.s - cvt.d.s
-pub fn cvt_d_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("cvt.d.s");
+// This is an upward cast, so it's always exact
+pub fn cvt_d_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let single_value = f32::extract_value(program_state, args.fs);
+    let double_value = single_value as f64;
+    f64::pack_value(program_state, args.fd, double_value);
 }
 
-// 0x30.d - c.f.d
-pub fn c_f_d(program_state: &mut ProgramState, args: FpCCArgs) -> () {
-    program_state.cp1.set_condition_code(args.cc, false);
+// 0x21.s - cvt.d.w
+// This is an upward cast, so it's always exact
+pub fn cvt_d_w(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let word_value = SignMagnitudeWord::extract_value(program_state, args.fs);
+    let int_value = i32::from(word_value);
+    let double_value = int_value as f64;
+
+    f64::pack_value(program_state, args.fd, double_value);
 }
 
-// 0x30.d - c.f.s
-pub fn c_f_s(program_state: &mut ProgramState, args: FpCCArgs) -> () {
-    program_state.cp1.set_condition_code(args.cc, false);
+// 0x24.fmt - cvt.w.fmt
+
+// 0x24.d - cvt.w.d
+pub fn cvt_w_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let double_value = f64::extract_value(program_state, args.fs);
+
+    // InvalidOperation cases from docs
+    if !SignMagnitudeWord::can_represent_double(double_value)
+        || double_value.is_nan()
+        || double_value.is_infinite()
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+
+        SignMagnitudeWord::pack_bits(program_state, args.fd, WORD_TOO_BIG_NAN);
+        return;
+    };
+
+    // If there was a fractional component, this is obviously inexact but must signal
+    if double_value.fract() != 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
+
+    // Round no matter what
+    let rounded_double = apply_fpu_rounding(program_state, double_value);
+    let word_value = rounded_double.trunc() as i64 as i32;
+    let word = SignMagnitudeWord::from(word_value);
+
+    SignMagnitudeWord::pack_value(program_state, args.fd, word);
 }
 
-// 0x31.d - c.un.d
-pub fn c_un_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.un.d");
+// 0x24.s - cvt.w.s
+pub fn cvt_w_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let single_value = f32::extract_value(program_state, args.fs);
+
+    // Check if source will fit in destination format
+    if !SignMagnitudeWord::can_represent_single(single_value)
+        || single_value.is_nan()
+        || single_value.is_infinite()
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+
+        SignMagnitudeWord::pack_bits(program_state, args.fd, WORD_TOO_BIG_NAN);
+        return;
+    }
+
+    // If there is a fractional component, it will be rounded off when moving to integer
+    if single_value.fract() != 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
+
+    let rounded_single = apply_fpu_rounding(program_state, single_value);
+
+    let word_value = rounded_single.trunc() as i32;
+    let word = SignMagnitudeWord::from(word_value);
+
+    SignMagnitudeWord::pack_value(program_state, args.fd, word);
 }
 
-// 0x31.s - c.un.s
-pub fn c_un_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.un.s");
+// 0x25.fmt - cvt.l.fmt
+
+// 0x25.d - cvt.l.d
+pub fn cvt_l_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    // Officially, this operation is unpredictable for a 32-bit FPU.
+    program_state.set_exception(ExceptionType::FloatingPoint(
+        FpExceptionType::UnimplementedOperation,
+    ));
+    // However...
+    let double_value = f64::extract_value(program_state, args.fs);
+
+    // Check that source format can be represented in destination
+    if !SignMagnitudeLong::can_represent_double(double_value)
+        || double_value.is_nan()
+        || double_value.is_infinite()
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+
+        // If the InvalidOperation exception is disabled, supply the default value from docs.
+        SignMagnitudeLong::pack_bits(program_state, args.fd, LONG_TOO_BIG_NAN);
+        return;
+    }
+
+    // If rounding actually resulted in loss of information, it would come from losing fractional part of original float
+    if double_value.fract() != 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
+
+    let rounded_double = apply_fpu_rounding(program_state, double_value);
+
+    let long_value = rounded_double.trunc() as i64;
+    let long = SignMagnitudeLong::from(long_value);
+
+    SignMagnitudeLong::pack_value(program_state, args.fd, long);
 }
 
-// 0x32.d - c.eq.d
-pub fn c_eq_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.eq.d");
+// 0x25.s - cvt.l.s
+pub fn cvt_l_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    // Officially, this operation is unpredictable for a 32-bit FPU.
+    program_state.set_exception(ExceptionType::FloatingPoint(
+        FpExceptionType::UnimplementedOperation,
+    ));
+    // However...
+    let single_value = f32::extract_value(program_state, args.fs);
+
+    // Check that source value can fit in destination format
+    if !SignMagnitudeLong::can_represent_single(single_value)
+        || single_value.is_nan()
+        || single_value.is_infinite()
+    {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+
+        SignMagnitudeLong::pack_bits(program_state, args.fd, LONG_TOO_BIG_NAN);
+        return;
+    }
+
+    // If rounding actually resulted in loss of information, it would come from losing fractional part of original float
+    if single_value.fract() != 0.0 {
+        program_state.set_exception(ExceptionType::FloatingPoint(FpExceptionType::Inexact));
+    }
+
+    let rounded_single = apply_fpu_rounding(program_state, single_value);
+
+    let long_value = rounded_single as i32 as i64;
+    let long = SignMagnitudeLong::from(long_value);
+
+    SignMagnitudeLong::pack_value(program_state, args.fd, long);
 }
 
-// 0x32.s - c.eq.s
-pub fn c_eq_s(program_state: &mut ProgramState, args: FpCCArgs) -> () {
-    program_state.cp1.set_condition_code(
-        args.cc,
-        program_state.cp1.registers[args.ft as usize]
-            == program_state.cp1.registers[args.fs as usize],
-    );
+// c.cond.fmt: Comparison Instructions
+
+// Make use of these higher-order functions which allow supplying a lambda comparison
+fn compare_with<F, T: FloatComparable>(program_state: &mut ProgramState, args: FpCCArgs, comp: F)
+where
+    F: Fn(T, T) -> bool,
+{
+    let s = T::extract_value(program_state, args.fs);
+    let t = T::extract_value(program_state, args.ft);
+
+    // If either operand is SNaN, an InvalidOperation exception should trigger.
+    if T::is_signaling_nan(s) || T::is_signaling_nan(t) {
+        program_state.set_exception(ExceptionType::FloatingPoint(
+            FpExceptionType::InvalidOperation,
+        ));
+    }
+
+    // If the cond3 bit is set in the comparison arguments, signal on QNaN.
+    if (args.funct >> 3) & 1 == 1 {
+        if s.is_nan() || t.is_nan() {
+            program_state.set_exception(ExceptionType::FloatingPoint(
+                FpExceptionType::InvalidOperation,
+            ));
+        }
+    }
+
+    program_state.cp1.set_condition_code(args.cc, comp(s, t));
 }
 
-// 0x33.d - c.ueq.d
-pub fn c_ueq_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ueq.d");
+// These helpers form the underlying building blocks for each comparison.
+/// If either operand is NaN, the result is true.
+fn unordered<T>(s: T, t: T) -> bool
+where
+    T: FloatComparable,
+{
+    s.is_nan() || t.is_nan()
 }
 
-// 0x33.s - c.ueq.s
-pub fn c_ueq_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ueq.s");
+/// If both operands are equal, the result is true.
+fn equal<T>(s: T, t: T) -> bool
+where
+    T: FloatComparable,
+{
+    s == t
 }
 
-// 0x34.d - c.olt.d
-pub fn c_olt_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.olt.d");
+/// If the first operand is less than the second, the result is true.
+fn less_than<T>(s: T, t: T) -> bool
+where
+    T: FloatComparable,
+{
+    s < t
 }
 
-// 0x34.s - c.olt.s
-pub fn c_olt_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.olt.s");
+// 0x30.fmt - c.f.fmt
+pub fn c_f<T: FloatComparable>(program_state: &mut ProgramState, args: FpCCArgs) -> () {
+    compare_with(program_state, args, |_: T, _: T| false);
 }
 
-// 0x35.d - c.ult.d
-pub fn c_ult_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ult.d");
+// 0x31.fmt - c.un.fmt
+pub fn c_un<T: FloatComparable>(program_state: &mut ProgramState, args: FpCCArgs) -> () {
+    compare_with(program_state, args, |s, t| unordered::<T>(s, t));
 }
 
-// 0x35.s - c.ult.s
-pub fn c_ult_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ult.s");
+// 0x32.fmt - c.eq.fmt
+pub fn c_eq<T: FloatComparable>(program_state: &mut ProgramState, args: FpCCArgs) -> () {
+    compare_with(program_state, args, |s, t| equal::<T>(s, t));
 }
 
-// 0x36.d - c.ole.d
-pub fn c_ole_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ole.d");
+// 0x33.fmt - c.ueq.fmt
+pub fn c_ueq<T: FloatComparable>(program_state: &mut ProgramState, args: FpCCArgs) -> () {
+    compare_with(program_state, args, |s, t| {
+        unordered::<T>(s, t) || equal::<T>(s, t)
+    })
 }
 
-// 0x36.s - c.ole.s
-pub fn c_ole_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ole.s");
+// 0x34.fmt - c.olt.fmt
+pub fn c_olt<T: FloatComparable>(program_state: &mut ProgramState, args: FpCCArgs) -> () {
+    compare_with(program_state, args, |s, t| {
+        !unordered::<T>(s, t) || less_than::<T>(s, t)
+    })
 }
 
-// 0x37.d - c.ule.d
-pub fn c_ule_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ule.d");
+// 0x35.fmt - c.ult.fmt
+pub fn c_ult<T: FloatComparable>(program_state: &mut ProgramState, args: FpCCArgs) -> () {
+    compare_with(program_state, args, |s, t| {
+        unordered::<T>(s, t) || less_than::<T>(s, t)
+    })
 }
 
-// 0x37.s - c.ule.s
-pub fn c_ule_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ule.s");
+// 0x36.fmt - c.ole.fmt
+pub fn c_ole<T: FloatComparable>(program_state: &mut ProgramState, args: FpCCArgs) -> () {
+    compare_with(program_state, args, |s, t| {
+        !unordered::<T>(s, t) || less_than::<T>(s, t) || equal::<T>(s, t)
+    })
 }
 
-// 0x38.d - c.sf.d
-pub fn c_sf_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.sf.d");
+// 0x37.fmt - c.ule.fmt
+pub fn c_ule<T: FloatComparable>(program_state: &mut ProgramState, args: FpCCArgs) -> () {
+    compare_with(program_state, args, |s, t| {
+        unordered::<T>(s, t) || less_than::<T>(s, t) || equal::<T>(s, t)
+    })
 }
 
-// 0x38.s - c.sf.s
-pub fn c_sf_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.sf.s");
-}
-
-// 0x39.d - c.ngle.d
-pub fn c_ngle_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ngle.d");
-}
-
-// 0x39.s - c.ngle.s
-pub fn c_ngle_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ngle.s");
-}
-
-// 0x3a.d - c.seq.d
-pub fn c_seq_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.seq.d");
-}
-
-// 0x3a.s - c.seq.s
-pub fn c_seq_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.seq.s");
-}
-
-// 0x3b.d - c.ngl.d
-pub fn c_ngl_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ngl.d");
-}
-
-// 0x3b.s - c.ngl.s
-pub fn c_ngl_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ngl.s");
-}
-
-// 0x3c.d - c.lt.d
-pub fn c_lt_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.lt.d");
-}
-
-// 0x3c.s - c.lt.s
-pub fn c_lt_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.lt.s");
-}
-
-// 0x3d.d - c.nge.d
-pub fn c_nge_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.nge.d");
-}
-
-// 0x3d.s - c.nge.s
-pub fn c_nge_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.nge.s");
-}
-
-// 0x3e.d - c.le.d
-pub fn c_le_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.le.d");
-}
-
-// 0x3e.s - c.le.s
-pub fn c_le_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.le.s");
-}
-
-// 0x3f.d - c.ngt.d
-pub fn c_ngt_d(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ngt.d");
-}
-
-// 0x3f.s - c.ngt.s
-pub fn c_ngt_s(_program_state: &mut ProgramState, _args: FpCCArgs) -> () {
-    todo!("c.ngt.s");
-}
+// The signaling variants of each comparison can actually be handled on the fly.
+// the compare_with function will check the cond3 bit of the argument,
+// and determine if signaling on QNaN is necessary.
+// that means we don't have to rewrite all that!
 
 /*
 
@@ -1547,8 +2112,10 @@ pub fn maddu(_program_state: &mut ProgramState, _args: RArgs) -> () {
 }
 
 // 0x02 - mul
-pub fn mul(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("mul");
+pub fn mul(program_state: &mut ProgramState, args: RArgs) -> () {
+    program_state.cpu.general_purpose_registers[args.rd as usize] =
+        (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+            * program_state.cpu.general_purpose_registers[args.rt as usize] as i32) as u32;
 }
 
 // 0x04 - msub
@@ -1601,7 +2168,7 @@ pub fn ins(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("ins");
 }
 
-// 0x20 - BSHFL multiplexing 
+// 0x20 - BSHFL multiplexing
 pub fn bshfl(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("wsbh(0x02) , seb(0x20) , seh(0x30)");
 }

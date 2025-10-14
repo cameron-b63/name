@@ -41,8 +41,8 @@ pub fn sys_print_double<W: Write>(
     program_state: &mut ProgramState,
     sys: &mut W,
 ) -> Result<(), String> {
-    let bits: u64 = ((program_state.cp1.registers[F12 as usize].to_bits() as u64) << 32)
-        | program_state.cp1.registers[F13 as usize].to_bits() as u64;
+    let bits: u64 = ((program_state.cp1.registers[F12 as usize] as u64) << 32)
+        | program_state.cp1.registers[F13 as usize] as u64;
     let to_print: f64 = f64::from_bits(bits);
     write!(sys, "{}", to_print).map_err(|_| "Failed to read")?;
     sys.flush().map_err(|_| "Failed to flush sys".to_string())
@@ -135,8 +135,8 @@ pub fn sys_read_double<R: Read>(
         .map_err(|_| format!("Failed to parse input as double: '{}'", new_string))?;
 
     // Store the double in register pair $f0-$f1
-    program_state.cp1.registers[0] = f32::from_bits((read_double.to_bits() >> 32) as u32);
-    program_state.cp1.registers[1] = f32::from_bits((read_double.to_bits() & 0xFFFFFFFF) as u32);
+    program_state.cp1.registers[0] = (read_double.to_bits() >> 32) as u32;
+    program_state.cp1.registers[1] = (read_double.to_bits() & 0xFFFFFFFF) as u32;
 
     Ok(())
 }

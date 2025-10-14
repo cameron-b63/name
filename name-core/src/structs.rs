@@ -38,6 +38,8 @@ pub struct Symbol {
 pub struct Processor {
     pub pc: u32,
     pub general_purpose_registers: [u32; 32],
+    pub hi: u32,
+    pub lo: u32,
 }
 
 /// Coprocessor 0 is for communication with the OS. Look in name-core/exception for more.
@@ -50,7 +52,7 @@ pub struct Coprocessor0 {
 /// Coprocessor 1 is the FPU (floating-point unit).
 #[derive(Debug, Default)]
 pub struct Coprocessor1 {
-    pub registers: [f32; 32],
+    pub registers: [u32; 32], // Working with raw bit patterns is best. Trust the voice of experience.
     pub control_registers: [u32; 2],
 }
 
@@ -68,6 +70,20 @@ impl Coprocessor1 {
         | ((self.control_registers[FCSR_INDEX] & 0b0000_0001_0000_0000_0000_0000_0000_0000) >> 22)
         // get FRM from FCSR
         | (self.control_registers[FCSR_INDEX] & 0b11)
+    }
+
+    /// Obtain the pseudo-register FEXR.
+    /// See [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00082-2B-MIPS32INT-AFP-06.01.pdf#page=101)
+    pub fn get_fexr(&self) -> u32 {
+        self.control_registers[FCSR_INDEX] & 0b0000_0000_0000_0011_1111_0000_0111_1100
+    }
+
+    /// Store back the pseudo-register FEXR.
+    /// See [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00082-2B-MIPS32INT-AFP-06.01.pdf#page=101)
+    pub fn set_fexr(&mut self, value: u32) {
+        self.control_registers[FCSR_INDEX] = (self.control_registers[FCSR_INDEX]
+            & 0b1111_1111_1111_1100_0000_1111_1000_0011)
+            | value;
     }
 
     /// Obtain the pseudo-register FCCR.
@@ -92,6 +108,11 @@ impl Coprocessor1 {
             1..7 => self.control_registers[FCSR_INDEX] |= (value as u32) << (24 + cc),
             _ => unreachable!(),
         }
+    }
+
+    /// Get the current rounding mode from FCSR bottom 2 bits (RM)
+    pub fn get_rounding_mode(&self) -> u32 {
+        return self.control_registers[FCSR_INDEX] & 0b11;
     }
 }
 

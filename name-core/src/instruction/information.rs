@@ -2,7 +2,10 @@ use crate::{
     elf_def::RelocationEntryType,
     instruction::{
         formats::{
-            bit_field_type::BitFieldArgs, cond_mov_cc_type::CondMovCCArgs, cop_mov_r_type::CopMovRArgs, fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs, fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs, i_type::IArgs, j_type::JArgs, r_type::RArgs, regimm_i_type::RegImmIArgs
+            bit_field_type::BitFieldArgs, cond_mov_cc_type::CondMovCCArgs,
+            cop_mov_r_type::CopMovRArgs, fp_cc_branch_type::FpCCBranchArgs, fp_cc_type::FpCCArgs,
+            fp_four_reg_type::FpFourRegArgs, fp_r_type::FpRArgs, i_type::IArgs, j_type::JArgs,
+            r_type::RArgs, regimm_i_type::RegImmIArgs,
         },
         instruction::RawInstruction,
     },
@@ -106,6 +109,8 @@ pub enum FpFmt {
     Reserved = 0,
     Single = 16,
     Double = 17,
+    Word = 20,
+    Long = 21,
 }
 
 // Cast FpFmt to its proper u32 rep in fmt3 form, page 115
@@ -115,6 +120,8 @@ impl FpFmt {
         match self {
             FpFmt::Single => 0,
             FpFmt::Double => 1,
+            FpFmt::Word => 4,
+            FpFmt::Long => 5,
             _ => 2,
         }
     }
