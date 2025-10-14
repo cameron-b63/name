@@ -2,6 +2,8 @@
 // These structs are used to make working with the .l and .w floating-point
 // formats more readable in implementation.
 
+use crate::instruction::implementation_helpers::FloatBits;
+
 /// SignMagnitudeLong refers to the .l format. It consists of one sign bit, and 63 value bits.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SignMagnitudeLong {
@@ -71,6 +73,35 @@ impl From<SignMagnitudeLong> for i64 {
 impl From<i64> for SignMagnitudeLong {
     fn from(value: i64) -> Self {
         Self::from_bits(value as u64)
+    }
+}
+
+// Implement FloatBits for consistent movement to/from registers
+impl FloatBits for SignMagnitudeLong {
+    type Bits = u64;
+
+    fn from_bits(value: Self::Bits) -> Self {
+        Self::from_bits(value)
+    }
+
+    fn extract_bits(program_state: &mut crate::structs::ProgramState, target: u32) -> Self::Bits {
+        f64::extract_bits(program_state, target)
+    }
+
+    fn extract_value(program_state: &mut crate::structs::ProgramState, target: u32) -> Self {
+        Self::from_bits(Self::extract_bits(program_state, target))
+    }
+
+    fn pack_bits(
+        program_state: &mut crate::structs::ProgramState,
+        target: u32,
+        value: Self::Bits,
+    ) -> () {
+        f64::pack_bits(program_state, target, value)
+    }
+
+    fn pack_value(program_state: &mut crate::structs::ProgramState, destination: u32, value: Self) {
+        Self::pack_bits(program_state, destination, Self::to_bits(&value))
     }
 }
 
@@ -147,5 +178,34 @@ impl From<SignMagnitudeWord> for i32 {
 impl From<i32> for SignMagnitudeWord {
     fn from(value: i32) -> Self {
         Self::from_bits(value as u32)
+    }
+}
+
+// Implement FloatBits for consistent movement to/from registers
+impl FloatBits for SignMagnitudeWord {
+    type Bits = u32;
+
+    fn from_bits(value: Self::Bits) -> Self {
+        Self::from_bits(value)
+    }
+
+    fn extract_bits(program_state: &mut crate::structs::ProgramState, target: u32) -> Self::Bits {
+        f32::extract_bits(program_state, target)
+    }
+
+    fn extract_value(program_state: &mut crate::structs::ProgramState, target: u32) -> Self {
+        Self::from_bits(Self::extract_bits(program_state, target))
+    }
+
+    fn pack_bits(
+        program_state: &mut crate::structs::ProgramState,
+        target: u32,
+        value: Self::Bits,
+    ) -> () {
+        f32::pack_bits(program_state, target, value)
+    }
+
+    fn pack_value(program_state: &mut crate::structs::ProgramState, destination: u32, value: Self) {
+        Self::pack_bits(program_state, destination, Self::to_bits(&value))
     }
 }

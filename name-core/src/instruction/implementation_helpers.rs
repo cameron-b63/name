@@ -15,21 +15,73 @@ pub fn is_register_aligned(program_state: &mut ProgramState, reg: u32) -> bool {
     }
 }
 
-/// This is a helper function for implementations that extracts a register pair's value as bits.
-/// The passed argument, target, should be the u32 repr of the high register (even register).
-/// For instance, extracting the double word inside $f2/$f3 means you should pass $f2's repr.
-pub fn extract_u64(program_state: &mut ProgramState, target: u32) -> u64 {
-    ((program_state.cp1.registers[target as usize] as u64) << 32)
-        | (program_state.cp1.registers[target as usize + 1] as u64)
+// Implement traits that allow generalizing operations across doubles and floats.
+/// For our model, this is just f32 and f64.
+pub trait FloatBits: Sized + Copy {
+    type Bits: Copy;
+    fn from_bits(value: Self::Bits) -> Self;
+    fn extract_bits(program_state: &mut ProgramState, target: u32) -> Self::Bits;
+    fn pack_bits(program_state: &mut ProgramState, target: u32, value: Self::Bits) -> ();
+    fn extract_value(program_state: &mut ProgramState, target: u32) -> Self;
+    fn pack_value(program_state: &mut ProgramState, destination: u32, value: Self);
 }
 
-/// This is a helper function for implementations that packs a u64 double-word value
-/// back into a register pair given by target.
-/// The target register should be the u32 repr of the high (even) register.
-/// For instance, extracting the double word inside $f2/$f3 means you should pass $f2's repr.
-pub fn pack_up_u64(program_state: &mut ProgramState, target: u32, value: u64) {
-    program_state.cp1.registers[target as usize] = (value >> 32) as u32;
-    program_state.cp1.registers[target as usize + 1] = value as u32;
+impl FloatBits for f32 {
+    type Bits = u32;
+    fn from_bits(value: Self::Bits) -> Self {
+        let _: u32 = value;
+        f32::from_bits(value)
+    }
+
+    fn extract_bits(program_state: &mut ProgramState, target: u32) -> Self::Bits {
+        program_state.cp1.registers[target as usize]
+    }
+
+    fn pack_bits(program_state: &mut ProgramState, destination: u32, value: Self::Bits) -> () {
+        let _: u32 = value;
+        program_state.cp1.registers[destination as usize] = value;
+    }
+
+    fn extract_value(program_state: &mut ProgramState, target: u32) -> Self {
+        f32::from_bits(Self::extract_bits(program_state, target))
+    }
+
+    fn pack_value(program_state: &mut ProgramState, destination: u32, value: Self) {
+        let _: f32 = value;
+        Self::pack_bits(program_state, destination, value.to_bits())
+    }
+}
+
+impl FloatBits for f64 {
+    type Bits = u64;
+    fn from_bits(value: Self::Bits) -> Self {
+        let _: u64 = value;
+        f64::from_bits(value)
+    }
+
+    /// The passed argument, target, should be the u32 repr of the high register (even register).
+    /// For instance, extracting the double word inside $f2/$f3 means you should pass $f2's repr.
+    fn extract_bits(program_state: &mut ProgramState, target: u32) -> Self::Bits {
+        let _ = is_register_aligned(program_state, target);
+        ((program_state.cp1.registers[target as usize] as u64) << 32)
+            | (program_state.cp1.registers[target as usize + 1] as u64)
+    }
+
+    /// The target register should be the u32 repr of the high (even) register.
+    /// For instance, extracting the double word inside $f2/$f3 means you should pass $f2's repr.
+    fn pack_bits(program_state: &mut ProgramState, destination: u32, value: Self::Bits) -> () {
+        let _ = is_register_aligned(program_state, destination);
+        program_state.cp1.registers[destination as usize] = (value >> 32) as u32;
+        program_state.cp1.registers[destination as usize + 1] = value as u32;
+    }
+
+    fn extract_value(program_state: &mut ProgramState, target: u32) -> Self {
+        f64::from_bits(f64::extract_bits(program_state, target))
+    }
+
+    fn pack_value(program_state: &mut ProgramState, destination: u32, value: Self) {
+        Self::pack_bits(program_state, destination, value.to_bits())
+    }
 }
 
 /// There are various FPU rounding modes, and the user should be able to use whatever they want.
@@ -143,5 +195,53 @@ impl Roundable for f64 {
 
     fn floor(self) -> Self {
         self.floor()
+    }
+}
+
+/// Trait to make functions like is_nan() usable in generalized comparisons.
+pub trait FloatComparable: PartialEq + PartialOrd + FloatBits {
+    fn is_nan(self) -> bool;
+    fn is_signaling_nan(value: Self) -> bool;
+}
+
+// Please do not mind my evil floating-point bit hacks - consult IEEE 754-2008.
+
+impl FloatComparable for f32 {
+    fn is_nan(self) -> bool {
+        f32::is_nan(self)
+    }
+
+    fn is_signaling_nan(value: Self) -> bool {
+        let bits = value.to_bits();
+        let exp = (bits >> 23) & 0xFF;
+        let frac = bits & 0x7FFFFF;
+
+        // Exponent all ones, fraction nonzero
+        if exp == 0xFF && frac != 0 {
+            let quiet_bit = (frac >> 22) & 1;
+            // signaling NaN has quiet_bit == 0
+            quiet_bit == 0
+        } else {
+            false
+        }
+    }
+}
+
+impl FloatComparable for f64 {
+    fn is_nan(self) -> bool {
+        f64::is_nan(self)
+    }
+
+    fn is_signaling_nan(value: Self) -> bool {
+        let bits = value.to_bits();
+        let exp = (bits >> 52) & 0x7FF;
+        let frac = bits & 0x000F_FFFF_FFFF_FFFF;
+
+        if exp == 0x7FF && frac != 0 {
+            let quiet_bit = (frac >> 51) & 1;
+            quiet_bit == 0
+        } else {
+            false
+        }
     }
 }

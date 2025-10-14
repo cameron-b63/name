@@ -595,55 +595,179 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
         //
         // Non-signaling comparisons:
         // 0b0000; FALSE predicate
-        defcomp!("c.f.d", implementation::c_f_d, 0b0000, FpFmt::Double),
-        defcomp!("c.f.s", implementation::c_f_s, 0b0000, FpFmt::Single),
+        defcomp!("c.f.d", implementation::c_f::<f64>, 0b0000, FpFmt::Double),
+        defcomp!("c.f.s", implementation::c_f::<f32>, 0b0000, FpFmt::Single),
         // 0b0001; UNORDERED predicate
-        defcomp!("c.un.d", implementation::c_un_d, 0b0001, FpFmt::Double),
-        defcomp!("c.un.s", implementation::c_un_s, 0b0001, FpFmt::Single),
+        defcomp!("c.un.d", implementation::c_un::<f64>, 0b0001, FpFmt::Double),
+        defcomp!("c.un.s", implementation::c_un::<f32>, 0b0001, FpFmt::Single),
         // 0b0010; EQUAL predicate
-        defcomp!("c.eq.d", implementation::c_eq_d, 0b0010, FpFmt::Double),
-        defcomp!("c.eq.s", implementation::c_eq_s, 0b0010, FpFmt::Single),
+        defcomp!("c.eq.d", implementation::c_eq::<f64>, 0b0010, FpFmt::Double),
+        defcomp!("c.eq.s", implementation::c_eq::<f32>, 0b0010, FpFmt::Single),
         // 0b0011; UNORDERED OR EQUAL predicate
-        defcomp!("c.ueq.d", implementation::c_ueq_d, 0b0011, FpFmt::Double),
-        defcomp!("c.ueq.s", implementation::c_ueq_s, 0b0011, FpFmt::Single),
+        defcomp!(
+            "c.ueq.d",
+            implementation::c_ueq::<f64>,
+            0b0011,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.ueq.s",
+            implementation::c_ueq::<f32>,
+            0b0011,
+            FpFmt::Single
+        ),
         // 0b0100; ORDERED OR LESS THAN predicate
-        defcomp!("c.olt.d", implementation::c_olt_d, 0b0100, FpFmt::Double),
-        defcomp!("c.olt.s", implementation::c_olt_s, 0b0100, FpFmt::Single),
+        defcomp!(
+            "c.olt.d",
+            implementation::c_olt::<f64>,
+            0b0100,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.olt.s",
+            implementation::c_olt::<f32>,
+            0b0100,
+            FpFmt::Single
+        ),
         // 0b0101; UNORDERED OR LESS THAN predicate
-        defcomp!("c.ult.d", implementation::c_ult_d, 0b0101, FpFmt::Double),
-        defcomp!("c.ult.s", implementation::c_ult_s, 0b0101, FpFmt::Single),
+        defcomp!(
+            "c.ult.d",
+            implementation::c_ult::<f64>,
+            0b0101,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.ult.s",
+            implementation::c_ult::<f32>,
+            0b0101,
+            FpFmt::Single
+        ),
         // 0b0110; ORDERED OR LESS THAN OR EQUAL TO predicate
-        defcomp!("c.ole.d", implementation::c_ole_d, 0b0110, FpFmt::Double),
-        defcomp!("c.ole.s", implementation::c_ole_s, 0b0110, FpFmt::Single),
+        defcomp!(
+            "c.ole.d",
+            implementation::c_ole::<f64>,
+            0b0110,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.ole.s",
+            implementation::c_ole::<f32>,
+            0b0110,
+            FpFmt::Single
+        ),
         // 0b0111; UNORDERED OR LESS THAN OR EQUAL TO predicate
-        defcomp!("c.ule.d", implementation::c_ule_d, 0b0111, FpFmt::Double),
-        defcomp!("c.ule.s", implementation::c_ule_s, 0b0111, FpFmt::Single),
+        defcomp!(
+            "c.ule.d",
+            implementation::c_ule::<f64>,
+            0b0111,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.ule.s",
+            implementation::c_ule::<f32>,
+            0b0111,
+            FpFmt::Single
+        ),
         // Signaling comparisons:
+        // These are going to be repeats,
+        // but under the hood,
+        // the implementation function calls a higher-order function that handles signaling.
+        // It's just a good abstraction.
         // 0b1000; SIGNALING FALSE predicate
-        defcomp!("c.sf.d", implementation::c_sf_d, 0b1000, FpFmt::Double),
-        defcomp!("c.sf.s", implementation::c_sf_s, 0b1000, FpFmt::Single),
+        defcomp!("c.sf.d", implementation::c_f::<f64>, 0b1000, FpFmt::Double),
+        defcomp!("c.sf.s", implementation::c_f::<f32>, 0b1000, FpFmt::Single),
         // 0b1001; NOT GREATER THAN OR LESS THAN OR EQUAL TO predicate
         // (note that this is essentially SIGNALING UNORDERED)
-        defcomp!("c.ngle.d", implementation::c_ngle_d, 0b1001, FpFmt::Double),
-        defcomp!("c.ngle.s", implementation::c_ngle_s, 0b1001, FpFmt::Single),
+        defcomp!(
+            "c.ngle.d",
+            implementation::c_un::<f64>,
+            0b1001,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.ngle.s",
+            implementation::c_un::<f32>,
+            0b1001,
+            FpFmt::Single
+        ),
         // 0b1010; SIGNALING EQUAL predicate
-        defcomp!("c.seq.d", implementation::c_seq_d, 0b1010, FpFmt::Double),
-        defcomp!("c.seq.s", implementation::c_seq_s, 0b1010, FpFmt::Single),
+        defcomp!(
+            "c.seq.d",
+            implementation::c_eq::<f64>,
+            0b1010,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.seq.s",
+            implementation::c_eq::<f32>,
+            0b1010,
+            FpFmt::Single
+        ),
         // 0b1011; NOT GREATER THAN OR LESS THAN predicate
-        defcomp!("c.ngl.d", implementation::c_ngl_d, 0b1011, FpFmt::Double),
-        defcomp!("c.ngl.s", implementation::c_ngl_s, 0b1011, FpFmt::Single),
+        defcomp!(
+            "c.ngl.d",
+            implementation::c_ueq::<f64>,
+            0b1011,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.ngl.s",
+            implementation::c_ueq::<f32>,
+            0b1011,
+            FpFmt::Single
+        ),
         // 0b1100; LESS THAN predicate
-        defcomp!("c.lt.d", implementation::c_lt_d, 0b1100, FpFmt::Double),
-        defcomp!("c.lt.s", implementation::c_lt_s, 0b1100, FpFmt::Single),
+        defcomp!(
+            "c.lt.d",
+            implementation::c_olt::<f64>,
+            0b1100,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.lt.s",
+            implementation::c_olt::<f32>,
+            0b1100,
+            FpFmt::Single
+        ),
         // 0b1101; NOT GREATER THAN OR EQUAL predicate
-        defcomp!("c.nge.d", implementation::c_nge_d, 0b1101, FpFmt::Double),
-        defcomp!("c.nge.s", implementation::c_nge_s, 0b1101, FpFmt::Single),
+        defcomp!(
+            "c.nge.d",
+            implementation::c_ult::<f64>,
+            0b1101,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.nge.s",
+            implementation::c_ult::<f32>,
+            0b1101,
+            FpFmt::Single
+        ),
         // 0b1110; LESS THAN OR EQUAL predicate
-        defcomp!("c.le.d", implementation::c_le_d, 0b1110, FpFmt::Double),
-        defcomp!("c.le.s", implementation::c_le_s, 0b1110, FpFmt::Single),
+        defcomp!(
+            "c.le.d",
+            implementation::c_ole::<f64>,
+            0b1110,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.le.s",
+            implementation::c_ole::<f32>,
+            0b1110,
+            FpFmt::Single
+        ),
         // 0b1111; NOT GREATER THAN predicate
-        defcomp!("c.ngt.d", implementation::c_ngt_d, 0b1111, FpFmt::Double),
-        defcomp!("c.ngt.s", implementation::c_ngt_s, 0b1111, FpFmt::Single),
+        defcomp!(
+            "c.ngt.d",
+            implementation::c_ule::<f64>,
+            0b1111,
+            FpFmt::Double
+        ),
+        defcomp!(
+            "c.ngt.s",
+            implementation::c_ule::<f32>,
+            0b1111,
+            FpFmt::Single
+        ),
         // End of comparison definitions.
         InstructionInformation {
             mnemonic: "ceil.l.d",
