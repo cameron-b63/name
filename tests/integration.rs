@@ -30,7 +30,7 @@ const TESTS: LazyCell<HashMap<&'static str, (&'static str, &'static str)>> = Laz
 fn assemble_to_emu_test() {
     // build the executables
     assert!(process::Command::new(env!("CARGO"))
-        .args(["build"])
+        .args(["build", "--profile", "dev"])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -44,7 +44,8 @@ fn assemble_to_emu_test() {
         .into_iter()
         .map(|exe| {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("..")
+                .parent()
+                .unwrap()
                 .join("target")
                 .join("debug")
                 .join(exe)
@@ -55,7 +56,8 @@ fn assemble_to_emu_test() {
 
     for (test, (input, output)) in TESTS.iter() {
         let file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
+            .parent()
+            .unwrap()
             .join("tests")
             .join("samples")
             .join(format!("{}.asm", test));
