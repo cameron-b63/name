@@ -17,6 +17,48 @@ use crate::{
 const F64_QNAN: f64 = f64::from_bits(0x7ff8_0000_0000_0000);
 /// See F64_QNAN
 const F32_QNAN: f32 = f32::from_bits(0x7fc0_0000);
+const F32_SIGN_BIT: u32 = 0x8000_0000;
+const F64_SIGN_BIT: u64 = 0x8000_0000_0000_0000;
+
+fn round_to_nearest_even_f32(value: f32) -> f32 {
+    if !value.is_finite() || value == 0.0 {
+        return value;
+    }
+
+    let truncated = value.trunc();
+    let fractional = value - truncated;
+    let abs_fractional = fractional.abs();
+
+    if abs_fractional < 0.5 {
+        truncated
+    } else if abs_fractional > 0.5 {
+        truncated + value.signum()
+    } else if truncated.rem_euclid(2.0) == 0.0 {
+        truncated
+    } else {
+        truncated + value.signum()
+    }
+}
+
+fn round_to_nearest_even_f64(value: f64) -> f64 {
+    if !value.is_finite() || value == 0.0 {
+        return value;
+    }
+
+    let truncated = value.trunc();
+    let fractional = value - truncated;
+    let abs_fractional = fractional.abs();
+
+    if abs_fractional < 0.5 {
+        truncated
+    } else if abs_fractional > 0.5 {
+        truncated + value.signum()
+    } else if truncated.rem_euclid(2.0) == 0.0 {
+        truncated
+    } else {
+        truncated + value.signum()
+    }
+}
 
 /// Helper function for instructions that operate on register pairs to remove invalid cases.
 /// If the register is improperly aligned given current program state, it will trigger
@@ -179,7 +221,7 @@ pub trait Roundable {
 
 impl Roundable for f32 {
     fn round(self) -> Self {
-        self.round()
+        round_to_nearest_even_f32(self)
     }
 
     fn trunc(self) -> Self {
@@ -197,7 +239,7 @@ impl Roundable for f32 {
 
 impl Roundable for f64 {
     fn round(self) -> Self {
-        self.round()
+        round_to_nearest_even_f64(self)
     }
 
     fn trunc(self) -> Self {
@@ -252,7 +294,7 @@ impl FloatArithmetic for f32 {
     }
 
     fn neg(self) -> Self {
-        f32::from_bits(self.to_bits() ^ !0x7FFF_FFFF)
+        f32::from_bits(self.to_bits() ^ F32_SIGN_BIT)
     }
 
     fn pack_qnan(program_state: &mut ProgramState, destination: u32) -> () {
@@ -291,7 +333,7 @@ impl FloatArithmetic for f64 {
     }
 
     fn neg(self) -> Self {
-        f64::from_bits(self.to_bits() ^ !0x7FFF_FFFF_FFFF_FFFF)
+        f64::from_bits(self.to_bits() ^ F64_SIGN_BIT)
     }
 
     fn pack_qnan(program_state: &mut ProgramState, destination: u32) -> () {
@@ -349,5 +391,33 @@ impl FloatComparable for f64 {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::constants::fpu_control::FCSR_INDEX;
+
+    #[test]
+    fn nearest_even_rounding_uses_even_tie_breaker() {
+        let mut program_state = ProgramState::default();
+        program_state.cp1.control_registers[FCSR_INDEX] &= !0b11;
+
+        assert_eq!(apply_fpu_rounding(&mut program_state, 2.5_f32), 2.0_f32);
+        assert_eq!(apply_fpu_rounding(&mut program_state, 3.5_f32), 4.0_f32);
+        assert_eq!(apply_fpu_rounding(&mut program_state, -2.5_f64), -2.0_f64);
+        assert_eq!(apply_fpu_rounding(&mut program_state, -3.5_f64), -4.0_f64);
+    }
+
+    #[test]
+    fn neg_flips_only_sign_bit() {
+        let nan32 = f32::from_bits(0x7fc1_2345);
+        let nan64 = f64::from_bits(0x7ff8_0000_0000_1234);
+
+        assert_eq!(<f32 as FloatArithmetic>::neg(1.5_f32).to_bits(), (-1.5_f32).to_bits());
+        assert_eq!(<f64 as FloatArithmetic>::neg(1.5_f64).to_bits(), (-1.5_f64).to_bits());
+        assert_eq!(<f32 as FloatArithmetic>::neg(nan32).to_bits(), 0xffc1_2345);
+        assert_eq!(<f64 as FloatArithmetic>::neg(nan64).to_bits(), 0xfff8_0000_0000_1234);
     }
 }

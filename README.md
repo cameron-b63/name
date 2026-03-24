@@ -2,7 +2,7 @@
 
 ![logo](logo/logo.png)
 
-NAME ("Not Another MIPS Emulator") is a MIPS assembly code emulation pipeline designed for educational use. It contains a MIPS assembler, linker, emulator, and VSCode development extension. The first three tools can be used entirely from the command line with `cargo`.
+NAME ("Not Another MIPS Emulator") is a MIPS assembly code emulation pipeline designed for educational use. It contains a MIPS assembler, linker, emulator, and VSCode development extension. The first three tools can be used entirely from the command line with `cargo`, and the extension can be built through the project [Makefile](Makefile).
 
 **Note** that while this implementation focuses on MIPS, in particular [this](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00086-2B-MIPS32BIS-AFP-6.06.pdf) TIS, a fork of this project could feasibly produce an implementation for any other asm. That being said, many design choices were made with MIPS32 in mind, and it could be a great deal of work.
 
@@ -19,7 +19,7 @@ The rationale behind using ELF files is to provide students with observation opp
 NAME accomplishes a modular approach to assembly code emulation by dividing and conquering four crucial elements:
 
 1. **Assembling** - accomplished by [name-as](name-as), a maintainable assembler that outputs ELF object files
-2. **Linking** - accomplished by [name-ld](name-ln), a sophisticated linker which can manage many modules at once
+2. **Linking** - accomplished by [name-ld](name-ld), a sophisticated linker which can manage many modules at once
 3. **Emulation** - accomplished by [name-emu](name-emu), a performant CPU emulator
 4. **Development** - accomplished by
   - [name-ext](name-ext), a VSCode integration for assembly development complete with a [DAP](https://microsoft.github.io/debug-adapter-protocol//) and [IntelliSense](https://learn.microsoft.com/en-us/visualstudio/ide/using-intellisense) for insight into emulated CPU cores
@@ -27,17 +27,25 @@ NAME accomplishes a modular approach to assembly code emulation by dividing and 
 
 ## Building From Source
 
-NAME is a vscode extension, which means it is built with typescript. Additionally, NAME uses Rust binaries to function. To ensure you can build from source, confirm you have installed the following software:
- - nodejs
- - rust
+NAME includes TypeScript VSCode extensions and Rust binaries. To build from source, install:
+ - nodejs / npm
+ - rust / cargo
 
 ### Common Pitfalls Building From Source
 
-Run `npm install` and `npm run compile` before launching the extension test window using F5 on [extension.ts](name-ext/src/extension.ts) in VSCode.
+Run `npm install` in [name-ext](name-ext) before building the extension.
+
+For the standard Linux workflow used by this repository, use:
+ - `make linux` (builds Rust binaries for Linux and compiles the extension)
+
+Other useful targets are available in [Makefile](Makefile):
+ - `make build-linux`
+ - `make build-windows`
+ - `make extension-compile`
 
 ## Test Files
 
-Some test files have been included. You can find them in [test files](test_files/tests/samples/test_files.md).
+Some test files have been included. You can find them in [test files](tests/samples/test_files.md).
 
 ## Assembly
 NAME assembles each module in the user's directory into an ET_REL relocatable object file for the linker to handle, using code found in [elf_utils.rs](name-as/src/elf_utils.rs) and [assembler.rs](name-as/src/assembler/assembler.rs). Each ET_REL has the same following sections, present in this order:
@@ -62,8 +70,7 @@ This "description" is a function which returns a `Token` of a specific `TokenKin
 The [parser](name-core/src/parse/parse.rs) uses the `Vec<Token>` produced by the lexer to create an AST. The AST begins as a `Vec<Ast>` with one element: an `Ast::Root`. The AST, once created by the parser, is folded into the assembly environment recursively from that `Ast::Root`. During this folding process, actual assembly occurs.
 
 #### Assembling
-**CHANGES ARE NOT LIVE YET. THIS INFORMATION MAY NOT BE ENTIRELY ACCURATE.**
-When the parsed line components contain an instruction mnemonic, the assembler first attempts to retrieve the associated [InstructionInformation](name-core/src/instruction/information.rs) from [core](name-core/src/instruction/instruction_set.rs). If it cannot be found, an error is returned. Once the InstructionInformation is retrieved, the assembler checks the associated operands for the correct argument configuration. If alternate configurations exist, they are also checked for. If no configurations match, an error is returned. Then, the assembler calls the appropriate helper function to actually pack the instruction. These helpers are defined in [assembly_utils.rs](name-as/src/assembler/assembly_utils.rs).
+When the parsed line components contain an instruction mnemonic, the assembler first attempts to retrieve the associated [InstructionInformation](name-core/src/instruction/information.rs) from [instruction_table.rs](name-core/src/instruction/instruction_table.rs). If it cannot be found, an error is returned. Once the InstructionInformation is retrieved, the assembler checks the associated operands for the correct argument configuration. If alternate configurations exist, they are also checked for. If no configurations match, an error is returned. Then, the assembler calls the appropriate helper function to actually pack the instruction. The instruction pack dispatch is implemented in [assemble_instruction.rs](name-as/src/assembler/assemble_instruction.rs).
 
 If an instruction which expects a branch label returns `Ok(None)`, this means the branch label was given but not yet defined, otherwise known as a forward reference. Take the following assembly code:
 ```mips
@@ -109,4 +116,8 @@ Execution is as simple as invoking the extracted function pointer from the previ
 ### Exceptions
 NAME models exceptions the same way MIPS hardware would - using Coprocessor 0. The `Coprocessor0` struct models Coprocessor 0 inside `ProgramState`: The *Status* and *Cause* Registers contain information about what happened to cause the exception to occur, and *EPC* contains the **E**xception **P**rogram **C**ounter - the program counter at which the exception occurred. Some commonly encountered exceptions include **syscalls**, **breakpoints**, dividing by zero, et cetera.
 
+The current CP0 model uses select-aware register addressing (`rd` + `sel`) and includes direct support for `mfc0`, `mtc0`, `eret`, and `deret` in the execution pipeline.
+
 During each fetch-decode-execute cycle, NAME checks to see if the *Status* register indicates an exception has occurred. If so, the exception handler is invoked, which matches on the *ExcCode* field in the *Cause* register to perform the appropriate crash or transfer of control. When the *ExcCode* field represents a syscall, the syscall handler is invoked; similarly, when the *ExcCode* field represents a breakpoint, the breakpoint handler is invoked.
+
+Floating-point execution is modeled through Coprocessor 1, including FCSR-backed rounding behavior and condition-code updates used by comparison and branch-on-condition instructions.

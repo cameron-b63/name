@@ -9,11 +9,10 @@ use std::{
 
 use crate::{
     constants::{
-        fpu_control::FCSR_INDEX, MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR,
-        MIPS_HEAP_START_ADDR, MIPS_STACK_END_ADDR, MIPS_TEXT_START_ADDR,
+        MIPS_ADDRESS_ALIGNMENT, MIPS_DATA_START_ADDR, MIPS_HEAP_START_ADDR, MIPS_STACK_END_ADDR, MIPS_TEXT_START_ADDR, fpu_control::FCSR_INDEX
     },
     dbprint, dbprintln,
-    debug::{debug_utils::*, debugger_methods::* /* implementations::* */},
+    debug::{debug_utils::*, debugger_methods::*},
     exception::{
         constants::EXCEPTION_BEING_HANDLED,
         definitions::{ExceptionType, SourceContext},
@@ -43,9 +42,9 @@ pub struct Processor {
 }
 
 /// Coprocessor 0 is for communication with the OS. Look in name-core/exception for more.
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Coprocessor0 {
-    pub registers: [u32; 32],
+    pub registers: [[u32; 8]; 32],
     pub debug_mode: bool, // TODO: implement EJTAG
 }
 
@@ -90,7 +89,7 @@ impl Coprocessor1 {
     /// See [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00082-2B-MIPS32INT-AFP-06.01.pdf#page=101)
     pub fn get_fccr(&self) -> u32 {
         // get contiguous cc's
-        (self.control_registers[FCSR_INDEX] >> 24 & 0b1111110)
+        (self.control_registers[FCSR_INDEX] >> 24 & 0b11111110)
         // get the non-contiguous cc 0
         | (self.control_registers[FCSR_INDEX] >> 22 & 0b1)
     }
@@ -103,16 +102,51 @@ impl Coprocessor1 {
 
     /// Set the given condition code. Updates FCSR.
     pub fn set_condition_code(&mut self, cc: u32, value: bool) {
-        match cc {
-            0 => self.control_registers[FCSR_INDEX] |= (value as u32) << 22,
-            1..7 => self.control_registers[FCSR_INDEX] |= (value as u32) << (24 + cc),
+        let bit_position = match cc {
+            0 => 22,
+            1..=7 => 24 + cc,
             _ => unreachable!(),
+        };
+
+        let mask = 1u32 << bit_position;
+
+        if value {
+            self.control_registers[FCSR_INDEX] |= mask;
+        } else {
+            self.control_registers[FCSR_INDEX] &= !mask;
         }
     }
 
     /// Get the current rounding mode from FCSR bottom 2 bits (RM)
     pub fn get_rounding_mode(&self) -> u32 {
         return self.control_registers[FCSR_INDEX] & 0b11;
+    }
+}
+
+#[cfg(test)]
+mod cop1_tests {
+    use super::Coprocessor1;
+
+    #[test]
+    fn set_condition_code_sets_and_clears_cc0() {
+        let mut cop1 = Coprocessor1::default();
+
+        cop1.set_condition_code(0, true);
+        assert!(cop1.get_condition_code(0));
+
+        cop1.set_condition_code(0, false);
+        assert!(!cop1.get_condition_code(0));
+    }
+
+    #[test]
+    fn set_condition_code_sets_and_clears_cc7() {
+        let mut cop1 = Coprocessor1::default();
+
+        cop1.set_condition_code(7, true);
+        assert!(cop1.get_condition_code(7));
+
+        cop1.set_condition_code(7, false);
+        assert!(!cop1.get_condition_code(7));
     }
 }
 
@@ -231,6 +265,29 @@ impl Memory {
                 return Err(MemoryError::ReservedSpaceReferenced);
             }
         }
+    }
+
+    /// This function allows reading n aligned bytes from memory.
+    pub fn read_n_bytes(&self, address: u32, n: usize) -> Result<u64, ExceptionType> {
+        if address % n as u32 != 0 {
+            return Err(ExceptionType::AddressExceptionLoad);
+        }
+
+        if !self.allows_read_from(address) || !self.allows_read_from(address + 1) {
+            return Err(ExceptionType::AddressExceptionLoad);
+        }
+
+        let mut i= 0;
+        let mut result: u64 = 0;
+        while i < n {
+            match self.read_byte(address + i as u32) {
+                Ok(b) => result |= (b as u64) << ((8*n - 8) - (i * 8)),
+                Err(_) => return Err(ExceptionType::AddressExceptionLoad),
+            }
+            i += 1;
+        }
+
+        return Ok(result);
     }
 
     /// The burden of alignment checking rests on each `set_<type>` function.
