@@ -10,47 +10,9 @@ use name_core::instruction::formats::i_type::IArgs;
 use name_core::instruction::formats::j_type::JArgs;
 use name_core::instruction::formats::r_type::RArgs;
 use name_core::instruction::formats::regimm_i_type::RegImmIArgs;
-use name_core::instruction::information::{ArgumentType, InstructionInformation, InstructionType};
+use name_core::instruction::information::{InstructionInformation, InstructionType};
 use name_core::instruction::{AssembleResult, ErrorKind, RawInstruction};
 use name_core::parse::parse::AstKind;
-
-fn assign_r_type_arguments_with_basis(
-    basis: RArgs,
-    arguments: Vec<AstKind>,
-    args_to_use: &[ArgumentType],
-) -> AssembleResult<RArgs> {
-    let mut r_args = basis;
-
-    for (i, passed) in arguments.into_iter().enumerate() {
-        match args_to_use[i] {
-            ArgumentType::Rd | ArgumentType::Fd => {
-                r_args.rd = passed
-                    .get_register_as_u32()
-                    .ok_or(ErrorKind::InvalidArgument)?;
-            }
-            ArgumentType::Rs | ArgumentType::Fs => {
-                r_args.rs = passed
-                    .get_register_as_u32()
-                    .ok_or(ErrorKind::InvalidArgument)?;
-            }
-            ArgumentType::Rt | ArgumentType::Ft => {
-                r_args.rt = passed
-                    .get_register_as_u32()
-                    .ok_or(ErrorKind::InvalidArgument)?;
-            }
-            ArgumentType::Immediate => {
-                let sa = passed.get_immediate().ok_or(ErrorKind::InvalidArgument)?;
-                if sa > 31 {
-                    return Err(ErrorKind::InvalidShamt);
-                }
-                r_args.shamt = sa;
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    Ok(r_args)
-}
 
 pub fn assemble_instruction(
     info: &InstructionInformation,
@@ -123,7 +85,9 @@ pub fn assemble_instruction(
             Ok(RawInstruction::from(j_args))
         }
         InstructionType::RType(basis) => {
-            let r_args = assign_r_type_arguments_with_basis(basis, arguments, config)?;
+            let mut r_args = RArgs::assign_r_type_arguments(arguments, config)?;
+            r_args.funct = basis.funct;
+            r_args.opcode = basis.opcode;
             Ok(RawInstruction::from(r_args))
         }
         InstructionType::RegImmIType(basis) => {
@@ -132,25 +96,5 @@ pub fn assemble_instruction(
             regimm.regimm_funct_code = basis.regimm_funct_code;
             Ok(RawInstruction::from(regimm))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use name_core::instruction::instruction_table::INSTRUCTION_TABLE;
-
-    #[test]
-    fn assembles_eret_with_cp0_rs_field() {
-        let info = INSTRUCTION_TABLE.get("eret").unwrap();
-        let assembled = assemble_instruction(info, vec![]).unwrap();
-        assert_eq!(assembled.raw, 0x4200_0018);
-    }
-
-    #[test]
-    fn assembles_deret_with_cp0_rs_field() {
-        let info = INSTRUCTION_TABLE.get("deret").unwrap();
-        let assembled = assemble_instruction(info, vec![]).unwrap();
-        assert_eq!(assembled.raw, 0x4200_001f);
     }
 }

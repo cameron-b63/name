@@ -256,32 +256,24 @@ pub fn lb(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp: u32 = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    let result_byte: u8 = match program_state.memory.read_n_bytes(temp, 1) {
-        Ok(b) => b as u8,
-        Err(e) => {
-            program_state.set_exception(e);
+    if !program_state.memory.allows_read_from(temp) {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+    let return_byte: u8 = match program_state.memory.read_byte(temp) {
+        Ok(b) => b,
+        Err(_) => {
+            program_state.set_exception(ExceptionType::AddressExceptionLoad);
             return;
         }
     };
-
-    program_state.cpu.general_purpose_registers[args.rt as usize] = result_byte as i8 as i32 as u32;
+    program_state.cpu.general_purpose_registers[args.rt as usize] = return_byte as i8 as i32 as u32;
     // explicit sign-extension
 }
 
 // 0x21 - lh
-pub fn lh(program_state: &mut ProgramState, args: IArgs) -> () {
-    let temp: u32 = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32 + args.imm as i32) as u32;
-
-    let result_half: u16 = match program_state.memory.read_n_bytes(temp, 2) {
-        Ok(h) => h as u16,
-        Err(e) => {
-            program_state.set_exception(e);
-            return;
-        },
-    };
-
-    // explicit sign-extension in the result
-    program_state.cpu.general_purpose_registers[args.rt as usize] = result_half as i16 as i32 as u32;
+pub fn lh(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("lh");
 }
 
 // 0x22 - lwl
@@ -294,16 +286,30 @@ pub fn lw(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    let result_word: u32 = match program_state.memory.read_n_bytes(temp, 4) {
-        Ok(w) => w as u32,
-        Err(e) => {
-            program_state.set_exception(e);
-            return;
+    if temp % 4 != 0 {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+
+    if !program_state.memory.allows_read_from(temp)
+        || !program_state.memory.allows_read_from(temp + 3)
+    {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+
+    // Checks passed. Load word.
+    let mut i = 0;
+    let mut result_word: u32 = 0;
+    while i < 4 {
+        match program_state.memory.read_byte(temp + i) {
+            Ok(b) => result_word |= (b as u32) << (24 - (i * 8)),
+            Err(_) => program_state.set_exception(ExceptionType::AddressExceptionLoad),
         }
-    };
+        i += 1;
+    }
 
     program_state.cpu.general_purpose_registers[args.rt as usize] = result_word;
-    // This handles sign-extension appropriately I think
 }
 
 // 0x24 - lbu
@@ -311,31 +317,24 @@ pub fn lbu(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp: u32 = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    let return_byte: u8 = match program_state.memory.read_n_bytes(temp, 1) {
-        Ok(b) => b as u8,
-        Err(e) => {
-            program_state.set_exception(e);
+    if !program_state.memory.allows_read_from(temp) {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+    let return_byte: u8 = match program_state.memory.read_byte(temp) {
+        Ok(b) => b,
+        Err(_) => {
+            program_state.set_exception(ExceptionType::AddressExceptionLoad);
             return;
         }
     };
-
-    program_state.cpu.general_purpose_registers[args.rt as usize] = return_byte as u32;
+    program_state.cpu.general_purpose_registers[args.rt as usize] = (return_byte as u32) & 0xFF;
+    // Clear any sign-extension
 }
 
 // 0x25 - lhu
-pub fn lhu(program_state: &mut ProgramState, args: IArgs) -> () {
-    let temp: u32 = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
-        + args.imm as i32) as u32;
-
-    let return_half: u16 = match program_state.memory.read_n_bytes(temp, 2) {
-        Ok(b) => b as u16,
-        Err(e) => {
-            program_state.set_exception(e);
-            return;
-        }
-    };
-
-    program_state.cpu.general_purpose_registers[args.rt as usize] = return_half as u32;
+pub fn lhu(_program_state: &mut ProgramState, _args: IArgs) -> () {
+    todo!("lhu");
 }
 
 // 0x26 - lwr
@@ -415,13 +414,30 @@ pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    let result_word = match program_state.memory.read_n_bytes(temp, 4) {
-        Ok(w) => w as u32,
-        Err(e) => {
-            program_state.set_exception(e);
-            return;
+    if temp % 4 != 0 {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+
+    if !program_state.memory.allows_read_from(temp)
+        || !program_state.memory.allows_read_from(temp + 3)
+    {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+
+    // Checks passed. Load word.
+    let mut i = 0;
+    let mut result_word: u32 = 0;
+    while i < 4 {
+        match program_state.memory.read_byte(temp + i) {
+            Ok(b) => result_word |= (b as u32) << (24 - (i * 8)),
+            Err(_) => {
+                program_state.set_exception(ExceptionType::AddressExceptionLoad);
+            }
         }
-    };
+        i += 1;
+    }
 
     program_state.cp1.registers[args.rt as usize] = result_word;
 }
@@ -438,13 +454,32 @@ pub fn ldc1(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    match program_state.memory.read_n_bytes(temp, 8) {
-        Ok(b) => f64::pack_bits(program_state, args.rt, b),
-        Err(_) => {
-            program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        }
+    if temp % 4 != 0 {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
     }
 
+    if !program_state.memory.allows_read_from(temp)
+        || !program_state.memory.allows_read_from(temp + 7)
+    {
+        program_state.set_exception(ExceptionType::AddressExceptionLoad);
+        return;
+    }
+
+    // Checks passed. Load double word.
+    let mut i = 0;
+    let mut result_double: u64 = 0;
+    while i < 8 {
+        match program_state.memory.read_byte(temp + i) {
+            Ok(b) => result_double |= (b as u64) << (56 - (i * 8)),
+            Err(_) => {
+                program_state.set_exception(ExceptionType::AddressExceptionLoad);
+            }
+        }
+        i += 1;
+    }
+
+    f64::pack_bits(program_state, args.rt, result_double);
 }
 
 // 0x38 - sc
@@ -952,15 +987,8 @@ pub fn tlbwi(_program_state: &mut ProgramState, _args: RArgs) -> () {
 }
 
 // 0x04 - mtc0
-pub fn mtc0(program_state: &mut ProgramState, args: CopMovRArgs) -> () {
-    let value = program_state.cpu.general_purpose_registers[args.rt as usize];
-
-    if let Err(e) = program_state
-        .cp0
-        .set_cp0_register(args.rd as usize, args.sel as usize, value)
-    {
-        program_state.set_exception(e);
-    }
+pub fn mtc0(_program_state: &mut ProgramState, _args: CopMovRArgs) -> () {
+    todo!("mtc0");
 }
 
 // 0x06 - tlbwr
@@ -985,77 +1013,18 @@ pub fn wrpgpr(_program_state: &mut ProgramState, _args: CopMovRArgs) -> () {
 
 // EJTAG exceptions:
 // 0x1f
-pub fn deret(program_state: &mut ProgramState, _args: RArgs) -> () {
-    program_state.recover_from_debug_exception();
+pub fn deret(_program_state: &mut ProgramState, _args: RArgs) -> () {
+    todo!("deret");
 }
 
-// 0x18 - eret
-pub fn eret(program_state: &mut ProgramState, _args: RArgs) -> () {
-    if program_state.cp0.get_error_level() == 1 {
-        program_state.cpu.pc = program_state.cp0.get_error_epc();
-        program_state.cp0.set_error_level(0);
-    } else {
-        program_state.cpu.pc = program_state.cp0.get_epc();
-        program_state.cp0.set_exception_level(0);
-    }
-}
-
-// (0x00) - mfc0
-pub fn mfc0(program_state: &mut ProgramState, args: CopMovRArgs) -> () {
-    let cop0_value = match program_state.cp0.get_cp0_register(args.rd as usize, args.sel as usize) {
-        Ok(value) => value,
-        Err(e) => {
-            program_state.set_exception(e);
-            return;
-        }
-    };
-
-    program_state.cpu.general_purpose_registers[args.rt as usize] = cop0_value;
+//
+pub fn mfc0(_program_state: &mut ProgramState, _args: CopMovRArgs) -> () {
+    todo!("mfc0");
 }
 
 // 0x20 - wait
 pub fn wait(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("wait instruction");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::structs::ProgramState;
-
-    #[test]
-    fn eret_returns_to_epc_and_clears_exl() {
-        let mut program_state = ProgramState::default();
-        program_state.cp0.set_epc(0x0040_0120);
-        program_state.cp0.set_exception_level(1);
-
-        eret(&mut program_state, RArgs::from(crate::instruction::RawInstruction::new(0x4200_0018)));
-
-        assert_eq!(program_state.cpu.pc, 0x0040_0120);
-        assert_eq!(program_state.cp0.get_exception_level(), 0);
-    }
-
-    #[test]
-    fn eret_uses_error_epc_when_erl_is_set() {
-        let mut program_state = ProgramState::default();
-        program_state.cp0.set_error_epc(0x8000_0180);
-        program_state.cp0.set_error_level(1);
-
-        eret(&mut program_state, RArgs::from(crate::instruction::RawInstruction::new(0x4200_0018)));
-
-        assert_eq!(program_state.cpu.pc, 0x8000_0180);
-        assert_eq!(program_state.cp0.get_error_level(), 0);
-    }
-
-    #[test]
-    fn deret_returns_to_depc() {
-        let mut program_state = ProgramState::default();
-        program_state.cp0.set_depc(0x0040_0200);
-
-        deret(&mut program_state, RArgs::from(crate::instruction::RawInstruction::new(0x4200_001f)));
-
-        assert_eq!(program_state.cpu.pc, 0x0040_0200);
-    }
 }
 
 /*

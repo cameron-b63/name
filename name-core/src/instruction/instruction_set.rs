@@ -1020,20 +1020,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             relocation_type: None,
         },
         InstructionInformation {
-            mnemonic: "deret",
-            basis: InstructionType::RType(RArgs {
-                opcode: 0x10,
-                rs: 0x10,
-                rt: 0,
-                rd: 0,
-                shamt: 0,
-                funct: 0x1f,
-            }),
-            implementation: wrap_imp(implementation::deret),
-            args: &[&[]],
-            relocation_type: None,
-        },
-        InstructionInformation {
             mnemonic: "div",
             basis: InstructionType::RType(RArgs {
                 opcode: 0x00,
@@ -1087,20 +1073,6 @@ pub static INSTRUCTION_SET: LazyLock<Vec<InstructionInformation>> = LazyLock::ne
             }),
             implementation: wrap_imp(implementation::divu),
             args: &[&[ArgumentType::Rs, ArgumentType::Rt]],
-            relocation_type: None,
-        },
-        InstructionInformation {
-            mnemonic: "eret",
-            basis: InstructionType::RType(RArgs {
-                opcode: 0x10,
-                rs: 0x10,
-                rt: 0,
-                rd: 0,
-                shamt: 0,
-                funct: 0x18,
-            }),
-            implementation: wrap_imp(implementation::eret),
-            args: &[&[]],
             relocation_type: None,
         },
         InstructionInformation {

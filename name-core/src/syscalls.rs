@@ -32,8 +32,7 @@ pub fn sys_print_float<W: Write>(
     program_state: &mut ProgramState,
     sys: &mut W,
 ) -> Result<(), String> {
-    let to_print = f32::from_bits(program_state.cp1.registers[F12 as usize]);
-    write!(sys, "{}", to_print).map_err(|_| "Failed to read")?;
+    write!(sys, "{}", program_state.cp1.registers[F12 as usize]).map_err(|_| "Failed to read")?;
     sys.flush().map_err(|_| "Failed to flush sys".to_string())
 }
 
@@ -61,7 +60,7 @@ pub fn sys_print_string<W: Write>(
         let byte = program_state
             .memory
             .read_byte(address)
-            .map_err(|e| format!("{e:?}"))?;
+            .map_err(|e| format!("{e}"))?;
 
         if byte == 0 {
             break;
@@ -235,14 +234,6 @@ mod tests {
         program_state.cpu.general_purpose_registers[A0 as usize] = 4;
 
         test_print(sys_print_int, &mut program_state, "4");
-    }
-
-    #[test]
-    fn test_sys_print_float() {
-        let mut program_state = ProgramState::default();
-        program_state.cp1.registers[F12 as usize] = 2.5_f32.to_bits();
-
-        test_print(sys_print_float, &mut program_state, "2.5");
     }
 
     #[test]

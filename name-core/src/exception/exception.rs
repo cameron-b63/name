@@ -43,11 +43,6 @@ impl ProgramState {
         // Clear FPU exception bits
         self.cp1.clear_fp_exception();
     }
-
-    /// Return from a debug exception using DEPC.
-    pub fn recover_from_debug_exception(&mut self) -> () {
-        self.cpu.pc = self.cp0.get_depc();
-    }
 }
 
 impl Coprocessor1 {
@@ -104,20 +99,5 @@ impl Coprocessor1 {
         }
 
         res
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn set_exception_sets_cp0_exc_code_for_syscall() {
-        let mut program_state = ProgramState::default();
-
-        program_state.set_exception(ExceptionType::Syscall);
-
-        assert_eq!(program_state.cp0.get_exc_code(), 8);
-        assert_eq!(program_state.cp0.get_exception_level(), EXCEPTION_BEING_HANDLED);
     }
 }

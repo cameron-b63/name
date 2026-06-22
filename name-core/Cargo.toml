@@ -12,6 +12,7 @@ serde = { version = "1.0.188", features = ["derive"] }
 toml = "0.7.6"
 strum = "0.26"
 strum_macros = "0.26"
+paste = "1.0.15"
 bumpalo = "3.16.0"
 
 [lints]
