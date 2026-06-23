@@ -12,6 +12,7 @@ pub struct FieldInfo {
 pub fn get_field_set(register: Cp0Register) -> Option<&'static [FieldInfo]> {
     match register {
         Cp0Register::Status => Some(STATUS_FIELDS),
+        Cp0Register::Cause => Some(CAUSE_FIELDS),
         _ => None,
     }
 }
@@ -175,3 +176,9 @@ pub static STATUS_FIELDS: &'static [FieldInfo] = &[
         lsb: 3,
     },
 ];
+
+pub static CAUSE_FIELDS: &'static [FieldInfo] = &[FieldInfo {
+    name: "ExcCode",
+    msb: 6,
+    lsb: 2,
+}];

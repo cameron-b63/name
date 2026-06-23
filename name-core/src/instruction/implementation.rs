@@ -897,8 +897,9 @@ pub fn tlbwi(_program_state: &mut ProgramState, _args: RArgs) -> () {
 }
 
 // 0x04 - mtc0
-pub fn mtc0(_program_state: &mut ProgramState, _args: CopMovRArgs) -> () {
-    todo!("mtc0");
+pub fn mtc0(program_state: &mut ProgramState, args: CopMovRArgs) -> () {
+    let value = program_state.cpu.general_purpose_registers[args.rt as usize];
+    program_state.cp0.registers[args.rd as usize][args.sel as usize] = value;
 }
 
 // 0x06 - tlbwr
@@ -928,8 +929,9 @@ pub fn deret(_program_state: &mut ProgramState, _args: RArgs) -> () {
 }
 
 //
-pub fn mfc0(_program_state: &mut ProgramState, _args: CopMovRArgs) -> () {
-    todo!("mfc0");
+pub fn mfc0(program_state: &mut ProgramState, args: CopMovRArgs) -> () {
+    program_state.cp0.registers[args.rt as usize][args.sel as usize] =
+        program_state.cpu.general_purpose_registers[args.rd as usize];
 }
 
 // 0x20 - wait
