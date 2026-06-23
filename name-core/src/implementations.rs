@@ -30,7 +30,7 @@ impl Processor {
 impl Coprocessor0 {
     pub fn new() -> Self {
         Coprocessor0 {
-            registers: [0; 32],
+            registers: [[0; 8]; 32],
             debug_mode: false,
         }
     }

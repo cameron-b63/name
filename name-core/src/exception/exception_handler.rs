@@ -3,7 +3,10 @@ use std::process::exit;
 use crate::{
     constants::fpu_control::FCSR_INDEX,
     debug::debug_utils::DebuggerState,
-    exception::definitions::{ExceptionType, FpExceptionType, SourceContext},
+    exception::{
+        definitions::{ExceptionType, FpExceptionType, SourceContext},
+        registers::Cp0Register,
+    },
     structs::{OperatingSystem, ProgramState},
 };
 
@@ -27,7 +30,7 @@ pub fn handle_exception(
     };
 
     // Retrieve necessary values
-    let epc: u32 = program_state.cp0.get_epc();
+    let epc: u32 = program_state.cp0.get_register_value(Cp0Register::EPC);
 
     // Match on exception type to either error out or handle appropriately
     match exception_type {

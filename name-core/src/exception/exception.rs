@@ -1,6 +1,6 @@
 use super::{constants::*, definitions::ExceptionType};
 use crate::{
-    exception::definitions::FpExceptionType,
+    exception::{definitions::FpExceptionType, registers::Cp0Register},
     structs::{Coprocessor1, ProgramState},
 };
 
@@ -18,7 +18,8 @@ impl ProgramState {
         // The EPC register contains the PC of where the exception occurred.
         // If it already contains some other value important to our flow, we do not want to overwrite the address.
         if !self.is_exception() {
-            self.cp0.set_epc(self.cpu.pc - 4);
+            self.cp0
+                .set_register_value(Cp0Register::EPC, self.cpu.pc - 4);
         }
         // Set the EXL bit.
         self.cp0.set_exception_level(EXCEPTION_BEING_HANDLED);
@@ -37,9 +38,9 @@ impl ProgramState {
         self.cp0.set_exception_level(NO_EXCEPTION);
         // TODO: LEAVE KERNEL MODE
         // Go back to where we were headed before the exception was handled
-        self.cpu.pc = self.cp0.get_epc() + 4;
+        self.cpu.pc = self.cp0.get_register_value(Cp0Register::EPC) + 4;
         // Clear EPC
-        self.cp0.set_epc(0u32);
+        self.cp0.set_register_value(Cp0Register::EPC, 0u32);
         // Clear FPU exception bits
         self.cp1.clear_fp_exception();
     }

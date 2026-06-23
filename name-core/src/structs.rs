@@ -45,8 +45,18 @@ pub struct Processor {
 /// Coprocessor 0 is for communication with the OS. Look in name-core/exception for more.
 #[derive(Debug, Default)]
 pub struct Coprocessor0 {
-    pub registers: [u32; 32],
-    pub debug_mode: bool, // TODO: implement EJTAG
+    pub registers: [[u32; 8]; 32],
+    pub debug_mode: bool, // TODO: Implement EJTAG
+}
+
+impl Coprocessor0 {
+    pub fn is_debug_mode(&self) -> bool {
+        return self.debug_mode;
+    }
+
+    pub fn set_debug_mode(&mut self, value: bool) {
+        self.debug_mode = value;
+    }
 }
 
 /// Coprocessor 1 is the FPU (floating-point unit).

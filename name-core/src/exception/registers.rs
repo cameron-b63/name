@@ -1,7 +1,7 @@
 /// This enum contains all the "registers" that are a part of the coprocessor 0 definition, even though the majority will go unused.
 /// It is based on this [specification](https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00090-2B-MIPS32PRA-AFP-06.02.pdf).
 #[derive(PartialEq, Clone, Copy, Debug)]
-pub enum Register {
+pub enum Cp0Register {
     // Register 0
     Index,
     MVPControl,

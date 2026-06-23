@@ -214,7 +214,16 @@ impl Roundable for f64 {
 }
 
 /// Trait to bundle up arithmetic capabilities, as well as provide general-purpose utility functions like is_infinite() and signum()
-pub trait FloatArithmetic: FloatBits + FloatFlush + Roundable + PartialEq + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> {
+pub trait FloatArithmetic:
+    FloatBits
+    + FloatFlush
+    + Roundable
+    + PartialEq
+    + Add<Output = Self>
+    + Sub<Output = Self>
+    + Mul<Output = Self>
+    + Div<Output = Self>
+{
     const INFINITY: Self;
     const NEG_INFINITY: Self;
     fn is_infinite(self) -> bool;
