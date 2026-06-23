@@ -10,7 +10,7 @@ use crate::instruction::formats::j_type::JArgs;
 use crate::instruction::formats::r_type::RArgs;
 use crate::instruction::formats::regimm_i_type::RegImmIArgs;
 use crate::instruction::implementation_helpers::{
-    apply_fpu_rounding, perform_op_with_flush, FloatArithmetic, FloatBits, FloatComparable
+    apply_fpu_rounding, perform_op_with_flush, FloatArithmetic, FloatBits, FloatComparable,
 };
 use crate::instruction::sign_magnitude::{SignMagnitudeLong, SignMagnitudeWord};
 use crate::structs::{
@@ -237,8 +237,19 @@ pub fn bgtzl(_program_state: &mut ProgramState, _args: IArgs) -> () {
 }
 
 // 0x19 - sh
-pub fn sh(_program_state: &mut ProgramState, _args: IArgs) -> () {
-    todo!("sh");
+pub fn sh(program_state: &mut ProgramState, args: IArgs) -> () {
+    let temp: u32 = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+        + args.imm as i32) as u32;
+
+    let value: u32 = program_state.cpu.general_purpose_registers[args.rt as usize] & 0xFFFF;
+
+    match program_state.memory.set_n_bytes(temp, 2, value as u64) {
+        Ok(_) => (),
+        Err(e) => {
+            program_state.set_exception(e);
+            return;
+        }
+    }
 }
 
 // 0x1a - swl
@@ -256,24 +267,33 @@ pub fn lb(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp: u32 = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    if !program_state.memory.allows_read_from(temp) {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-    let return_byte: u8 = match program_state.memory.read_byte(temp) {
-        Ok(b) => b,
-        Err(_) => {
-            program_state.set_exception(ExceptionType::AddressExceptionLoad);
+    let result_byte: u8 = match program_state.memory.read_n_bytes(temp, 1) {
+        Ok(b) => b as u8,
+        Err(e) => {
+            program_state.set_exception(e);
             return;
         }
     };
-    program_state.cpu.general_purpose_registers[args.rt as usize] = return_byte as i8 as i32 as u32;
+
+    program_state.cpu.general_purpose_registers[args.rt as usize] = result_byte as i8 as i32 as u32;
     // explicit sign-extension
 }
 
 // 0x21 - lh
-pub fn lh(_program_state: &mut ProgramState, _args: IArgs) -> () {
-    todo!("lh");
+pub fn lh(program_state: &mut ProgramState, args: IArgs) -> () {
+    let temp: u32 = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+        + args.imm as i32) as u32;
+
+    let result_half: u16 = match program_state.memory.read_n_bytes(temp, 2) {
+        Ok(h) => h as u16,
+        Err(e) => {
+            program_state.set_exception(e);
+            return;
+        }
+    };
+
+    program_state.cpu.general_purpose_registers[args.rt as usize] =
+        result_half as i16 as i32 as u32;
 }
 
 // 0x22 - lwl
@@ -286,30 +306,15 @@ pub fn lw(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    if temp % 4 != 0 {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    if !program_state.memory.allows_read_from(temp)
-        || !program_state.memory.allows_read_from(temp + 3)
-    {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    // Checks passed. Load word.
-    let mut i = 0;
-    let mut result_word: u32 = 0;
-    while i < 4 {
-        match program_state.memory.read_byte(temp + i) {
-            Ok(b) => result_word |= (b as u32) << (24 - (i * 8)),
-            Err(_) => program_state.set_exception(ExceptionType::AddressExceptionLoad),
+    let result_word = match program_state.memory.read_n_bytes(temp, 4) {
+        Ok(w) => w,
+        Err(e) => {
+            program_state.set_exception(e);
+            return;
         }
-        i += 1;
-    }
+    };
 
-    program_state.cpu.general_purpose_registers[args.rt as usize] = result_word;
+    program_state.cpu.general_purpose_registers[args.rt as usize] = result_word as u32;
 }
 
 // 0x24 - lbu
@@ -317,24 +322,31 @@ pub fn lbu(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp: u32 = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    if !program_state.memory.allows_read_from(temp) {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-    let return_byte: u8 = match program_state.memory.read_byte(temp) {
-        Ok(b) => b,
-        Err(_) => {
-            program_state.set_exception(ExceptionType::AddressExceptionLoad);
+    let result_byte = match program_state.memory.read_n_bytes(temp, 1) {
+        Ok(b) => b as u8,
+        Err(e) => {
+            program_state.set_exception(e);
             return;
         }
     };
-    program_state.cpu.general_purpose_registers[args.rt as usize] = (return_byte as u32) & 0xFF;
-    // Clear any sign-extension
+
+    program_state.cpu.general_purpose_registers[args.rt as usize] = result_byte as u32;
 }
 
 // 0x25 - lhu
-pub fn lhu(_program_state: &mut ProgramState, _args: IArgs) -> () {
-    todo!("lhu");
+pub fn lhu(program_state: &mut ProgramState, args: IArgs) -> () {
+    let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
+        + args.imm as i32) as u32;
+
+    let result_half = match program_state.memory.read_n_bytes(temp, 2) {
+        Ok(h) => h,
+        Err(e) => {
+            program_state.set_exception(e);
+            return;
+        }
+    };
+
+    program_state.cpu.general_purpose_registers[args.rt as usize] = result_half as u32;
 }
 
 // 0x26 - lwr
@@ -347,18 +359,15 @@ pub fn sb(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    if !program_state.memory.allows_write_to(temp) {
-        program_state.set_exception(ExceptionType::AddressExceptionStore);
-        return;
-    }
+    let value = program_state.cpu.general_purpose_registers[args.rt as usize] & 0xFF;
 
-    match program_state.memory.set_byte(
-        temp,
-        program_state.cpu.general_purpose_registers[args.rt as usize] as u8,
-    ) {
+    match program_state.memory.set_n_bytes(temp, 1, value as u64) {
         Ok(_) => (),
-        Err(_) => program_state.set_exception(ExceptionType::AddressExceptionStore),
-    };
+        Err(e) => {
+            program_state.set_exception(e);
+            return;
+        }
+    }
 }
 
 // 0x2b - sw
@@ -366,36 +375,15 @@ pub fn sw(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    if temp % 4 != 0 {
-        program_state.set_exception(ExceptionType::AddressExceptionStore);
-        return;
-    }
-
-    if !program_state.memory.allows_write_to(temp)
-        || !program_state.memory.allows_write_to(temp + 3)
-    {
-        program_state.set_exception(ExceptionType::AddressExceptionStore);
-        return;
-    }
-
     // Retrieve value of rt from cpu
     let value: u32 = program_state.cpu.general_purpose_registers[args.rt as usize];
 
-    // Checks passed. Store word.
-    let mut i = 0;
-    while i < 4 {
-        // Shift/mask value to get correct byte
-        let new_byte: u8 = ((value >> (i * 8)) & 0xFF) as u8;
-        // Write it to correct location
-        match program_state.memory.set_byte(temp + (3 - i), new_byte) {
-            Ok(_) => (),
-            Err(_) => {
-                // If write failed, trigger an exception
-                program_state.set_exception(ExceptionType::AddressExceptionStore);
-                return;
-            }
+    match program_state.memory.set_n_bytes(temp, 4, value as u64) {
+        Ok(_) => (),
+        Err(e) => {
+            program_state.set_exception(e);
+            return;
         }
-        i += 1;
     }
 }
 
@@ -414,32 +402,15 @@ pub fn lwc1(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    if temp % 4 != 0 {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    if !program_state.memory.allows_read_from(temp)
-        || !program_state.memory.allows_read_from(temp + 3)
-    {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    // Checks passed. Load word.
-    let mut i = 0;
-    let mut result_word: u32 = 0;
-    while i < 4 {
-        match program_state.memory.read_byte(temp + i) {
-            Ok(b) => result_word |= (b as u32) << (24 - (i * 8)),
-            Err(_) => {
-                program_state.set_exception(ExceptionType::AddressExceptionLoad);
-            }
+    let result_word = match program_state.memory.read_n_bytes(temp, 4) {
+        Ok(w) => w,
+        Err(e) => {
+            program_state.set_exception(e);
+            return;
         }
-        i += 1;
-    }
+    };
 
-    program_state.cp1.registers[args.rt as usize] = result_word;
+    program_state.cp1.registers[args.rt as usize] = result_word as u32;
 }
 
 // 0x33 - pref
@@ -454,32 +425,13 @@ pub fn ldc1(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    if temp % 4 != 0 {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    if !program_state.memory.allows_read_from(temp)
-        || !program_state.memory.allows_read_from(temp + 7)
-    {
-        program_state.set_exception(ExceptionType::AddressExceptionLoad);
-        return;
-    }
-
-    // Checks passed. Load double word.
-    let mut i = 0;
-    let mut result_double: u64 = 0;
-    while i < 8 {
-        match program_state.memory.read_byte(temp + i) {
-            Ok(b) => result_double |= (b as u64) << (56 - (i * 8)),
-            Err(_) => {
-                program_state.set_exception(ExceptionType::AddressExceptionLoad);
-            }
+    match program_state.memory.read_n_bytes(temp, 8) {
+        Ok(b) => f64::pack_bits(program_state, args.rt, b),
+        Err(e) => {
+            program_state.set_exception(e);
+            return;
         }
-        i += 1;
     }
-
-    f64::pack_bits(program_state, args.rt, result_double);
 }
 
 // 0x38 - sc
@@ -492,36 +444,15 @@ pub fn swc1(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    if temp % 4 != 0 {
-        program_state.set_exception(ExceptionType::AddressExceptionStore);
-        return;
-    }
-
-    if !program_state.memory.allows_write_to(temp)
-        || !program_state.memory.allows_write_to(temp + 3)
-    {
-        program_state.set_exception(ExceptionType::AddressExceptionStore);
-        return;
-    }
-
     // Retrieve value of ft from coprocessor 1
     let value: u32 = program_state.cp1.registers[args.rt as usize];
 
-    // Checks passed. Store word.
-    let mut i = 0;
-    while i < 4 {
-        // Shift/mask value to get correct byte
-        let new_byte: u8 = ((value >> (i * 8)) & 0xFF) as u8;
-        // Write it to correct location
-        match program_state.memory.set_byte(temp + (3 - i), new_byte) {
-            Ok(_) => (),
-            Err(_) => {
-                // If write failed, trigger an exception
-                program_state.set_exception(ExceptionType::AddressExceptionStore);
-                return;
-            }
+    match program_state.memory.set_n_bytes(temp, 4, value as u64) {
+        Ok(_) => (),
+        Err(e) => {
+            program_state.set_exception(e);
+            return;
         }
-        i += 1;
     }
 }
 
@@ -532,36 +463,15 @@ pub fn sdc1(program_state: &mut ProgramState, args: IArgs) -> () {
     let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] as i32
         + args.imm as i32) as u32;
 
-    if temp % 4 != 0 {
-        program_state.set_exception(ExceptionType::AddressExceptionStore);
-        return;
-    }
-
-    if !program_state.memory.allows_write_to(temp)
-        || !program_state.memory.allows_write_to(temp + 3)
-    {
-        program_state.set_exception(ExceptionType::AddressExceptionStore);
-        return;
-    }
-
     // Retrieve value of ft from coprocessor 1
     let value: u64 = f64::extract_bits(program_state, args.rt);
 
-    // Checks passed. Store word.
-    let mut i = 0;
-    while i < 8 {
-        // Shift/mask value to get correct byte
-        let new_byte: u8 = ((value >> (i * 8)) & 0xFF) as u8;
-        // Write it to correct location
-        match program_state.memory.set_byte(temp + (7 - i), new_byte) {
-            Ok(_) => (),
-            Err(_) => {
-                // If write failed, trigger an exception
-                program_state.set_exception(ExceptionType::AddressExceptionStore);
-                return;
-            }
+    match program_state.memory.set_n_bytes(temp, 8, value) {
+        Ok(_) => (),
+        Err(e) => {
+            program_state.set_exception(e);
+            return;
         }
-        i += 1;
     }
 }
 
@@ -667,23 +577,23 @@ pub fn sync(_program_state: &mut ProgramState, _args: RArgs) -> () {
 }
 
 // 0x10 - mfhi
-pub fn mfhi(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("mfhi");
+pub fn mfhi(program_state: &mut ProgramState, args: RArgs) -> () {
+    program_state.cpu.general_purpose_registers[args.rd as usize] = program_state.cpu.hi;
 }
 
 // 0x11 - mthi
-pub fn mthi(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("mthi");
+pub fn mthi(program_state: &mut ProgramState, args: RArgs) -> () {
+    program_state.cpu.hi = program_state.cpu.general_purpose_registers[args.rs as usize];
 }
 
 // 0x12 - mflo
-pub fn mflo(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("mflo");
+pub fn mflo(program_state: &mut ProgramState, args: RArgs) -> () {
+    program_state.cpu.general_purpose_registers[args.rd as usize] = program_state.cpu.lo;
 }
 
 // 0x13 - mtlo
-pub fn mtlo(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("mtlo");
+pub fn mtlo(program_state: &mut ProgramState, args: RArgs) -> () {
+    program_state.cpu.lo = program_state.cpu.general_purpose_registers[args.rs as usize];
 }
 
 // 0x18 - mult
@@ -1056,8 +966,9 @@ pub fn cfc1(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
 }
 
 // 0x00;0x04 - MT (Move to) - GPR -> FPU
-pub fn mtc1(_program_state: &mut ProgramState, _args: CopMovRArgs) -> () {
-    todo!("mtc1");
+pub fn mtc1(program_state: &mut ProgramState, args: CopMovRArgs) -> () {
+    program_state.cp1.registers[args.rt as usize] =
+        program_state.cpu.general_purpose_registers[args.rd as usize];
 }
 
 // 0x00;0x06 - CT (Coprocessor to) - GPR <- FPU
@@ -1113,12 +1024,11 @@ pub fn addf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs)
         ));
         // If the exception path was disabled, supply a QNaN
         f64::pack_qnan(program_state, args.fd);
-        return
+        return;
     }
 
     // If the operation results in magnitude subtraction of infinities, the operation is invalid.
-    if s.is_infinite() && t.is_infinite() && s.signum() != t.signum()
-    {
+    if s.is_infinite() && t.is_infinite() && s.signum() != t.signum() {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));
@@ -1155,8 +1065,7 @@ pub fn subf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs)
     }
 
     // If the operation results in magnitude subtraction of infinities, the operation is invalid.
-    if s.is_infinite() && t.is_infinite() && s.signum() == t.signum()
-    {
+    if s.is_infinite() && t.is_infinite() && s.signum() == t.signum() {
         program_state.set_exception(ExceptionType::FloatingPoint(
             FpExceptionType::InvalidOperation,
         ));

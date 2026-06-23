@@ -38,5 +38,5 @@ MIPS
 
 run.sh
 
-MIPS/*
-MIPS
+tests/samples/*.o
+tests/samples/*.bin

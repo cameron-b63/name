@@ -233,6 +233,29 @@ impl Memory {
         }
     }
 
+    /// This function allows reading n aligned bytes from memory.
+    pub fn read_n_bytes(&self, address: u32, n: usize) -> Result<u64, ExceptionType> {
+        if address % n as u32 != 0 {
+            return Err(ExceptionType::AddressExceptionLoad);
+        }
+
+        if !self.allows_read_from(address) || !self.allows_read_from(address + n as u32) {
+            return Err(ExceptionType::AddressExceptionLoad);
+        }
+
+        let mut i = 0;
+        let mut result: u64 = 0;
+        while i < n {
+            match self.read_byte(address + i as u32) {
+                Ok(b) => result |= (b as u64) << ((8 * n - 8) - (i * 8)),
+                Err(_) => return Err(ExceptionType::AddressExceptionLoad),
+            }
+            i += 1;
+        }
+
+        return Ok(result);
+    }
+
     /// The burden of alignment checking rests on each `set_<type>` function.
     /// set_byte performs address translation on the provided address and sets the value at that address to value.
     pub fn set_byte(&mut self, address: u32, value: u8) -> Result<(), MemoryError> {
@@ -287,6 +310,30 @@ impl Memory {
                 return Err(MemoryError::ReservedSpaceReferenced);
             }
         }
+    }
+
+    pub fn set_n_bytes(&mut self, address: u32, n: usize, value: u64) -> Result<(), ExceptionType> {
+        if address % n as u32 != 0 {
+            return Err(ExceptionType::AddressExceptionStore);
+        }
+
+        if !self.allows_write_to(address) || !self.allows_write_to(address + n as u32) {
+            return Err(ExceptionType::AddressExceptionStore);
+        }
+
+        let mut i = 0;
+        while i < n {
+            match self.set_byte(address + i as u32, ((value >> (8 * i)) & 0xFF) as u8) {
+                Ok(_) => (),
+                Err(_) => {
+                    return Err(ExceptionType::AddressExceptionStore);
+                }
+            }
+
+            i += 1;
+        }
+
+        Ok(())
     }
 
     /// This function checks that the provided address falls within a section that allows execution.
