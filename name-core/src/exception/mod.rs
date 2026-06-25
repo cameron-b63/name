@@ -1,4 +1,5 @@
 pub mod constants;
+pub mod cp0_defaults;
 pub mod cp0_helpers;
 pub mod definitions;
 pub mod exception;

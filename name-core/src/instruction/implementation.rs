@@ -1,4 +1,5 @@
 use crate::exception::definitions::{ExceptionType, FpExceptionType};
+use crate::instruction::formats::bit_field_type::BitFieldArgs;
 use crate::instruction::formats::cond_mov_cc_type::CondMovCCArgs;
 use crate::instruction::formats::cop_mov_r_type::CopMovRArgs;
 use crate::instruction::formats::fp_cc_branch_type::FpCCBranchArgs;
@@ -507,13 +508,21 @@ pub fn srl(program_state: &mut ProgramState, args: RArgs) -> () {
         program_state.cpu.general_purpose_registers[args.rd as usize] =
             program_state.cpu.general_purpose_registers[args.rt as usize] >> args.shamt;
     } else {
-        todo!("rotr");
+        if !program_state.cp0.is_smart_mode_ase_set() {
+            program_state.set_exception(ExceptionType::ReservedInstruction);
+            return;
+        } else {
+            unreachable!("SmartMIPS is not being implemented.")
+        }
     }
 }
 
 // 0x03 - sra
-pub fn sra(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("sra");
+pub fn sra(program_state: &mut ProgramState, args: RArgs) -> () {
+    // https://stackoverflow.com/questions/31879878/how-can-i-perform-arithmetic-right-shift-in-c-in-a-portable-way
+    let value = program_state.cpu.general_purpose_registers[args.rt as usize];
+    let s = -((value >> 31) as i32) as u32;
+    program_state.cpu.general_purpose_registers[args.rd as usize] = (s ^ value) >> args.shamt ^ s;
 }
 
 // 0x04 - sllv
@@ -531,8 +540,12 @@ pub fn srlv(program_state: &mut ProgramState, args: RArgs) -> () {
 }
 
 // 0x07 - srav
-pub fn srav(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("srav");
+pub fn srav(program_state: &mut ProgramState, args: RArgs) -> () {
+    // https://stackoverflow.com/questions/31879878/how-can-i-perform-arithmetic-right-shift-in-c-in-a-portable-way
+    let shamt = program_state.cpu.general_purpose_registers[args.rs as usize];
+    let value = program_state.cpu.general_purpose_registers[args.rt as usize];
+    let s = -((value >> 31) as i32) as u32;
+    program_state.cpu.general_purpose_registers[args.rd as usize] = (s ^ value) >> shamt ^ s;
 }
 
 // 0x08 - jr
@@ -2013,13 +2026,25 @@ pub fn nmsub_s(_program_state: &mut ProgramState, _args: FpFourRegArgs) -> () {
 */
 
 // 0x00 - madd
-pub fn madd(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("madd");
+pub fn madd(program_state: &mut ProgramState, args: RArgs) -> () {
+    let hilo: u64 = (program_state.cpu.hi as u64) << 32 | program_state.cpu.lo as u64;
+    let product = program_state.cpu.general_purpose_registers[args.rs as usize] as i32 as i64
+        * program_state.cpu.general_purpose_registers[args.rt as usize] as i32 as i64;
+
+    let temp = hilo + product as u64;
+    program_state.cpu.hi = (temp >> 32) as u32;
+    program_state.cpu.lo = temp as u32;
 }
 
 // 0x01 - maddu
-pub fn maddu(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("maddu");
+pub fn maddu(program_state: &mut ProgramState, args: RArgs) -> () {
+    let hilo: u64 = (program_state.cpu.hi as u64) << 32 | program_state.cpu.lo as u64;
+    let product = program_state.cpu.general_purpose_registers[args.rs as usize] as u64
+        * program_state.cpu.general_purpose_registers[args.rt as usize] as u64;
+
+    let temp = hilo + product;
+    program_state.cpu.hi = (temp >> 32) as u32;
+    program_state.cpu.lo = temp as u32;
 }
 
 // 0x02 - mul
@@ -2030,23 +2055,57 @@ pub fn mul(program_state: &mut ProgramState, args: RArgs) -> () {
 }
 
 // 0x04 - msub
-pub fn msub(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("msub");
+pub fn msub(program_state: &mut ProgramState, args: RArgs) -> () {
+    let hilo: u64 = (program_state.cpu.hi as u64) << 32 | program_state.cpu.lo as u64;
+    let product = program_state.cpu.general_purpose_registers[args.rs as usize] as i32 as i64
+        * program_state.cpu.general_purpose_registers[args.rt as usize] as i32 as i64;
+
+    let temp = hilo - product as u64;
+    program_state.cpu.hi = (temp >> 32) as u32;
+    program_state.cpu.lo = temp as u32;
 }
 
 // 0x05 - msubu
-pub fn msubu(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("msubu");
+pub fn msubu(program_state: &mut ProgramState, args: RArgs) -> () {
+    let hilo: u64 = (program_state.cpu.hi as u64) << 32 | program_state.cpu.lo as u64;
+    let product = program_state.cpu.general_purpose_registers[args.rs as usize] as u64
+        * program_state.cpu.general_purpose_registers[args.rt as usize] as u64;
+
+    let temp = hilo - product;
+    program_state.cpu.hi = (temp >> 32) as u32;
+    program_state.cpu.lo = temp as u32;
 }
 
 // 0x20 - clz
-pub fn clz(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("clz");
+pub fn clz(program_state: &mut ProgramState, args: RArgs) -> () {
+    let value = program_state.cpu.general_purpose_registers[args.rs as usize];
+    let mut temp = 32;
+    let mut i = 31;
+    while i >= 0 {
+        if value & (1 << i) == 1 {
+            temp = 31 - i;
+            break;
+        }
+        i = i - 1;
+    }
+
+    program_state.cpu.general_purpose_registers[args.rd as usize] = temp as u32;
 }
 
 // 0x21 - clo
-pub fn clo(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("clo");
+pub fn clo(program_state: &mut ProgramState, args: RArgs) -> () {
+    let value = program_state.cpu.general_purpose_registers[args.rs as usize];
+    let mut temp = 32;
+    let mut i = 31;
+    while i >= 0 {
+        if value & (1 << i) == 0 {
+            temp = 31 - i;
+            break;
+        }
+        i = i - 1;
+    }
+
+    program_state.cpu.general_purpose_registers[args.rd as usize] = temp as u32;
 }
 
 // 0x3f - sddbp
@@ -2070,18 +2129,81 @@ pub fn sdbbp(_program_state: &mut ProgramState, _args: RArgs) -> () {
 */
 
 // 0x00 - ext (extract bit fields)
-pub fn ext(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("ext");
+pub fn ext(program_state: &mut ProgramState, args: BitFieldArgs) -> () {
+    if args.lsb + args.msbd > 31 {
+        // Officially unpredictable. I am choosing to throw ReservedInstruction.
+        program_state.set_exception(ExceptionType::ReservedInstruction);
+        return;
+    }
+
+    let size = args.msbd + 1;
+    let mask = (1 << size) - 1;
+    let temp = (program_state.cpu.general_purpose_registers[args.rs as usize] >> args.lsb) & mask;
+    program_state.cpu.general_purpose_registers[args.rt as usize] = temp;
 }
 
 // 0x04 - ins (insert bit fields)
-pub fn ins(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("ins");
+pub fn ins(program_state: &mut ProgramState, args: BitFieldArgs) -> () {
+    if args.lsb > args.msbd {
+        // Officially unpredictable. I'm choosing to throw ReservedInstruction
+        program_state.set_exception(ExceptionType::ReservedInstruction);
+        return;
+    }
+
+    let size = args.msbd - args.lsb + 1;
+    let lower_mask = (1 << size) - 1;
+    let clear_mask = !(lower_mask << args.lsb);
+
+    let lower_value = program_state.cpu.general_purpose_registers[args.rs as usize] & lower_mask;
+    let insertion_mask = lower_value << args.lsb;
+
+    let temp = (program_state.cpu.general_purpose_registers[args.rt as usize] & clear_mask)
+        | insertion_mask;
+
+    program_state.cpu.general_purpose_registers[args.rt as usize] = temp;
+
+    return;
 }
 
 // 0x20 - BSHFL multiplexing
-pub fn bshfl(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("wsbh(0x02) , seb(0x20) , seh(0x30)");
+pub fn bshfl(program_state: &mut ProgramState, args: RArgs) -> () {
+    // BSHFL funct codes mux the following using an ID in the shamt field:
+    match args.shamt {
+        0x02 => {
+            // wsbh(0x02)
+            // there's a bithack for this, please code golf
+            let value = program_state.cpu.general_purpose_registers[args.rt as usize];
+            let first = (value >> 24) as u8;
+            let second = (value >> 16) as u8;
+            let third = (value >> 8) as u8;
+            let fourth = value as u8;
+
+            let bytes = [second, first, fourth, third];
+
+            program_state.cpu.general_purpose_registers[args.rd as usize] =
+                u32::from_be_bytes(bytes);
+        }
+        0x20 => {
+            // seb(0x20)
+            program_state.cpu.general_purpose_registers[args.rd as usize] = ((program_state
+                .cpu
+                .general_purpose_registers[args.rt as usize]
+                as u8)
+                as i8
+                as i32)
+                as u32;
+        }
+        0x30 => {
+            // seh(0x30)
+            program_state.cpu.general_purpose_registers[args.rd as usize] =
+                ((program_state.cpu.general_purpose_registers[args.rt as usize] as u16) as i16
+                    as i32) as u32;
+        }
+        _ => {
+            program_state.set_exception(ExceptionType::ReservedInstruction);
+            return;
+        }
+    }
 }
 
 // 0x3b - rdhwr (read hardware register)

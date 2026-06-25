@@ -93,4 +93,11 @@ impl Coprocessor0 {
         let exc_code_field_info = get_field_info(Cp0Register::Cause, "ExcCode");
         self.set_field_value(Cp0Register::Status, exc_code_field_info, value);
     }
+
+    /// Get the SmartMIPS ASE status
+    pub fn is_smart_mode_ase_set(&self) -> bool {
+        let sm_field_info = get_field_info(Cp0Register::Config3, "SM");
+
+        self.get_field_value(Cp0Register::Config3, sm_field_info) == 1
+    }
 }

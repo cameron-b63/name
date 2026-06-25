@@ -2,7 +2,7 @@ use crate::constants::{
     fpu_control::{FCSR_DEFAULT_VALUES, FIR_DEFAULT_VALUES},
     {MIPS_TEXT_START_ADDR, REGISTERS},
 };
-use crate::structs::{Coprocessor0, Coprocessor1, Processor, ProgramState, /*, OperatingSystem*/};
+use crate::structs::{Coprocessor1, Processor, ProgramState /*, OperatingSystem*/};
 
 impl Default for Processor {
     fn default() -> Self {
@@ -22,16 +22,6 @@ impl Processor {
             general_purpose_registers: [0; 32],
             hi: 0,
             lo: 0,
-        }
-    }
-}
-
-// TODO: Fill any default values for cp0 fields
-impl Coprocessor0 {
-    pub fn new() -> Self {
-        Coprocessor0 {
-            registers: [[0; 8]; 32],
-            debug_mode: false,
         }
     }
 }
