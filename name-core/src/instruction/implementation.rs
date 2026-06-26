@@ -57,6 +57,13 @@ const WORD_TOO_SMALL_NAN: u32 = 0x8000_0000;
      - COP1X (opcode 0x13)
      - SPECIAL2 (opcode 0x1c)
      - SPECIAL3 (opcode 0x1f)
+
+     Also, there are some special notes I'd like to include:
+
+     The MIPS specification documents specifically state that the implementation of the "likely" hint is up for interpretation (in particular, the NullifyCurrentInstruction() specifics),
+     and they also state that software should stay away from the "likely" variants of each branch instruction because they will be removed in future versions.
+     For this reason, implementation of all "b<x>l" type instructions has been left as a wrapper around the associated "b<x>".
+     This was also done because it was the easy way out :)
 */
 
 /*
@@ -218,23 +225,25 @@ pub fn lui(program_state: &mut ProgramState, args: IArgs) -> () {
 }
 
 // 0x14 - beql
-pub fn beql(_program_state: &mut ProgramState, _args: IArgs) -> () {
-    todo!("beql");
+pub fn beql(program_state: &mut ProgramState, args: IArgs) -> () {
+    // This implementation is not specified, so I'm just going to choose to utilize the normal beq instruction.
+    beq(program_state, args)
 }
 
 // 0x15 - bnel
-pub fn bnel(_program_state: &mut ProgramState, _args: IArgs) -> () {
-    todo!("bnel");
+pub fn bnel(program_state: &mut ProgramState, args: IArgs) -> () {
+    bne(program_state, args)
 }
 
 // 0x16 - blezl
-pub fn blezl(_program_state: &mut ProgramState, _args: IArgs) -> () {
-    todo!("blezl")
+pub fn blezl(program_state: &mut ProgramState, args: IArgs) -> () {
+    blez(program_state, args)
 }
 
 // 0x17 - bgtl
-pub fn bgtzl(_program_state: &mut ProgramState, _args: IArgs) -> () {
-    todo!("bgtzl")
+pub fn bgtzl(program_state: &mut ProgramState, args: IArgs) -> () {
+    // The likely hint is unspecified, so I'm choosing the path of least resistance.
+    bgtz(program_state, args)
 }
 
 // 0x19 - sh
@@ -809,13 +818,14 @@ pub fn bgez(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
 }
 
 // 0x02 - bltzl
-pub fn bltzl(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("bltzl");
+pub fn bltzl(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    bltz(program_state, args)
 }
 
 // 0x03 - bgezl
-pub fn bgezl(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("bgezl");
+pub fn bgezl(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    // The likely hint is unspecified. I'm choosing the easiest thing.
+    bgez(program_state, args)
 }
 
 // 0x08 - tgei
@@ -849,8 +859,19 @@ pub fn tnei(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
 }
 
 // 0x10 - bltzal
-pub fn bltzal(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("bltzal");
+pub fn bltzal(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    if (program_state.cpu.general_purpose_registers[args.rs as usize] as i32)
+        >= (program_state.cpu.general_purpose_registers[0] as i32)
+    {
+        return;
+    }
+
+    let offset = (args.imm as u16 as i16 as i32) << 2;
+    let target_address = (program_state.cpu.pc as i32 + offset) as u32;
+
+    let temp = program_state.cpu.pc;
+    program_state.jump_if_valid(target_address);
+    program_state.cpu.general_purpose_registers[Ra as usize] = temp;
 }
 
 // 0x11 - bgezal
@@ -870,13 +891,15 @@ pub fn bgezal(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
 }
 
 // 0x12 - bltzall
-pub fn bltzall(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("bltzall");
+pub fn bltzall(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    // The likely hint is unspecified. I will just use the normal bltzal instruction.
+    bltzal(program_state, args)
 }
 
 // 0x13 - bgezall
-pub fn bgezall(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("bgezall");
+pub fn bgezall(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    // The likely hint is unspecified. I will just use the normal bgezal instruction.
+    bgezal(program_state, args)
 }
 
 // 0x1f - synci
