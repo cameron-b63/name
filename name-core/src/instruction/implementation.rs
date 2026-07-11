@@ -1210,13 +1210,19 @@ pub fn divf<T: FloatArithmetic>(program_state: &mut ProgramState, args: FpRArgs)
 }
 
 // 0x04.d - sqrt.d
-pub fn sqrt_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("sqrt.d");
+pub fn sqrt_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let fs = f64::extract_value(program_state, args.fs);
+    let sqrt = fs.sqrt();
+    let rounded = apply_fpu_rounding(program_state, sqrt);
+    f64::pack_value(program_state, args.fd, rounded);
 }
 
 // 0x04.s - sqrt.s
-pub fn sqrt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("sqrt.s");
+pub fn sqrt_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let fs = f32::extract_value(program_state, args.fs);
+    let sqrt = fs.sqrt();
+    let rounded = apply_fpu_rounding(program_state, sqrt);
+    f32::pack_value(program_state, args.fd, rounded);
 }
 
 // 0x05 - abs.fmt (this should NOT panic when taking abs(NaN) due to FCSR dictating IEEE 2008 revision instead of legacy MIPS!)
@@ -1535,23 +1541,35 @@ pub fn movn_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
 }
 
 // 0x15.d - recip.d
-pub fn recip_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("recip.d");
+pub fn recip_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let fs = f64::extract_value(program_state, args.fs);
+    let reciprocal = 1.0 / fs;
+    let rounded = apply_fpu_rounding(program_state, reciprocal);
+    f64::pack_value(program_state, args.fd, rounded);
 }
 
 // 0x15.s - recip.s
-pub fn recip_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("recip.s");
+pub fn recip_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let fs = f32::extract_value(program_state, args.fs);
+    let reciprocal = 1.0 / fs;
+    let rounded = apply_fpu_rounding(program_state, reciprocal);
+    f32::pack_value(program_state, args.fd, rounded);
 }
 
 // 0x16.d - rsqrt.d
-pub fn rsqrt_d(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("rsqrt.d");
+pub fn rsqrt_d(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let fs = f64::extract_value(program_state, args.fs);
+    let rsqrt = 1.0 / fs.sqrt();
+    let rounded = apply_fpu_rounding(program_state, rsqrt);
+    f64::pack_value(program_state, args.fd, rounded);
 }
 
 // 0x16.s - rsqrt.s
-pub fn rsqrt_s(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
-    todo!("rsqrt.s");
+pub fn rsqrt_s(program_state: &mut ProgramState, args: FpRArgs) -> () {
+    let fs = f32::extract_value(program_state, args.fs);
+    let rsqrt = 1.0 / fs.sqrt();
+    let rounded = apply_fpu_rounding(program_state, rsqrt);
+    f32::pack_value(program_state, args.fd, rounded);
 }
 
 // 0x20.fmt - cvt.s.fmt
@@ -1993,44 +2011,135 @@ pub fn prefx(_program_state: &mut ProgramState, _args: RArgs) -> () {
     todo!("prefx");
 }
 
+// 0x20.fmt - madd.fmt
+
 // 0x20.d - madd.d
-pub fn madd_d(_program_state: &mut ProgramState, _args: FpFourRegArgs) -> () {
-    todo!("madd.d");
+pub fn madd_d(program_state: &mut ProgramState, args: FpFourRegArgs) -> () {
+    // fd = (fs * ft) + fr
+    let fs = f64::extract_value(program_state, args.fs);
+    let ft = f64::extract_value(program_state, args.ft);
+    let fr = f64::extract_value(program_state, args.fr);
+
+    let intermediate_product = fs * ft;
+    let rounded_product = apply_fpu_rounding(program_state, intermediate_product);
+
+    let intermediate_sum = rounded_product + fr;
+    let rounded_sum = apply_fpu_rounding(program_state, intermediate_sum);
+
+    f64::pack_value(program_state, args.fd, rounded_sum);
 }
 
 // 0x20.s - madd.s
-pub fn madd_s(_program_state: &mut ProgramState, _args: FpFourRegArgs) -> () {
-    todo!("madd.s");
+pub fn madd_s(program_state: &mut ProgramState, args: FpFourRegArgs) -> () {
+    // fd = (fs * ft) + fr
+    let fs = f32::extract_value(program_state, args.fs);
+    let ft = f32::extract_value(program_state, args.ft);
+    let fr = f32::extract_value(program_state, args.fr);
+
+    let intermediate_product = fs * ft;
+    let rounded_product = apply_fpu_rounding(program_state, intermediate_product);
+
+    let intermediate_sum = rounded_product + fr;
+    let rounded_sum = apply_fpu_rounding(program_state, intermediate_sum);
+
+    f32::pack_value(program_state, args.fd, rounded_sum);
 }
 
 // 0x28.d - msub.d
-pub fn msub_d(_program_state: &mut ProgramState, _args: FpFourRegArgs) -> () {
-    todo!("msub.d");
+pub fn msub_d(program_state: &mut ProgramState, args: FpFourRegArgs) -> () {
+    // fd = (fs * ft) - fr
+    let fs = f64::extract_value(program_state, args.fs);
+    let ft = f64::extract_value(program_state, args.ft);
+    let fr = f64::extract_value(program_state, args.fr);
+    let intermediate_product = fs * ft;
+
+    let rounded_product = apply_fpu_rounding(program_state, intermediate_product);
+    let intermediate_difference = rounded_product - fr;
+    let rounded_difference = apply_fpu_rounding(program_state, intermediate_difference);
+
+    f64::pack_value(program_state, args.fd, rounded_difference);
 }
 
 // 0x28.s - msub.s
-pub fn msub_s(_program_state: &mut ProgramState, _args: FpFourRegArgs) -> () {
-    todo!("msub.s");
+pub fn msub_s(program_state: &mut ProgramState, args: FpFourRegArgs) -> () {
+    let fs = f32::extract_value(program_state, args.fs);
+    let ft = f32::extract_value(program_state, args.ft);
+    let fr = f32::extract_value(program_state, args.fr);
+    let intermediate_product = fs * ft;
+
+    let rounded_product = apply_fpu_rounding(program_state, intermediate_product);
+    let intermediate_difference = rounded_product - fr;
+    let rounded_difference = apply_fpu_rounding(program_state, intermediate_difference);
+
+    f32::pack_value(program_state, args.fd, rounded_difference);
 }
 
 // 0x30 - nmadd.d
-pub fn nmadd_d(_program_state: &mut ProgramState, _args: FpFourRegArgs) -> () {
-    todo!("nmadd.d");
+pub fn nmadd_d(program_state: &mut ProgramState, args: FpFourRegArgs) -> () {
+    let fs = f64::extract_value(program_state, args.fs);
+    let ft = f64::extract_value(program_state, args.ft);
+    let fr = f64::extract_value(program_state, args.fr);
+
+    let intermediate_product = fs * ft;
+    let rounded_product = apply_fpu_rounding(program_state, intermediate_product);
+
+    let intermediate_sum = rounded_product + fr;
+    let rounded_sum = apply_fpu_rounding(program_state, intermediate_sum);
+
+    let negated = rounded_sum.neg();
+
+    f64::pack_value(program_state, args.fd, negated);
 }
 
 // 0x30 - nmadd.s
-pub fn nmadd_s(_program_state: &mut ProgramState, _args: FpFourRegArgs) -> () {
-    todo!("nmadd.s");
+pub fn nmadd_s(program_state: &mut ProgramState, args: FpFourRegArgs) -> () {
+    let fs = f32::extract_value(program_state, args.fs);
+    let ft = f32::extract_value(program_state, args.ft);
+    let fr = f32::extract_value(program_state, args.fr);
+
+    let intermediate_product = fs * ft;
+    let rounded_product = apply_fpu_rounding(program_state, intermediate_product);
+
+    let intermediate_sum = rounded_product + fr;
+    let rounded_sum = apply_fpu_rounding(program_state, intermediate_sum);
+
+    let negated = rounded_sum.neg();
+
+    f32::pack_value(program_state, args.fd, negated);
 }
 
 // 0x38 - nmsub.d
-pub fn nmsub_d(_program_state: &mut ProgramState, _args: FpFourRegArgs) -> () {
-    todo!("nmsub.d");
+pub fn nmsub_d(program_state: &mut ProgramState, args: FpFourRegArgs) -> () {
+    let fs = f64::extract_value(program_state, args.fs);
+    let ft = f64::extract_value(program_state, args.ft);
+    let fr = f64::extract_value(program_state, args.fr);
+
+    let intermediate_product = fs * ft;
+    let rounded_product = apply_fpu_rounding(program_state, intermediate_product);
+
+    let intermediate_difference = rounded_product - fr;
+    let rounded_difference = apply_fpu_rounding(program_state, intermediate_difference);
+
+    let negated = rounded_difference.neg();
+
+    f64::pack_value(program_state, args.fd, negated);
 }
 
 // 0x38 - nmsub.s
-pub fn nmsub_s(_program_state: &mut ProgramState, _args: FpFourRegArgs) -> () {
-    todo!("nmsub.s");
+pub fn nmsub_s(program_state: &mut ProgramState, args: FpFourRegArgs) -> () {
+    let fs = f32::extract_value(program_state, args.fs);
+    let ft = f32::extract_value(program_state, args.ft);
+    let fr = f32::extract_value(program_state, args.fr);
+
+    let intermediate_product = fs * ft;
+    let rounded_product = apply_fpu_rounding(program_state, intermediate_product);
+
+    let intermediate_difference = rounded_product - fr;
+    let rounded_difference = apply_fpu_rounding(program_state, intermediate_difference);
+
+    let negated = rounded_difference.neg();
+
+    f32::pack_value(program_state, args.fd, negated);
 }
 
 /*
