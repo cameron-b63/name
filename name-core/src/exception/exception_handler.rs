@@ -62,8 +62,9 @@ pub fn handle_exception(
             );
             exit(0);
         }
-        ExceptionType::Syscall => {
-            // Invoke the syscall handler on program state
+        ExceptionType::Syscall | ExceptionType::Trap => {
+            // Invoke the syscall handler on program state.
+            // Trap is functionally just a syscall.
             if let Err(e) = os.handle_syscall(program_state) {
                 panic!(
                     "{}",
@@ -117,9 +118,6 @@ pub fn handle_exception(
                 )
             );
             exit(0);
-        }
-        ExceptionType::Trap => {
-            todo!("Not sure how we want trap to work yet.");
         }
         ExceptionType::FloatingPoint(_) => {
             // This scope is going to refer to "explicit trap" quite a bit.

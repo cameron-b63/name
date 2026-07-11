@@ -746,34 +746,61 @@ pub fn sltu(program_state: &mut ProgramState, args: RArgs) -> () {
     }
 }
 
+// Trap instructions
+/// This helper generalizes the "if (rs <unsigned comparison> rt) then trap" flow.
+fn unsigned_trap_on_comparison<F>(program_state: &mut ProgramState, args: RArgs, comparison: F)
+where
+    F: Fn(&u32, &u32) -> bool,
+{
+    if comparison(
+        &program_state.cpu.general_purpose_registers[args.rs as usize],
+        &program_state.cpu.general_purpose_registers[args.rt as usize],
+    ) {
+        program_state.set_exception(ExceptionType::Trap);
+    }
+}
+
+/// This helper generalizes the "if (rs <signed comparison> rt) then trap" flow.
+fn signed_trap_on_comparison<F>(program_state: &mut ProgramState, args: RArgs, comparison: F)
+where
+    F: Fn(&i32, &i32) -> bool,
+{
+    if comparison(
+        &(program_state.cpu.general_purpose_registers[args.rs as usize] as i32),
+        &(program_state.cpu.general_purpose_registers[args.rt as usize] as i32),
+    ) {
+        program_state.set_exception(ExceptionType::Trap);
+    }
+}
+
 // 0x30 - tge
-pub fn tge(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("tge");
+pub fn tge(program_state: &mut ProgramState, args: RArgs) -> () {
+    signed_trap_on_comparison(program_state, args, i32::ge);
 }
 
 // 0x31 - tgeu
-pub fn tgeu(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("tgeu");
+pub fn tgeu(program_state: &mut ProgramState, args: RArgs) -> () {
+    unsigned_trap_on_comparison(program_state, args, u32::ge);
 }
 
 // 0x32 - tlt
-pub fn tlt(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("tlt");
+pub fn tlt(program_state: &mut ProgramState, args: RArgs) -> () {
+    signed_trap_on_comparison(program_state, args, i32::lt);
 }
 
 // 0x33 - tlt
-pub fn tltu(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("tltu");
+pub fn tltu(program_state: &mut ProgramState, args: RArgs) -> () {
+    unsigned_trap_on_comparison(program_state, args, u32::lt);
 }
 
 // 0x34 - teq
-pub fn teq(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("teq");
+pub fn teq(program_state: &mut ProgramState, args: RArgs) -> () {
+    unsigned_trap_on_comparison(program_state, args, u32::eq);
 }
 
 // 0x36 - tne
-pub fn tne(_program_state: &mut ProgramState, _args: RArgs) -> () {
-    todo!("tne");
+pub fn tne(program_state: &mut ProgramState, args: RArgs) -> () {
+    unsigned_trap_on_comparison(program_state, args, u32::ne);
 }
 
 /*
@@ -828,34 +855,68 @@ pub fn bgezl(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
     bgez(program_state, args)
 }
 
+/// This helper generalizes the "if (rs <signed comparison> immediate) then trap" flow.
+fn signed_immediate_trap_on_comparison<F>(
+    program_state: &mut ProgramState,
+    args: RegImmIArgs,
+    comparison: F,
+) where
+    F: Fn(&i32, &i32) -> bool,
+{
+    let imm = args.imm as i32;
+    if comparison(
+        &(program_state.cpu.general_purpose_registers[args.rs as usize] as i32),
+        &imm,
+    ) {
+        program_state.set_exception(ExceptionType::Trap);
+    }
+}
+
+/// This helper generalizes the "if (rs <unsigned comparison> immediate) then trap" flow.
+fn unsigned_immediate_trap_on_comparison<F>(
+    program_state: &mut ProgramState,
+    args: RegImmIArgs,
+    comparison: F,
+) where
+    F: Fn(&u32, &u32) -> bool,
+{
+    let imm = args.imm;
+    if comparison(
+        &program_state.cpu.general_purpose_registers[args.rs as usize],
+        &imm,
+    ) {
+        program_state.set_exception(ExceptionType::Trap);
+    }
+}
+
 // 0x08 - tgei
-pub fn tgei(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("tgei");
+pub fn tgei(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    signed_immediate_trap_on_comparison(program_state, args, i32::ge);
 }
 
 // 0x09 - tgeiu
-pub fn tgeiu(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("tgeiu");
+pub fn tgeiu(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    unsigned_immediate_trap_on_comparison(program_state, args, u32::ge);
 }
 
 // 0x0a - tlti
-pub fn tlti(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("tlti");
+pub fn tlti(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    signed_immediate_trap_on_comparison(program_state, args, i32::lt);
 }
 
 // 0x0b - tltiu
-pub fn tltiu(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("tltiu");
+pub fn tltiu(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    unsigned_immediate_trap_on_comparison(program_state, args, u32::lt);
 }
 
 // 0x0c - teqi
-pub fn teqi(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("teqi");
+pub fn teqi(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    unsigned_immediate_trap_on_comparison(program_state, args, u32::eq);
 }
 
 // 0x0e - tnei
-pub fn tnei(_program_state: &mut ProgramState, _args: RegImmIArgs) -> () {
-    todo!("tnei");
+pub fn tnei(program_state: &mut ProgramState, args: RegImmIArgs) -> () {
+    unsigned_immediate_trap_on_comparison(program_state, args, u32::ne);
 }
 
 // 0x10 - bltzal
