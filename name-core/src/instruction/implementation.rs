@@ -1018,7 +1018,8 @@ pub fn ctc1(_program_state: &mut ProgramState, _args: FpRArgs) -> () {
 /// All implementations (t/f, likely/unlikely) are contained in this function.
 /// This simplifies the table.
 pub fn bc1(program_state: &mut ProgramState, args: FpCCBranchArgs) -> () {
-    // match on the type of instruction (update later to account for likely)
+    // match on the type of instruction.
+    // The likely hint is ignored, so there's no need to even consider it. Hilarious, since this was its own work unit...
     match args.tf {
         0 => {
             // Branch on floating-point false (bc1f)
